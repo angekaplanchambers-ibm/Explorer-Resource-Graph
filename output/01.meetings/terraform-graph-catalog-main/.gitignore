@@ -1,0 +1,45 @@
+# ---- Go build & test artifacts ----
+
+# Compiled binaries and the Makefile's build output (bin/$(NAME)).
+/bin/
+
+# A binary accidentally left in the repo root by
+# `go build ./cmd/terraform-graph-catalog`.
+/terraform-graph-catalog
+
+# Platform-specific compiled objects / binaries.
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary built with `go test -c`.
+*.test
+
+# Coverage and profiling output (e.g. `make cover` -> coverage.out).
+*.out
+coverage.html
+
+# Go workspace files (developer-local; must never be committed).
+go.work
+go.work.sum
+
+# This module uses Go modules and is not vendored. Uncomment to vendor.
+# /vendor/
+
+# ---- Local configuration & secrets ----
+
+# Local environment overrides. Real secrets must never be committed; the
+# service is configured entirely through GRAPH_CATALOG_* environment variables.
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# ---- Editor / IDE / OS cruft ----
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

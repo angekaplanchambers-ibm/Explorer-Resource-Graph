@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!-- Copyright IBM Corp. 2026 -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terraform Graph Catalog — Dev UI</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- D3 v7 (window.d3) powers the SVG graph renderer. graph.js defines the
+         GraphRenderer plus the domain colour/icon helpers (window.GraphRenderer
+         and window.CatalogGraph); app.js drives them. All deferred so they run
+         in source order after the DOM is parsed. -->
+    <script src="vendor/d3.min.js" defer></script>
+    <script src="vendor/marked.min.js" defer></script>
+    <script src="graph.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">◆</span>
+        <span>Terraform Graph Catalog</span>
+        <span class="tag">dev</span>
+      </div>
+      <div class="status" id="status">
+        <span class="grant" id="grant-status">grant: —</span>
+        <button id="refresh-btn" title="Reload catalog data">↻ Refresh</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="graph-pane">
+        <nav class="views" id="view-tabs">
+          <button data-view="workspaces" class="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5"/>
+            </svg>
+            Workspaces
+          </button>
+          <button data-view="resources">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5M12 13v8"/>
+            </svg>
+            Resources
+          </button>
+          <button data-view="providers">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 3v4M15 3v4M7 7h10v3a5 5 0 0 1-10 0V7ZM12 15v6"/>
+            </svg>
+            Providers
+          </button>
+        </nav>
+
+        <div class="toolbar">
+          <div class="seg" id="display-tabs" title="How to present the data">
+            <button data-display="graph" class="active">Graph</button>
+            <button data-display="table">Table</button>
+          </div>
+          <div class="seg" id="layout-tabs" title="Graph layout">
+            <button data-layout="force" class="active">Force</button>
+            <button data-layout="stacked">Stacked</button>
+            <button data-layout="radial">Radial</button>
+          </div>
+          <div class="controls" id="controls"></div>
+        </div>
+
+        <div class="canvas-wrap">
+          <div id="cy"></div>
+          <div class="legend" id="legend"></div>
+          <div class="data-table" id="data-table" hidden></div>
+          <aside class="inspector" id="inspector">
+            <div class="inspector-empty">Select a node to inspect.</div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="chat-pane">
+        <div class="chat-header">Ask the catalog</div>
+        <div class="chat-log" id="chat-log">
+          <div class="msg system">Ask about resources, dependencies, providers, or cross-workspace relationships. The assistant queries the catalog with its tools.</div>
+        </div>
+        <form class="chat-input" id="chat-form">
+          <textarea
+            id="chat-text"
+            rows="2"
+            placeholder="e.g. How many m5.xlarge EC2 instances are there?"
+          ></textarea>
+          <button type="submit" id="chat-send">Send</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

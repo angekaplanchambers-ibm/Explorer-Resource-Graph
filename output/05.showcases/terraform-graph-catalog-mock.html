@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<!-- Terraform Graph Catalog — Standalone Mock
+     Uses the real graph.js + app.js from the PoC, with API calls replaced by
+     fixture data so the full D3 graph + chat UI works without the Go backend.
+     Open directly in Chrome: file:// or via any local server. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Terraform Graph Catalog — Mock</title>
+  <style>
+/* ── Original style.css ────────────────────────────────────────────────── */
+:root{--bg:#0f1117;--bg-elev:#171a22;--bg-elev2:#1f2330;--border:#2a2f3d;--fg:#e6e8ee;--fg-dim:#9aa3b2;--accent:#7b61ff;--accent-dim:#5a47c0;--green:#38c172;--amber:#f0b429;--red:#e3556e;--grid-dot:#222736;--edge:#39414f;--edge-strong:#5a6480;--mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px;display:flex;flex-direction:column;height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg-elev);border-bottom:1px solid var(--border);flex:0 0 auto}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600}
+.brand .logo{color:var(--accent);font-size:18px}
+.tag{font-size:10px;text-transform:uppercase;letter-spacing:.08em;background:var(--accent-dim);color:#fff;padding:2px 6px;border-radius:4px}
+.status{display:flex;align-items:center;gap:12px}
+.grant{font-family:var(--mono);font-size:12px;color:var(--fg-dim)}
+button{background:var(--bg-elev2);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px}
+button:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+.layout{display:flex;flex:1 1 auto;min-height:0}
+.graph-pane{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+.chat-pane{flex:0 0 380px;display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--bg-elev);min-height:0}
+.views{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-elev)}
+.views button{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid transparent}
+.nav-icon{width:15px;height:15px;flex-shrink:0}
+.views button.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--border);min-height:44px}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;flex:0 0 auto}
+.seg button{background:transparent;border:0;border-right:1px solid var(--border);border-radius:0;padding:5px 12px}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--bg-elev2);border-color:var(--border)}
+.seg button.active{background:var(--accent-dim);color:#fff}
+.controls{display:flex;flex:1 1 auto;flex-wrap:wrap;gap:8px;align-items:center;color:var(--fg-dim)}
+.controls label{font-size:12px;color:var(--fg-dim)}
+.controls select,.controls input{background:var(--bg-elev2);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:13px}
+.controls .hint{font-size:12px;color:var(--fg-dim)}
+.canvas-wrap{position:relative;flex:1 1 auto;min-height:0}
+#cy{position:absolute;inset:0;background-color:var(--bg);background-image:radial-gradient(var(--grid-dot) 1px,transparent 1px);background-size:22px 22px;background-position:11px 11px}
+.graph-svg{display:block;width:100%;height:100%;cursor:grab}
+.graph-svg:active{cursor:grabbing}
+.links path.link{fill:none;stroke:var(--edge);stroke-width:1.4;transition:stroke .18s ease,stroke-width .18s ease,stroke-opacity .18s ease}
+.links path.link[data-kind="uses"]{stroke-dasharray:5 4}
+.node-group{cursor:pointer;color:#fff;transition:opacity .2s ease}
+.node-group .node-dot{transition:fill .18s ease,stroke .18s ease}
+.node-group .node-icon{pointer-events:none;filter:drop-shadow(0 0 1px rgba(0,0,0,.6))}
+.node-group:hover .node-dot,.node-group.hover-focus .node-dot{filter:drop-shadow(0 0 7px var(--node-color))}
+.node-group[data-mode="data"] .node-dot{stroke-dasharray:3 2.5;fill-opacity:.85}
+.labels text.label-name{fill:var(--fg);font-size:11px;font-weight:500;paint-order:stroke;stroke:var(--bg);stroke-width:3px;stroke-linejoin:round;pointer-events:none}
+.labels text.label-type{fill:var(--fg-dim);font-size:9.5px;paint-order:stroke;stroke:var(--bg);stroke-width:2.5px;stroke-linejoin:round;pointer-events:none}
+.labels.zoomed-out{opacity:0;transition:opacity .2s ease}
+.node-group.hover-dim,.label-group.hover-dim{opacity:.12}
+.links path.link.hover-hide{stroke-opacity:0}
+.links path.link.hover-hi{stroke:var(--edge-strong);stroke-width:1.8}
+.node-group.dim,.label-group.dim{opacity:.12}
+.links path.link.dim{stroke-opacity:.06}
+.node-group.is-source .node-dot{stroke:#ffffff;stroke-width:2.5;filter:drop-shadow(0 0 7px var(--amber))}
+.node-group.is-affected .node-dot{filter:drop-shadow(0 0 5px #e3556e)}
+.node-group.is-dependent .node-dot{filter:drop-shadow(0 0 5px #38c172)}
+.node-group.is-dependent-indirect .node-dot{filter:drop-shadow(0 0 5px #4dabf7)}
+.links path.link.edge-hi{stroke:#b6904a;stroke-width:1.8;stroke-opacity:.85}
+.links path.link.edge-hi-faint{stroke:#3f72a6;stroke-width:1.3;stroke-opacity:.6}
+.inspector{position:absolute;top:12px;right:12px;width:300px;max-height:calc(100% - 24px);overflow:auto;background:rgba(23,26,34,.96);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px}
+.inspector-empty{color:var(--fg-dim)}
+.inspector[hidden]{display:none}
+.inspector h3{margin:0 0 8px;font-size:13px;font-family:var(--mono);word-break:break-all}
+.inspector dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px}
+.inspector dt{color:var(--fg-dim)}
+.inspector dd{margin:0;font-family:var(--mono);word-break:break-all}
+.inspector ul{margin:4px 0 0;padding-left:16px}
+.inspector pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;overflow:auto;max-height:200px;font-size:11px}
+.sharing-summary{margin:10px 0 4px;padding:8px;border:1px solid var(--border);border-left:3px solid #4dabf7;border-radius:6px;background:rgba(77,171,247,.07)}
+.sharing-summary-head{color:var(--fg-dim);text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:3px}
+.inspector-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn-blast{background:rgba(240,180,41,.1);border-color:rgba(240,180,41,.35);color:var(--amber)}
+.btn-blast:hover{background:rgba(240,180,41,.18);border-color:rgba(240,180,41,.55)}
+.btn-exit-blast{font-size:11px;padding:3px 8px;margin-bottom:6px;opacity:.75}
+.btn-exit-blast:hover{opacity:1}
+.blast-inspector h3{margin:6px 0 8px}
+.blast-total{font-size:12px;color:var(--fg-dim);margin-bottom:10px}
+.blast-hop{margin:8px 0}
+.blast-hop-head{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.legend-swatch-gradient{width:30px;height:11px;border-radius:3px}
+.legend{position:absolute;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:10px 14px;padding:7px 11px;background:rgba(23,26,34,.9);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--fg-dim);max-width:calc(100% - 340px);pointer-events:none}
+.legend[hidden]{display:none}
+.legend-item{display:inline-flex;align-items:center;gap:5px}
+.legend-swatch{width:11px;height:11px;display:inline-block;border:1px solid rgba(255,255,255,.18)}
+.legend-swatch.dot{border-radius:50%}
+.data-table{position:absolute;inset:0;overflow:auto;padding:12px}
+.data-table[hidden]{display:none}
+.data-table .hint{font-size:12px;color:var(--fg-dim);margin-bottom:8px}
+.data-table table{border-collapse:collapse;width:100%;font-size:12px}
+.data-table th,.data-table td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+.data-table th{color:var(--fg-dim);position:sticky;top:0;background:var(--bg-elev)}
+.data-table tr.clickable{cursor:pointer}
+.data-table tr.clickable:hover td{background:var(--bg-elev2)}
+.chat-header{padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;flex:0 0 auto}
+.chat-log{flex:1 1 auto;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.msg{padding:9px 12px;border-radius:10px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.msg.system{background:transparent;color:var(--fg-dim);font-size:12px;padding:0 2px}
+.msg.user{background:var(--accent-dim);align-self:flex-end;max-width:85%}
+.msg.assistant{background:var(--bg-elev2);align-self:flex-start;max-width:90%}
+.msg.error{background:rgba(227,85,110,.15);border:1px solid var(--red);color:#ffd7df}
+.msg.md{white-space:normal}
+.msg.md>:first-child{margin-top:0}
+.msg.md>:last-child{margin-bottom:0}
+.msg.md p{margin:0 0 8px}
+.msg.md ul,.msg.md ol{margin:4px 0 8px;padding-left:20px}
+.msg.md li{margin:2px 0}
+.msg.md li::marker{color:var(--fg-dim)}
+.msg.md h1,.msg.md h2,.msg.md h3,.msg.md h4,.msg.md h5,.msg.md h6{margin:10px 0 4px;font-size:13px;font-weight:600}
+.msg.md a{color:var(--accent)}
+.msg.md strong{font-weight:600}
+.msg.md code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 4px}
+.msg.md pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;overflow:auto;margin:4px 0 8px}
+.msg.md pre code{border:0;padding:0;background:transparent;font-size:11px;white-space:pre}
+.tools{align-self:flex-start;max-width:90%;font-size:11px;color:var(--fg-dim);font-family:var(--mono);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+.tools .tool{white-space:pre-wrap;word-break:break-word}
+.tools .tool.err{color:var(--red)}
+.tools .tool.ui-action{color:var(--accent)}
+.chat-input{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);flex:0 0 auto}
+.chat-input textarea{flex:1 1 auto;resize:none;background:var(--bg-elev2);color:var(--fg);border:1px solid var(--border);border-radius:8px;padding:8px;font-family:inherit;font-size:13px}
+.chat-input button{align-self:stretch;padding:0 16px}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--fg-dim);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.banner{padding:8px 12px;font-size:12px;background:rgba(240,180,41,.12);border-bottom:1px solid var(--amber);color:#ffe9b0}
+.inspector-section-head{color:var(--fg-dim);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.version-list{display:flex;flex-direction:column;gap:5px}
+.version-row{cursor:pointer;padding:5px 6px;border-radius:5px;border:1px solid transparent;transition:border-color .12s,background .12s}
+.version-row:hover{border-color:var(--border);background:rgba(255,255,255,.04)}
+.version-row.active{border-color:#4dabf7;background:rgba(77,171,247,.1)}
+.version-row.active .version-label{color:#4dabf7}
+.version-row-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.version-label{font-family:var(--mono);font-size:11px;color:var(--fg)}
+.version-count{font-size:11px;color:var(--fg-dim);flex-shrink:0}
+.version-bar-wrap{height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.version-bar-fill{height:100%;background:#4dabf7;border-radius:2px}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <span>Terraform Graph Catalog</span>
+      <span class="tag">mock</span>
+    </div>
+    <div class="status">
+      <span class="grant" id="grant-status">grant: fixture-data</span>
+      <button id="refresh-btn" title="Reload">↻ Refresh</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="graph-pane">
+      <nav class="views" id="view-tabs">
+        <button data-view="workspaces" class="active">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="M3 13l9 5 9-5"/>
+          </svg>
+          Workspaces
+        </button>
+        <button data-view="resources">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5M12 13v8"/>
+          </svg>
+          Resources
+        </button>
+        <button data-view="providers">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 3v4M15 3v4M7 7h10v3a5 5 0 0 1-10 0V7ZM12 15v6"/>
+          </svg>
+          Providers
+        </button>
+      </nav>
+      <div class="toolbar">
+        <div class="seg" id="display-tabs">
+          <button data-display="graph" class="active">Graph</button>
+          <button data-display="table">Table</button>
+        </div>
+        <div class="seg" id="layout-tabs">
+          <button data-layout="force" class="active">Force</button>
+          <button data-layout="stacked">Stacked</button>
+          <button data-layout="radial">Radial</button>
+        </div>
+        <div class="controls" id="controls"></div>
+      </div>
+      <div class="canvas-wrap">
+        <div id="cy"></div>
+        <div class="legend" id="legend"></div>
+        <div class="data-table" id="data-table" hidden></div>
+        <aside class="inspector" id="inspector">
+          <div class="inspector-empty">Select a node to inspect.</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="chat-pane">
+      <div class="chat-header">Ask the catalog</div>
+      <div class="chat-log" id="chat-log">
+        <div class="msg system">This is a mock — the chat answers are pre-scripted fixtures. Ask about resources, dependencies, providers, or blast radius to see the UI in action.</div>
+      </div>
+      <form class="chat-input" id="chat-form">
+        <textarea id="chat-text" rows="2" placeholder="e.g. How many EC2 instances are there?"></textarea>
+        <button type="submit" id="chat-send">Send</button>
+      </form>
+    </section>
+  </main>
+
+  <!-- D3 v7 from CDN (required by graph.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+
+  <!-- ── Fixture data shim — replaces Go backend API calls ─────────────── -->
+  <script>
+"use strict";
+
+// Fixture graph: 8 workspaces with cross-workspace remote_state edges
+const FIXTURE_GRAPH = {
+  nodes: [
+    { workspace_id: "payments-prod-us-east",  org_id: "hashicorp-demo", project_id: "payments",  resource_count: 47, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "payments-prod-eu-west",  org_id: "hashicorp-demo", project_id: "payments",  resource_count: 43, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "networking-prod-core",   org_id: "hashicorp-demo", project_id: "platform",  resource_count: 61, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "api-gateway-prod",       org_id: "hashicorp-demo", project_id: "platform",  resource_count: 22, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "auth-service-prod",      org_id: "hashicorp-demo", project_id: "platform",  resource_count: 29, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "data-pipeline-prod",     org_id: "hashicorp-demo", project_id: "analytics", resource_count: 35, providers: ["registry.terraform.io/hashicorp/aws"] },
+    { workspace_id: "cdn-global-prod",        org_id: "hashicorp-demo", project_id: "platform",  resource_count: 12, providers: ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/cloudflare"] },
+    { workspace_id: "inventory-service-stg",  org_id: "hashicorp-demo", project_id: "inventory", resource_count: 18, providers: ["registry.terraform.io/hashicorp/aws"] },
+  ],
+  // edges: producer → consumer (terraform_remote_state)
+  edges: [
+    { producer_workspace_id: "networking-prod-core",  consumer_workspace_id: "payments-prod-us-east" },
+    { producer_workspace_id: "networking-prod-core",  consumer_workspace_id: "payments-prod-eu-west" },
+    { producer_workspace_id: "networking-prod-core",  consumer_workspace_id: "api-gateway-prod" },
+    { producer_workspace_id: "networking-prod-core",  consumer_workspace_id: "auth-service-prod" },
+    { producer_workspace_id: "auth-service-prod",     consumer_workspace_id: "api-gateway-prod" },
+    { producer_workspace_id: "api-gateway-prod",      consumer_workspace_id: "data-pipeline-prod" },
+    { producer_workspace_id: "payments-prod-us-east", consumer_workspace_id: "data-pipeline-prod" },
+  ],
+};
+
+// Fixture resources per workspace
+const FIXTURE_RESOURCES = {
+  "payments-prod-us-east": [
+    { workspace_id:"payments-prod-us-east", address:"aws_instance.app_server[0]",       resource_type:"aws_instance",              resource_name:"app_server",   mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:"0",  dependencies:["aws_security_group.web_sg","aws_subnet.private_a"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_instance.app_server[1]",       resource_type:"aws_instance",              resource_name:"app_server",   mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:"1",  dependencies:["aws_security_group.web_sg","aws_subnet.private_b"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_db_instance.payments_db",      resource_type:"aws_db_instance",           resource_name:"payments_db",  mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_db_subnet_group.db_subnets","aws_security_group.db_sg"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_security_group.web_sg",        resource_type:"aws_security_group",        resource_name:"web_sg",       mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.main"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_security_group.db_sg",         resource_type:"aws_security_group",        resource_name:"db_sg",        mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.main"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_vpc.main",                     resource_type:"aws_vpc",                   resource_name:"main",         mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:[] },
+    { workspace_id:"payments-prod-us-east", address:"aws_subnet.private_a",             resource_type:"aws_subnet",                resource_name:"private_a",    mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.main"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_subnet.private_b",             resource_type:"aws_subnet",                resource_name:"private_b",    mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.main"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_db_subnet_group.db_subnets",   resource_type:"aws_db_subnet_group",       resource_name:"db_subnets",   mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_subnet.private_a","aws_subnet.private_b"] },
+    { workspace_id:"payments-prod-us-east", address:"aws_iam_role.app_role",            resource_type:"aws_iam_role",              resource_name:"app_role",     mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:[] },
+    { workspace_id:"payments-prod-us-east", address:"aws_lb.payments_alb",              resource_type:"aws_lb",                    resource_name:"payments_alb", mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_security_group.web_sg","aws_subnet.private_a","aws_subnet.private_b"] },
+    { workspace_id:"payments-prod-us-east", address:"data.terraform_remote_state.net",  resource_type:"terraform_remote_state",    resource_name:"net",          mode:"data",    provider:"registry.terraform.io/hashicorp/terraform", module:"", instance_key:null, dependencies:[] },
+  ],
+  "networking-prod-core": [
+    { workspace_id:"networking-prod-core", address:"aws_vpc.core",                      resource_type:"aws_vpc",                   resource_name:"core",         mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:[] },
+    { workspace_id:"networking-prod-core", address:"aws_subnet.pub_a",                  resource_type:"aws_subnet",                resource_name:"pub_a",        mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.core"] },
+    { workspace_id:"networking-prod-core", address:"aws_subnet.pub_b",                  resource_type:"aws_subnet",                resource_name:"pub_b",        mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.core"] },
+    { workspace_id:"networking-prod-core", address:"aws_internet_gateway.igw",          resource_type:"aws_internet_gateway",      resource_name:"igw",          mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.core"] },
+    { workspace_id:"networking-prod-core", address:"aws_nat_gateway.nat_a",             resource_type:"aws_nat_gateway",           resource_name:"nat_a",        mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_subnet.pub_a","aws_eip.nat_a"] },
+    { workspace_id:"networking-prod-core", address:"aws_eip.nat_a",                     resource_type:"aws_eip",                   resource_name:"nat_a",        mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:[] },
+    { workspace_id:"networking-prod-core", address:"aws_route_table.private",           resource_type:"aws_route_table",           resource_name:"private",      mode:"managed", provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.core","aws_nat_gateway.nat_a"] },
+    { workspace_id:"networking-prod-core", address:"aws_security_group.allow_internal", resource_type:"aws_security_group",        resource_name:"allow_internal",mode:"managed",provider:"registry.terraform.io/hashicorp/aws", module:"", instance_key:null, dependencies:["aws_vpc.core"] },
+  ],
+};
+
+// Fixture blast-radius data keyed by workspace_id
+const FIXTURE_BLAST = {
+  "networking-prod-core": [
+    { workspace_id:"payments-prod-us-east", resource_type:"aws_instance",    address:"aws_instance.app_server[0]", hop_distance:1 },
+    { workspace_id:"payments-prod-us-east", resource_type:"aws_instance",    address:"aws_instance.app_server[1]", hop_distance:1 },
+    { workspace_id:"payments-prod-us-east", resource_type:"aws_db_instance", address:"aws_db_instance.payments_db", hop_distance:1 },
+    { workspace_id:"payments-prod-eu-west", resource_type:"aws_instance",    address:"aws_instance.app_server[0]", hop_distance:1 },
+    { workspace_id:"api-gateway-prod",      resource_type:"aws_instance",    address:"aws_instance.api[0]", hop_distance:1 },
+    { workspace_id:"auth-service-prod",     resource_type:"aws_instance",    address:"aws_instance.auth[0]", hop_distance:1 },
+    { workspace_id:"data-pipeline-prod",    resource_type:"aws_glue_job",    address:"aws_glue_job.etl_main", hop_distance:2 },
+    { workspace_id:"data-pipeline-prod",    resource_type:"aws_s3_bucket",   address:"aws_s3_bucket.datalake", hop_distance:2 },
+  ],
+  "payments-prod-us-east": [
+    { workspace_id:"data-pipeline-prod", resource_type:"aws_glue_job",  address:"aws_glue_job.payments_feed", hop_distance:1 },
+    { workspace_id:"data-pipeline-prod", resource_type:"aws_s3_bucket", address:"aws_s3_bucket.payments_raw",  hop_distance:1 },
+  ],
+};
+
+// Fixture provider data
+const FIXTURE_PROVIDERS = [
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 5.0", version_exact:"5.0.1", workspace_id:"payments-prod-us-east" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 5.0", version_exact:"5.0.1", workspace_id:"payments-prod-eu-west" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 4.67",version_exact:"4.67.0",workspace_id:"networking-prod-core" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 4.67",version_exact:"4.67.0",workspace_id:"api-gateway-prod" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 5.0", version_exact:"5.0.1", workspace_id:"auth-service-prod" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 5.0", version_exact:"5.0.1", workspace_id:"data-pipeline-prod" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 5.0", version_exact:"5.0.1", workspace_id:"cdn-global-prod" },
+  { provider_source:"registry.terraform.io/hashicorp/aws",        alias:null, version_constraint:"~> 4.67",version_exact:"4.67.0",workspace_id:"inventory-service-stg" },
+  { provider_source:"registry.terraform.io/hashicorp/cloudflare", alias:null, version_constraint:"~> 4.0", version_exact:"4.29.0",workspace_id:"cdn-global-prod" },
+];
+
+// Fixture dependents for a resource address
+const FIXTURE_DEPENDENTS = {
+  "aws_vpc.core": [
+    { address:"aws_subnet.pub_a",                  dependency_reason:"implicit:vpc_id",       workspace_id:"networking-prod-core" },
+    { address:"aws_subnet.pub_b",                  dependency_reason:"implicit:vpc_id",       workspace_id:"networking-prod-core" },
+    { address:"aws_internet_gateway.igw",          dependency_reason:"implicit:vpc_id",       workspace_id:"networking-prod-core" },
+    { address:"aws_security_group.allow_internal", dependency_reason:"implicit:vpc_id",       workspace_id:"networking-prod-core" },
+    { address:"aws_route_table.private",           dependency_reason:"explicit",              workspace_id:"networking-prod-core" },
+  ],
+  "aws_security_group.web_sg": [
+    { address:"aws_instance.app_server[0]",        dependency_reason:"implicit:security_groups", workspace_id:"payments-prod-us-east" },
+    { address:"aws_instance.app_server[1]",        dependency_reason:"implicit:security_groups", workspace_id:"payments-prod-us-east" },
+    { address:"aws_lb.payments_alb",               dependency_reason:"implicit:security_groups", workspace_id:"payments-prod-us-east" },
+  ],
+};
+
+// ── Intercept window.fetch — app.js uses fetch() directly ─────────────────
+// Must run BEFORE app.js (which is deferred) so all fetch() calls hit the mock.
+
+window.fetch = async function mockFetch(input, init) {
+  const url    = typeof input === "string" ? input : input.url;
+  const method = (init && init.method) ? init.method.toUpperCase() : "GET";
+  let   body;
+  try { body = (init && init.body) ? JSON.parse(init.body) : undefined; } catch (_) {}
+
+  await new Promise(r => setTimeout(r, 80));
+
+  let data;
+
+  if (method === "POST" && url.includes("/dev/grants/all")) {
+    data = { grant_id: "fixture-0000-0000-0000", expires_at: new Date(Date.now() + 3600000).toISOString() };
+  }
+  else if (method === "GET" && (url.endsWith("/dev/graph") || url === "/dev/graph")) {
+    data = FIXTURE_GRAPH;
+  }
+  else if (method === "GET" && url.includes("/dev/graph/workspace/")) {
+    const ws = decodeURIComponent(url.split("/dev/graph/workspace/")[1].split("?")[0]);
+    data = { resources: FIXTURE_RESOURCES[ws] || generateWorkspaceResources(ws) };
+  }
+  else if (method === "POST" && url.includes("/dev/chat")) {
+    data = mockChat(body);
+  }
+  else if (url.match(/\/workspaces\/[^/?]+\/blast-radius/)) {
+    const m = url.match(/\/workspaces\/([^/?]+)\/blast-radius/);
+    const ws = m ? decodeURIComponent(m[1]) : "";
+    const rows = FIXTURE_BLAST[ws] || [];
+    data = { data: rows, count: rows.length, next_cursor: null };
+  }
+  else if (url.includes("/providers")) {
+    let src = "";
+    try { src = new URL(url, location.origin).searchParams.get("provider_source") || ""; } catch (_) {}
+    const rows = src ? FIXTURE_PROVIDERS.filter(p => p.provider_source.includes(src)) : FIXTURE_PROVIDERS;
+    data = { data: rows, count: rows.length, next_cursor: null };
+  }
+  else if (url.match(/\/resources\/[^/?]+\/dependents/)) {
+    const m = url.match(/\/resources\/([^/?]+)\/dependents/);
+    const addr = m ? decodeURIComponent(m[1]) : "";
+    const rows = FIXTURE_DEPENDENTS[addr] || [];
+    data = { data: rows, count: rows.length, next_cursor: null };
+  }
+  else {
+    data = { data: [], count: 0, next_cursor: null };
+  }
+
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+};
+
+// Helper: generate generic resources for workspaces not in the fixture set
+function generateWorkspaceResources(ws) {
+  const types = [
+    ["aws_instance","app","Compute"],["aws_security_group","web_sg","Security"],
+    ["aws_vpc","main","Networking"],["aws_subnet","private_a","Networking"],
+    ["aws_iam_role","app_role","Identity"],["aws_s3_bucket","data","Storage & Data"],
+  ];
+  return types.map(([rt, name]) => ({
+    workspace_id: ws, address: `${rt}.${name}`, resource_type: rt,
+    resource_name: name, mode: "managed",
+    provider: "registry.terraform.io/hashicorp/aws", module: "", instance_key: null, dependencies: [],
+  }));
+}
+
+// ── Scripted chat responses ─────────────────────────────────────────────────
+
+function mockChat(body) {
+  const msg = ((body.messages || []).slice(-1)[0] || {}).content || "";
+  const q = msg.toLowerCase();
+
+  if (q.includes("ec2") || q.includes("instance")) {
+    return {
+      reply: "**EC2 instances across your estate**\n\n- `payments-prod-us-east`: 2 × `aws_instance.app_server`\n- `networking-prod-core`: no direct EC2\n- Other workspaces: fixture data has generic instances\n\n**Total (fixture): 2 confirmed instances** in the payments workspace. In production this would query all indexed workspaces.",
+      tool_calls: [{ name:"list_resources", arguments:{ resource_type:"aws_instance" }, count:2 }],
+      actions: [],
+    };
+  }
+  if (q.includes("blast") || q.includes("networking-prod-core")) {
+    return {
+      reply: "**Blast radius of `networking-prod-core`**\n\n4 workspaces consume its outputs:\n\n| Workspace | Hop | Resources affected |\n|---|---|---|\n| payments-prod-us-east | 1 | 3 |\n| payments-prod-eu-west | 1 | 1 |\n| api-gateway-prod | 1 | 1 |\n| auth-service-prod | 1 | 1 |\n| data-pipeline-prod | 2 | 2 |\n\nSwitching to blast-radius view…",
+      tool_calls: [{ name:"get_blast_radius", arguments:{ workspace_id:"networking-prod-core" }, count:8 }],
+      actions: [{ type:"show_blast_radius", args:{ workspace_id:"networking-prod-core" } }],
+    };
+  }
+  if (q.includes("provider") || q.includes("aws version") || q.includes("upgrade")) {
+    return {
+      reply: "**AWS provider version spread**\n\n| Version | Workspaces |\n|---|---|\n| 5.0.1 | payments-prod-us-east, payments-prod-eu-west, auth-service-prod, data-pipeline-prod, cdn-global-prod |\n| 4.67.0 | networking-prod-core, api-gateway-prod, inventory-service-stg |\n\n3 workspaces are on `4.67.0` — a provider upgrade to `~> 5.0` would affect them. Switching to provider view…",
+      tool_calls: [{ name:"list_providers", arguments:{ provider_source:"hashicorp/aws" }, count:8 }],
+      actions: [{ type:"show_provider_version", args:{ provider_source:"registry.terraform.io/hashicorp/aws", version_exact:"4.67.0" } }],
+    };
+  }
+  if (q.includes("drift")) {
+    return {
+      reply: "**Drift status**\n\nThe fixture data does not include real drift signals — that requires live state comparison. In production the catalog's ETL ingests current state and flags resources whose actual attributes differ from the last-applied plan.",
+      tool_calls: [],
+      actions: [],
+    };
+  }
+  if (q.includes("depend") || q.includes("vpc")) {
+    return {
+      reply: "**Resources depending on `aws_vpc.core` in `networking-prod-core`**\n\n- `aws_subnet.pub_a` — `implicit:vpc_id`\n- `aws_subnet.pub_b` — `implicit:vpc_id`\n- `aws_internet_gateway.igw` — `implicit:vpc_id`\n- `aws_security_group.allow_internal` — `implicit:vpc_id`\n- `aws_route_table.private` — `explicit` (`depends_on`)\n\n5 direct dependents. All within the same workspace. No cross-workspace transitive chain from this resource.",
+      tool_calls: [{ name:"get_dependents", arguments:{ address:"aws_vpc.core" }, count:5 }],
+      actions: [{ type:"navigate_view", args:{ view:"resources", workspace_id:"networking-prod-core" } }],
+    };
+  }
+  if (q.includes("payment")) {
+    return {
+      reply: "**payments-prod-us-east** has **47 resources** in the fixture.\n\nKey resources:\n- 2 × `aws_instance` (app servers)\n- 1 × `aws_db_instance` (payments_db)\n- 1 × `aws_lb` (ALB)\n- 1 × `aws_vpc` + subnets\n\nThis workspace consumes outputs from `networking-prod-core` (hop 1) and feeds `data-pipeline-prod` (hop 1 from here).",
+      tool_calls: [{ name:"list_resources", arguments:{ workspace_id:"payments-prod-us-east" }, count:12 }],
+      actions: [{ type:"navigate_view", args:{ view:"resources", workspace_id:"payments-prod-us-east" } }],
+    };
+  }
+  // fallback
+  return {
+    reply: "I can answer questions about this fixture estate. Try:\n- *\"How many EC2 instances are there?\"*\n- *\"Show blast radius of networking-prod-core\"*\n- *\"What provider versions are in use?\"*\n- *\"What depends on aws_vpc.core?\"*\n- *\"Tell me about the payments workspace\"*",
+    tool_calls: [],
+    actions: [],
+  };
+}
+  </script>
+
+  <!-- marked.js for Markdown rendering in chat -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+
+  <!-- The real graph.js and app.js from the PoC, loaded inline via fetch-replaced API -->
+  <script src="../01.meetings/terraform-graph-catalog-main/internal/devui/static/graph.js" defer></script>
+  <script src="../01.meetings/terraform-graph-catalog-main/internal/devui/static/app.js" defer></script>
+</body>
+</html>

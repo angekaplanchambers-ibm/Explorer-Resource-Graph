@@ -1,0 +1,17 @@
+# Copyright IBM Corp. 2026
+
+services:
+  postgres:
+    image: postgres
+    container_name: graph_catalog_db
+    command: ["postgres", "-c", "log_statement=mod"]
+    environment:
+      POSTGRES_PASSWORD: 5E1F9A7C-2B4D-4E6F-9A1B-3C5D7E9F1A2B
+      POSTGRES_DB: graph_catalog
+    ports:
+      - 55438:5432
+  redis:
+    image: redis
+    container_name: graph_catalog_redis
+    ports:
+      - 56385:6379

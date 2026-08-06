@@ -1,0 +1,908 @@
+/* Copyright IBM Corp. 2026 */
+
+:root {
+  --bg: #0f1117;
+  --bg-elev: #171a22;
+  --bg-elev2: #1f2330;
+  --border: #2a2f3d;
+  --fg: #e6e8ee;
+  --fg-dim: #9aa3b2;
+  --accent: #7b61ff;
+  --accent-dim: #5a47c0;
+  --green: #38c172;
+  --amber: #f0b429;
+  --red: #e3556e;
+  /* Graph canvas: blueprint dot grid + edge tones (SVG renderer, graph.js). */
+  --grid-dot: #222736;
+  --edge: #39414f;
+  --edge-strong: #5a6480;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.brand .logo {
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--accent-dim);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grant {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+button {
+  background: var(--bg-elev2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Layout */
+.layout {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.graph-pane {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-pane {
+  flex: 0 0 380px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-elev);
+  min-height: 0;
+}
+
+/* View tabs */
+.views {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.views button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.nav-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.views button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Toolbar: segmented controls (display + layout) plus per-scope controls */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.seg button {
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  padding: 5px 12px;
+}
+
+.seg button:last-child {
+  border-right: 0;
+}
+
+.seg button:hover {
+  background: var(--bg-elev2);
+  border-color: var(--border);
+}
+
+.seg button.active {
+  background: var(--accent-dim);
+  color: #fff;
+}
+
+/* Per-scope controls row (lives inside the toolbar) */
+.controls {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--fg-dim);
+}
+
+.controls label {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.controls select,
+.controls input {
+  background: var(--bg-elev2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.controls .hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+/* Canvas */
+.canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#cy {
+  position: absolute;
+  inset: 0;
+  /* Blueprint dotted grid, adapted from InfraGraph and tuned for the dark
+     canvas. The grid lives on the container (not the panned SVG), so nodes
+     slide over a static field — matching InfraGraph. */
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--grid-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: 11px 11px;
+}
+
+/* --- SVG graph (GraphRenderer) ------------------------------------------- */
+
+.graph-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.graph-svg:active {
+  cursor: grabbing;
+}
+
+/* Edges: thin curved paths, no arrowheads (direction reads from curvature, as
+   in InfraGraph). The provider→workspace "uses" edge is dashed. */
+.links path.link {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.4;
+  transition:
+    stroke 0.18s ease,
+    stroke-width 0.18s ease,
+    stroke-opacity 0.18s ease;
+}
+
+.links path.link[data-kind="uses"] {
+  stroke-dasharray: 5 4;
+}
+
+/* Nodes: a filled disc in the category colour with a white line icon. The icon
+   carries a faint dark halo so it stays legible on lighter discs. */
+.node-group {
+  cursor: pointer;
+  color: #fff; /* drives currentColor on the icon strokes */
+  transition: opacity 0.2s ease;
+}
+
+.node-group .node-dot {
+  transition:
+    fill 0.18s ease,
+    stroke 0.18s ease;
+}
+
+.node-group .node-icon {
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+
+/* Hover / focus glow in the node's own colour (InfraGraph affordance). */
+.node-group:hover .node-dot,
+.node-group.hover-focus .node-dot {
+  filter: drop-shadow(0 0 7px var(--node-color));
+}
+
+/* Data sources: a dashed ring distinguishes mode at a glance (the old view used
+   a separate shape; here every node is a disc, so the ring carries the signal). */
+.node-group[data-mode="data"] .node-dot {
+  stroke-dasharray: 3 2.5;
+  fill-opacity: 0.85;
+}
+
+/* Two-line label: name (bright) over type (dim), each haloed against the canvas
+   via paint-order stroke so it stays legible over nodes/edges. */
+.labels text.label-name {
+  fill: var(--fg);
+  font-size: 11px;
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.labels text.label-type {
+  fill: var(--fg-dim);
+  font-size: 9.5px;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* Renderer toggles .zoomed-out on the label layer below a zoom threshold so a
+   zoomed-out graph isn't a wall of overlapping text. */
+.labels.zoomed-out {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Hover focus-by-dimming: fade everything but the hovered node's neighbourhood. */
+.node-group.hover-dim,
+.label-group.hover-dim {
+  opacity: 0.12;
+}
+
+.links path.link.hover-hide {
+  stroke-opacity: 0;
+}
+
+.links path.link.hover-hi {
+  stroke: var(--edge-strong);
+  stroke-width: 1.8;
+}
+
+/* Click-selection highlight: dim the rest of the graph. */
+.node-group.dim,
+.label-group.dim {
+  opacity: 0.12;
+}
+
+.links path.link.dim {
+  stroke-opacity: 0.06;
+}
+
+/* Source node ring + glow (selected resource / provider / blast origin). The
+   fill colour itself is painted inline by the renderer (STATE_COLORS). */
+.node-group.is-source .node-dot {
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 7px var(--amber));
+}
+
+/* Lit neighbours glow in their own state colour so they lift clear of the dimmed
+   field, mirroring InfraGraph's focus affordance (fill is painted inline). */
+.node-group.is-affected .node-dot {
+  filter: drop-shadow(0 0 5px #e3556e);
+}
+
+.node-group.is-dependent .node-dot {
+  filter: drop-shadow(0 0 5px #38c172);
+}
+
+.node-group.is-dependent-indirect .node-dot {
+  filter: drop-shadow(0 0 5px #4dabf7);
+}
+
+/* Lit edges from the selection to its neighbours. Direct spokes (ochre) dominate;
+   transitive chain edges (sky-blue) are thinner and fainter. */
+.links path.link.edge-hi {
+  stroke: #b6904a;
+  stroke-width: 1.8;
+  stroke-opacity: 0.85;
+}
+
+.links path.link.edge-hi-faint {
+  stroke: #3f72a6;
+  stroke-width: 1.3;
+  stroke-opacity: 0.6;
+}
+
+.inspector {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 300px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  background: rgba(23, 26, 34, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.inspector-empty {
+  color: var(--fg-dim);
+}
+
+.inspector[hidden] {
+  display: none;
+}
+
+.inspector h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.inspector dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+}
+
+.inspector dt {
+  color: var(--fg-dim);
+}
+
+.inspector dd {
+  margin: 0;
+  font-family: var(--mono);
+  word-break: break-all;
+}
+
+.inspector ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+
+.inspector pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+  max-height: 200px;
+  font-size: 11px;
+}
+
+/* Output-consumer summary inside the workspace inspector (normal click mode).
+   Calm blue/teal — informational, not alarming. */
+.sharing-summary {
+  margin: 10px 0 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-left: 3px solid #4dabf7;
+  border-radius: 6px;
+  background: rgba(77, 171, 247, 0.07);
+}
+
+.sharing-summary-head {
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+/* Button row at the foot of the workspace inspector. */
+.inspector-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* "View blast radius →" — amber-tinted to signal it's a deeper analysis. */
+.btn-blast {
+  background: rgba(240, 180, 41, 0.1);
+  border-color: rgba(240, 180, 41, 0.35);
+  color: var(--amber);
+}
+
+.btn-blast:hover {
+  background: rgba(240, 180, 41, 0.18);
+  border-color: rgba(240, 180, 41, 0.55);
+}
+
+/* "← exit blast view" — small, ghost-style, sits at the top of blast panel. */
+.btn-exit-blast {
+  font-size: 11px;
+  padding: 3px 8px;
+  margin-bottom: 6px;
+  opacity: 0.75;
+}
+
+.btn-exit-blast:hover {
+  opacity: 1;
+}
+
+/* Blast-radius detail panel (entered via "View blast radius" button). */
+.blast-inspector h3 {
+  margin: 6px 0 8px;
+}
+
+.blast-total {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 10px;
+}
+
+.blast-hop {
+  margin: 8px 0;
+}
+
+.blast-hop-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+  /* colour set inline from blastHopColor() to match the graph gradient */
+}
+
+/* Gradient swatch in the blast-mode legend (wider than a standard dot). */
+.legend-swatch-gradient {
+  width: 30px;
+  height: 11px;
+  border-radius: 3px;
+}
+
+/* Legend overlay (rides on the graph canvas) */
+.legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding: 7px 11px;
+  background: rgba(23, 26, 34, 0.9);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  max-width: calc(100% - 340px);
+  pointer-events: none;
+}
+
+.legend[hidden] {
+  display: none;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-swatch {
+  width: 11px;
+  height: 11px;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.legend-swatch.dot {
+  border-radius: 50%;
+}
+
+.legend-swatch.rect {
+  border-radius: 2px;
+}
+
+.legend-swatch.diamond {
+  transform: rotate(45deg);
+}
+
+/* Generic data table (Table display for any scope) */
+.data-table {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.data-table[hidden] {
+  display: none;
+}
+
+.data-table .hint {
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 8px;
+}
+
+.data-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+}
+
+.data-table th {
+  color: var(--fg-dim);
+  position: sticky;
+  top: 0;
+  background: var(--bg-elev);
+}
+
+.data-table tr.clickable {
+  cursor: pointer;
+}
+
+.data-table tr.clickable:hover td {
+  background: var(--bg-elev2);
+}
+
+/* Chat */
+.chat-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.chat-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.msg {
+  padding: 9px 12px;
+  border-radius: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg.system {
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 12px;
+  padding: 0 2px;
+}
+
+.msg.user {
+  background: var(--accent-dim);
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.msg.assistant {
+  background: var(--bg-elev2);
+  align-self: flex-start;
+  max-width: 90%;
+}
+
+.msg.error {
+  background: rgba(227, 85, 110, 0.15);
+  border: 1px solid var(--red);
+  color: #ffd7df;
+}
+
+/* Rendered Markdown inside assistant messages. Block elements supply the
+   spacing, so disable the pre-wrap used by plain-text bubbles. */
+.msg.md {
+  white-space: normal;
+}
+
+.msg.md > :first-child {
+  margin-top: 0;
+}
+
+.msg.md > :last-child {
+  margin-bottom: 0;
+}
+
+.msg.md p {
+  margin: 0 0 8px;
+}
+
+.msg.md ul,
+.msg.md ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+
+.msg.md li {
+  margin: 2px 0;
+}
+
+.msg.md li::marker {
+  color: var(--fg-dim);
+}
+
+.msg.md h1,
+.msg.md h2,
+.msg.md h3,
+.msg.md h4,
+.msg.md h5,
+.msg.md h6 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.msg.md a {
+  color: var(--accent);
+}
+
+.msg.md strong {
+  font-weight: 600;
+}
+
+.msg.md code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.msg.md pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+  margin: 4px 0 8px;
+}
+
+.msg.md pre code {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 11px;
+  white-space: pre;
+}
+
+.tools {
+  align-self: flex-start;
+  max-width: 90%;
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.tools .tool {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tools .tool.err {
+  color: var(--red);
+}
+
+.tools .tool.ui-action {
+  color: var(--accent);
+}
+
+.chat-input {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.chat-input textarea {
+  flex: 1 1 auto;
+  resize: none;
+  background: var(--bg-elev2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.chat-input button {
+  align-self: stretch;
+  padding: 0 16px;
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg-dim);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.banner {
+  padding: 8px 12px;
+   font-size: 12px;
+   background: rgba(240, 180, 41, 0.12);
+   border-bottom: 1px solid var(--amber);
+   color: #ffe9b0;
+ }
+
+/* Provider version breakdown in the inspector (click a provider node). */
+.inspector-section-head {
+  color: var(--fg-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.version-row {
+  cursor: pointer;
+  padding: 5px 6px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.version-row:hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.version-row.active {
+  border-color: #4dabf7;
+  background: rgba(77, 171, 247, 0.1);
+}
+
+.version-row.active .version-label {
+  color: #4dabf7;
+}
+
+.version-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.version-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.version-count {
+  font-size: 11px;
+  color: var(--fg-dim);
+  flex-shrink: 0;
+}
+
+.version-bar-wrap {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.version-bar-fill {
+  height: 100%;
+  background: #4dabf7;
+  border-radius: 2px;
+}
