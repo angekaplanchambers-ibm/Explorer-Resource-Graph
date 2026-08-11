@@ -2681,7 +2681,7 @@ useEffect(() => {
             className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
             style={{ borderColor: "rgba(59,61,69,0.4)" }}
           >
-            <span className="flex items-center gap-2"><Compass size={14} />Browse Types, Use Cases and Saved Views</span>
+            <span className="flex items-center gap-2"><Compass size={14} />Types, Use cases and Saved views</span>
             <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
           </button>
 
