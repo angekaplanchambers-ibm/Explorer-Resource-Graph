@@ -2716,7 +2716,8 @@ useEffect(() => {
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
               Try the following queries based on your usage.
             </p>
-            <div className="flex flex-col gap-1.5">
+            <div className="relative">
+            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[132px]" style={{ scrollbarWidth: "none" }}>
               {SUGGESTED_QUERIES.map(query => {
                 const Icon = query.Icon;
                 return (
@@ -2745,6 +2746,9 @@ useEffect(() => {
                   </button>
                 );
               })}
+            </div>
+            {/* Fade-out at bottom */}
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10" style={{ background: themeMode === "light" ? "linear-gradient(to bottom, transparent, rgba(255,255,255,0.88))" : "linear-gradient(to bottom, transparent, rgba(19,20,26,0.9))" }} />
             </div>
           </div>
         )}
