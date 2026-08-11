@@ -2717,7 +2717,7 @@ useEffect(() => {
               Try the following queries based on your usage.
             </p>
             <div className="relative">
-            <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[132px]" style={{ scrollbarWidth: "none" }}>
+            <div className="flex flex-col gap-1 overflow-y-auto max-h-[98px]" style={{ scrollbarWidth: "none" }}>
               {SUGGESTED_QUERIES.map(query => {
                 const Icon = query.Icon;
                 return (
@@ -2725,23 +2725,23 @@ useEffect(() => {
                     key={`${query.type}::${query.label}`}
                     type="button"
                     onClick={() => openGraph(query.type, query.label)}
-                    className="group flex w-full items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3 text-left shadow-[0_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] active:translate-y-0 active:scale-[0.99] active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                    className="group flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] active:translate-y-0 active:scale-[0.99]"
                     style={{
                       background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
                       borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
                     }}
                   >
                     <span
-                      className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-white shadow-sm ring-1 ring-black/5"
+                      className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5"
                       style={{ background: query.color }}
                     >
-                      <Icon size={13} />
+                      <Icon size={10} />
                     </span>
-                    <span className="flex-1 text-[13px] font-medium" style={{ color: glassText }}>
+                    <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
                       {query.label}
                     </span>
-                    <div className="flex size-6 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
-                      <ChevronRight size={14} className="shrink-0" style={{ color: glassMuted }} />
+                    <div className="flex size-5 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
+                      <ChevronRight size={11} className="shrink-0" style={{ color: glassMuted }} />
                     </div>
                   </button>
                 );
