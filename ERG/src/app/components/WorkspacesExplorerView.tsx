@@ -2268,7 +2268,6 @@ function ExplorerSplashView({
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
-  const [suggestedQueriesVisible, setSuggestedQueriesVisible] = useState(false);
   const modalQueryColumns =
     selectedGraphType === "Policy Sets" ? policySetColumns :
     selectedGraphType === "Modules" ? moduleTableColumns :
@@ -2392,74 +2391,6 @@ useEffect(() => {
               <p className="mt-1 text-[13px] leading-5" style={{ color: glassMuted }}>Select a Type or Use case to explore your Infrastructure.</p>
             </div>
 
-            {/* Suggested queries — only in empty state, hidden by default */}
-            <div className="w-full max-w-[480px]">
-              <div className="flex items-center justify-center gap-1 px-1 mb-2">
-                <span className="text-[13px] font-semibold" style={{ color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.9)" }}>
-                  Try the following queries based on your usage.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSuggestedQueriesVisible(v => !v)}
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-white/40 shadow-sm backdrop-blur-md transition-colors hover:bg-white/60"
-                  style={{ color: glassMuted, borderColor: themeMode === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)" }}
-                  aria-label={suggestedQueriesVisible ? "Hide suggested queries" : "Show suggested queries"}
-                >
-                  <ChevronDown
-                    size={13}
-                    style={{
-                      transition: "transform 0.2s ease",
-                      transform: suggestedQueriesVisible ? "rotate(0deg)" : "rotate(-90deg)",
-                    }}
-                  />
-                </button>
-              </div>
-
-              <AnimatePresence>
-                {suggestedQueriesVisible && (
-                  <motion.div
-                    key="suggested-queries-list"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 4 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="flex flex-col gap-1.5"
-                  >
-                    {SUGGESTED_QUERIES.map(query => {
-                      const Icon = query.Icon;
-                      return (
-                        <button
-                          key={`${query.type}::${query.label}`}
-                          type="button"
-                          onClick={() => {
-                            openGraph(query.type, query.label);
-                            setSuggestedQueriesVisible(false);
-                          }}
-                          className="group flex w-full items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3 text-left shadow-[0_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] active:translate-y-[0px] active:scale-[0.99] active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-                          style={{
-                            background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
-                            borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                          }}
-                        >
-                          <span
-                            className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-white shadow-sm ring-1 ring-black/5"
-                            style={{ background: query.color }}
-                          >
-                            <Icon size={13} />
-                          </span>
-                          <span className="flex-1 text-[13px] font-medium" style={{ color: glassText }}>
-                            {query.label}
-                          </span>
-                          <div className="flex size-6 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100 dark:bg-white/5 dark:group-hover:bg-white/10">
-                            <ChevronRight size={14} className="shrink-0" style={{ color: glassMuted }} />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
         )}
       </div>
@@ -2779,6 +2710,44 @@ useEffect(() => {
             </div>
           );
         })()}
+
+        {!selectedGraphTitle && (
+          <div className="mt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+              Try the following queries based on your usage.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {SUGGESTED_QUERIES.map(query => {
+                const Icon = query.Icon;
+                return (
+                  <button
+                    key={`${query.type}::${query.label}`}
+                    type="button"
+                    onClick={() => openGraph(query.type, query.label)}
+                    className="group flex w-full items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3 text-left shadow-[0_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] active:translate-y-0 active:scale-[0.99] active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                    style={{
+                      background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+                      borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+                    }}
+                  >
+                    <span
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-white shadow-sm ring-1 ring-black/5"
+                      style={{ background: query.color }}
+                    >
+                      <Icon size={13} />
+                    </span>
+                    <span className="flex-1 text-[13px] font-medium" style={{ color: glassText }}>
+                      {query.label}
+                    </span>
+                    <div className="flex size-6 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
+                      <ChevronRight size={14} className="shrink-0" style={{ color: glassMuted }} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
       </div>
 
