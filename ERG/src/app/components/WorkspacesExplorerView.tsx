@@ -2226,6 +2226,75 @@ const SUGGESTED_QUERIES: SuggestedQuery[] = [
   { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#818cf8" },
 ];
 
+function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
+  themeMode: "light" | "dark";
+  glassText: string;
+  glassMuted: string;
+  onSelect: (type: string, label: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const checkScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasMore(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  };
+
+  useEffect(() => { checkScroll(); }, []);
+
+  return (
+    <div className="mt-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+        Try the following queries based on your usage.
+      </p>
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          onScroll={checkScroll}
+          className="flex flex-col gap-1 overflow-y-auto max-h-[98px]"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {SUGGESTED_QUERIES.map(query => {
+            const Icon = query.Icon;
+            return (
+              <button
+                key={`${query.type}::${query.label}`}
+                type="button"
+                onClick={() => onSelect(query.type, query.label)}
+                className="group flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] active:translate-y-0 active:scale-[0.99]"
+                style={{
+                  background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+                  borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+                }}
+              >
+                <span
+                  className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5"
+                  style={{ background: query.color }}
+                >
+                  <Icon size={10} />
+                </span>
+                <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
+                  {query.label}
+                </span>
+                <div className="flex size-5 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
+                  <ChevronRight size={11} className="shrink-0" style={{ color: glassMuted }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {hasMore && (
+          <div
+            className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 transition-opacity duration-200"
+            style={{ background: themeMode === "light" ? "linear-gradient(to bottom, transparent, rgba(255,255,255,0.88))" : "linear-gradient(to bottom, transparent, rgba(19,20,26,0.9))" }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ExplorerSplashView({
   onSelectType,
   onSelectUseCase,
@@ -2712,45 +2781,12 @@ useEffect(() => {
         })()}
 
         {!selectedGraphTitle && (
-          <div className="mt-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
-              Try the following queries based on your usage.
-            </p>
-            <div className="relative">
-            <div className="flex flex-col gap-1 overflow-y-auto max-h-[98px]" style={{ scrollbarWidth: "none" }}>
-              {SUGGESTED_QUERIES.map(query => {
-                const Icon = query.Icon;
-                return (
-                  <button
-                    key={`${query.type}::${query.label}`}
-                    type="button"
-                    onClick={() => openGraph(query.type, query.label)}
-                    className="group flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] active:translate-y-0 active:scale-[0.99]"
-                    style={{
-                      background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
-                      borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                    }}
-                  >
-                    <span
-                      className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5"
-                      style={{ background: query.color }}
-                    >
-                      <Icon size={10} />
-                    </span>
-                    <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
-                      {query.label}
-                    </span>
-                    <div className="flex size-5 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
-                      <ChevronRight size={11} className="shrink-0" style={{ color: glassMuted }} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {/* Fade-out at bottom */}
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10" style={{ background: themeMode === "light" ? "linear-gradient(to bottom, transparent, rgba(255,255,255,0.88))" : "linear-gradient(to bottom, transparent, rgba(19,20,26,0.9))" }} />
-            </div>
-          </div>
+          <SuggestedQueriesList
+            themeMode={themeMode}
+            glassText={glassText}
+            glassMuted={glassMuted}
+            onSelect={openGraph}
+          />
         )}
       </div>
       </div>
