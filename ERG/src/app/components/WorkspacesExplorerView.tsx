@@ -2219,11 +2219,12 @@ type SuggestedQuery = {
 };
 
 const SUGGESTED_QUERIES: SuggestedQuery[] = [
-  { type: "Workspaces", label: "Workspaces with failed checks", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Workspaces", label: "Drifted Workspaces", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Workspaces", label: "Workspace VCS source", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Terraform Versions", label: "Top Terraform versions", Icon: TerraformIcon, color: "#38bdf8" },
-  { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#818cf8" },
+  { type: "Workspaces",        label: "Workspaces with failed checks", Icon: WorkspaceIcon,  color: "#9b8ff5" },
+  { type: "Policy Sets",       label: "Policy sets with failures",     Icon: Shield,          color: "#fbbf24" },
+  { type: "Modules",           label: "Top module versions",           Icon: ModuleIcon,      color: "#818cf8" },
+  { type: "Providers",         label: "Providers by workspace count",  Icon: Globe,           color: "#34d399" },
+  { type: "Resources",         label: "Resources by type",             Icon: ResourcesIcon,   color: "#f472b6" },
+  { type: "Terraform Versions", label: "Top Terraform versions",       Icon: TerraformIcon,   color: "#38bdf8" },
 ];
 
 function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
