@@ -514,9 +514,10 @@ interface TFCWorkspaceViewProps {
   page: PageContext;
   onPageChange: (p: PageContext) => void;
   rightInset?: number;
+  hideTopNav?: boolean;
 }
 
-export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page, onPageChange, rightInset = 0 }: TFCWorkspaceViewProps) {
+export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page, onPageChange, rightInset = 0, hideTopNav = false }: TFCWorkspaceViewProps) {
   const [selectedRun, setSelectedRun] = useState<{ id: string; runId: string } | null>(null);
 
   // This imported Figma frame replaces the single-workspace overview with the
@@ -524,7 +525,7 @@ export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page,
   if (page === "overview") {
     return (
       <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: T.bg }}>
-        <TopNav />
+        {!hideTopNav && <TopNav />}
         <div
           className="min-h-0 flex-1 overflow-auto bg-white"
           style={{ paddingRight: rightInset, transition: "padding-right 0.4s cubic-bezier(0.25,0.8,0.25,1)" }}
@@ -537,7 +538,7 @@ export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page,
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ backgroundColor: T.bg }}>
-      <TopNav />
+      {!hideTopNav && <TopNav />}
       <div
         className="flex flex-1 min-h-0 overflow-hidden"
         style={{ paddingRight: rightInset, transition: "padding-right 0.4s cubic-bezier(0.25,0.8,0.25,1)" }}

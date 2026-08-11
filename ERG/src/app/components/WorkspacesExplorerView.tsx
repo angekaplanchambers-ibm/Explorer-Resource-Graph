@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import DotBackgroundGraph from "../../imports/DotBackgroundGraph";
 import {
-  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
-  Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, Lock, MoreHorizontal, Plus, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User,
+  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Compass,
+  Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, ListOrdered, Lock, MoreHorizontal, Plus, RefreshCw, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User, X
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 
 const WORKSPACE_SVG_PATH = "M0 2.75C0 1.23122 1.23122 0 2.75 0H17.25C18.7688 0 20 1.23122 20 2.75V17.25C20 18.7688 18.7688 20 17.25 20H2.75C1.23122 20 0 18.7688 0 17.25V2.75ZM7 18.5H17.25C17.9404 18.5 18.5 17.9404 18.5 17.25V7.5H7V18.5ZM5.5 7.5V18.5H2.75C2.05964 18.5 1.5 17.9404 1.5 17.25V7.5H5.5ZM18.5 6V2.75C18.5 2.05964 17.9404 1.5 17.25 1.5H2.75C2.05964 1.5 1.5 2.05964 1.5 2.75V6H18.5Z";
 
-function WorkspaceIcon({ size = 16, className = "" }: { size?: number; className?: string }) {
+function WorkspaceIcon({ size = 16, className = "", color }: { size?: number; className?: string; color?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="currentColor" className={className}>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="currentColor" className={className} style={color ? { color } : undefined}>
       <path clipRule="evenodd" d={WORKSPACE_SVG_PATH} fillRule="evenodd" />
     </svg>
   );
@@ -128,7 +130,16 @@ const tableColumns = [
   { id: "updated", label: "Updated", width: "w-[165px]", valueType: "date" },
 ] as const;
 
+// Module Type details schema — intentionally limited to these five fields.
 const moduleTableColumns = [
+  { id: "name", label: "Name", width: "w-[210px]", valueType: "text" },
+  { id: "version", label: "Version", width: "w-[130px]", valueType: "text" },
+  { id: "source", label: "Source", width: "w-[380px]", valueType: "text" },
+  { id: "workspaceCount", label: "Workspace count", width: "w-[165px]", valueType: "number" },
+  { id: "workspaces", label: "Workspaces", width: "w-[315px]", valueType: "text" },
+] as const;
+
+const providerTableColumns = [
   { id: "name", label: "Name", valueType: "text" },
   { id: "version", label: "Version", valueType: "text" },
   { id: "source", label: "Source", valueType: "text" },
@@ -136,6 +147,7 @@ const moduleTableColumns = [
   { id: "workspaces", label: "Workspaces", valueType: "text" },
 ] as const;
 
+// Resource Type details schema — intentionally limited to these twelve fields.
 const resourceTableColumns = [
   { id: "type", label: "Type", width: "w-[150px]", valueType: "text" },
   { id: "name", label: "Name", width: "w-[190px]", valueType: "text" },
@@ -151,10 +163,11 @@ const resourceTableColumns = [
   { id: "sourceUpdatedAt", label: "Source updated at", width: "w-[200px]", valueType: "date" },
 ] as const;
 
+// Terraform Version Type details schema — intentionally limited to these three fields.
 const terraformVersionTableColumns = [
-  { id: "version", label: "Version", valueType: "text" },
-  { id: "workspaceCount", label: "Workspace count", valueType: "number" },
-  { id: "workspaces", label: "Workspaces", valueType: "text" },
+  { id: "version", label: "Version", width: "w-[190px]", valueType: "text" },
+  { id: "workspaceCount", label: "Workspace count", width: "w-[175px]", valueType: "number" },
+  { id: "workspaces", label: "Workspaces", width: "w-[635px]", valueType: "text" },
 ] as const;
 
 const operatorsByValueType = {
@@ -211,7 +224,138 @@ function matchValue(actual: unknown, valueType: string, operator: string, condit
 }
 
 function SortControl() {
-  return <span className="inline-flex flex-col leading-[7px] text-[#656a76]"><ChevronUp size={10} strokeWidth={1.8} /><ChevronDown size={10} strokeWidth={1.8} /></span>;
+  return <ChevronsUpDown size={14} className="text-[#656a76] shrink-0" />;
+}
+
+function TablePagination({
+  currentPage = 1,
+  totalPages = 1,
+  totalItems = 0,
+  pageSize = 20,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [10, 20, 50, 100],
+}: {
+  currentPage?: number;
+  totalPages?: number;
+  totalItems?: number;
+  pageSize?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
+  pageSizeOptions?: number[];
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, "...", totalPages - 1, totalPages];
+    }
+    if (currentPage >= totalPages - 3) {
+      return [1, 2, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, 2, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+  };
+
+  const pages = getPageNumbers();
+
+  return (
+    <div className="mt-6 flex items-center justify-between text-[13px] font-normal text-[#3b3d45] select-none">
+      {/* Left: Range text */}
+      <div>
+        {startItem}–{endItem} of {totalItems}
+      </div>
+
+      {/* Center: Page controls */}
+      <div className="flex items-center gap-5">
+        <button
+          type="button"
+          onClick={() => onPageChange?.(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="text-[#656a76] hover:text-[#17171a] disabled:cursor-not-allowed disabled:text-[#c2c5cb] transition-colors"
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="flex items-center gap-4">
+          {pages.map((p, idx) => {
+            if (p === "...") {
+              return (
+                <span key={`dots-${idx}`} className="text-[#3b3d45]">
+                  ...
+                </span>
+              );
+            }
+            const pageNum = Number(p);
+            const isActive = pageNum === currentPage;
+            return (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => onPageChange?.(pageNum)}
+                className={`relative px-1 pb-0.5 text-[13px] font-normal transition-colors ${
+                  isActive
+                    ? "text-[#0f62fe] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#0f62fe]"
+                    : "text-[#3b3d45] hover:text-[#0f62fe]"
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange?.(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages || totalPages === 0}
+          className="text-[#3b3d45] hover:text-[#17171a] disabled:cursor-not-allowed disabled:text-[#c2c5cb] transition-colors"
+          aria-label="Next page"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      {/* Right: Items per page */}
+      <div className="relative flex items-center gap-2.5">
+        <span>Items per page</span>
+        <button
+          type="button"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-expanded={menuOpen}
+          className="flex h-8 items-center gap-2 rounded-[6px] border border-[#8c909c] bg-white px-3 py-1 font-normal text-[#17171a] hover:bg-[#f8f9fa] shadow-sm transition-colors"
+        >
+          <span>{pageSize}</span>
+          <ChevronsUpDown size={14} className="text-[#656a76]" />
+        </button>
+        {menuOpen && (
+          <div className="absolute bottom-[38px] right-0 z-50 min-w-[80px] overflow-hidden rounded-[6px] border border-[#b8bcc5] bg-white py-1 shadow-md">
+            {pageSizeOptions.map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onPageSizeChange?.(opt);
+                  setMenuOpen(false);
+                }}
+                className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[13px] hover:bg-[#f1f2f3] ${
+                  opt === pageSize ? "font-medium text-[#0f62fe]" : "text-[#3b3d45]"
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const moduleRows = [
@@ -260,14 +404,16 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
+              
               {columns.map(column => (
-                <th key={column.id} className="h-12 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2">{column.label}<SortControl /></span></th>
+                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
               ))}
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
             {filteredRows.map(([name, version, source, workspaceCount, workspaces]) => (
               <tr key={`${name}-${version}`} className="border-t border-[#dedfe3] bg-white">
+                
                 {columns.map(column => {
                   const content = {
                     name,
@@ -283,11 +429,12 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
           </tbody>
         </table>
       </div>
-      <div className="mt-6 flex items-center justify-center gap-6 text-[11px] text-[#52525b]">
-        <span>1–{rows.length} of {rows.length}</span>
-        <div className="flex items-center gap-3"><ChevronLeft size={15} className="text-[#9b9cb8]" /><span className="border-b-2 border-[#0f62fe] px-1 py-1 text-[#0f62fe]">1</span><ChevronRight size={15} className="text-[#656a76]" /></div>
-        <span>Items per page&nbsp;&nbsp;<span className="rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-2 py-1">20 <ChevronUp className="inline" size={10} /></span></span>
-      </div>
+      <TablePagination
+        currentPage={1}
+        totalPages={1}
+        totalItems={filteredRows.length}
+        pageSize={20}
+      />
     </>
   );
 }
@@ -327,11 +474,16 @@ function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { 
     <>
       <div className="overflow-hidden rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
           <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map(column => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0">{content[column.id]}</td>; })}</tr>)}</tbody>
         </table>
       </div>
-      <div className="mt-6 flex items-center justify-center gap-6 text-[11px] text-[#52525b]"><span>1–{filteredRows.length} of {filteredRows.length}</span><div className="flex items-center gap-3"><ChevronLeft size={15} className="text-[#9b9cb8]" /><span className="border-b-2 border-[#0f62fe] px-1 py-1 text-[#0f62fe]">1</span><ChevronRight size={15} className="text-[#656a76]" /></div><span>Items per page&nbsp;&nbsp;<span className="rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-2 py-1">20 <ChevronUp className="inline" size={10} /></span></span></div>
+      <TablePagination
+        currentPage={1}
+        totalPages={1}
+        totalItems={filteredRows.length}
+        pageSize={20}
+      />
     </>
   );
 }
@@ -378,10 +530,11 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleC
     <>
       <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2300px] table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[11px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className={`h-12 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}><span className="flex items-center justify-between gap-2">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
           <tbody className="text-[11px] text-[#52525b]">
             {filteredRows.map(row => (
               <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white">
+                
                 {columns.map(column => {
                   const content = {
                     type: row.type,
@@ -404,7 +557,12 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleC
           </tbody>
         </table>
       </div>
-      <div className="mt-6 flex items-center justify-center gap-6 text-[11px] text-[#52525b]"><span>1–20 of 3427</span><div className="flex items-center gap-3"><ChevronLeft size={15} className="text-[#9b9cb8]" /><span className="border-b-2 border-[#0f62fe] px-1 py-1 text-[#0f62fe]">1</span><span>2</span><span>3</span><span>4</span><span>…</span><span>171</span><span>172</span><ChevronRight size={15} /></div><span>Items per page&nbsp;&nbsp;<span className="rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-2 py-1">20 <ChevronUp className="inline" size={10} /></span></span></div>
+      <TablePagination
+        currentPage={1}
+        totalPages={172}
+        totalItems={3427}
+        pageSize={20}
+      />
     </>
   );
 }
@@ -547,10 +705,11 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
         <table className="min-w-[2100px] table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              <th className="h-12 w-10 border-r border-[#dedfe3] px-3" />
+              
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3" />
               {policySetColumns.map(col => (
-                <th key={col.id} className={`h-12 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`}>
-                  <span className="flex items-center justify-between gap-2 whitespace-nowrap">{col.label}<SortControl /></span>
+                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`}>
+                  <span className="flex items-center justify-between gap-2 whitespace-nowrap text-[12px] font-semibold text-[#17171a]">{col.label}<SortControl /></span>
                 </th>
               ))}
             </tr>
@@ -561,6 +720,7 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
               return (
                 <React.Fragment key={row.id}>
                   <tr className="h-12 border-t border-[#dedfe3] bg-white">
+                    
                     <td className="border-r border-[#dedfe3] px-3 text-center">
                       <button
                         type="button"
@@ -596,7 +756,7 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
                   {isExpanded && (
                     <tr className="border-t border-[#dedfe3] bg-[#f8f9fa]">
                       <td />
-                      <td colSpan={policySetColumns.length} className="px-6 py-4">
+                      <td colSpan={policySetColumns.length + 1} className="px-6 py-4">
                         <div className="flex flex-col gap-2 text-[12px]">
                           <div className="flex items-center gap-3">
                             <span className="w-[120px] shrink-0 text-[#656a76]">Policy set:</span>
@@ -637,15 +797,12 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
           </tbody>
         </table>
       </div>
-      <div className="mt-6 flex items-center justify-center gap-6 text-[11px] text-[#52525b]">
-        <span>1–{policySetRows.length} of {policySetRows.length}</span>
-        <div className="flex items-center gap-3">
-          <ChevronLeft size={15} className="text-[#9b9cb8]" />
-          <span className="border-b-2 border-[#1060ff] px-1 py-1 text-[#1060ff]">1</span>
-          <ChevronRight size={15} className="text-[#656a76]" />
-        </div>
-        <span>Items per page&nbsp;&nbsp;<span className="rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-2 py-1">20 <ChevronUp className="inline" size={10} /></span></span>
-      </div>
+      <TablePagination
+        currentPage={1}
+        totalPages={1}
+        totalItems={policySetRows.length}
+        pageSize={20}
+      />
     </>
   );
 }
@@ -669,7 +826,9 @@ const SELECTED_COLOR = "#f97316";
 const NEIGHBOR_COLOR = "#22c55e";
 const VW = 1200;
 const VH = 660;
-const NODE_R = 20;
+const NODE_SIZE = 16;
+const NODE_RADIUS = 20;
+const NODE_R = NODE_SIZE / 2;
 
 type TopoNode = {
   id: string;
@@ -680,7 +839,7 @@ type TopoNode = {
 };
 type TopoEdge = { source: string; target: string };
 
-function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdge[] } {
+function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []): { nodes: TopoNode[]; edges: TopoEdge[] } {
   const nodes: TopoNode[] = [];
   const edgeSet = new Set<string>();
   const edges: TopoEdge[] = [];
@@ -692,7 +851,27 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
   }
 
   if (activeType === "Workspaces") {
-    const subset = workspaceRows.slice(0, 16);
+    const filteredWs = conditions.length
+      ? workspaceRows.filter(row => {
+          const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
+          return conditions.every(c => {
+            const col = tableColumns.find(col => col.id === c.fieldId);
+            const fieldMap: Record<string, unknown> = {
+              name: row.name, project: row.project, run: row.run, runStatus: row.runStatus,
+              currentRunApplied, repository, noCodeModule: row.noCodeModule,
+              moduleCount, modules, providerCount, providers, terraformVersion,
+              drifted: String(row.drifted), healthChecksSucceeded: row.healthChecksSucceeded,
+              healthChecksPassed: row.healthChecksPassed, healthChecksFailed: row.healthChecksFailed,
+              healthChecksErrored: row.healthChecksErrored, resourcesDrifted: row.resourcesDrifted,
+              resourcesUndrifted: row.resourcesUndrifted, stateTerraformVersion: row.stateTerraformVersion,
+              currentRumCount: row.currentRumCount, resources: row.count, tags: row.tags,
+              created: row.created, updated: row.updated,
+            };
+            return matchValue(fieldMap[c.fieldId] ?? "", col?.valueType ?? "text", c.operator, c.value);
+          });
+        })
+      : workspaceRows;
+    const subset = filteredWs.slice(0, 16);
     for (const ws of subset) {
       const wsProviders = ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/google", "registry.terraform.io/hashicorp/azurerm", "registry.terraform.io/hashicorp/kubernetes"][ws.count % 4];
       nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: { org: "hashicorp-demo", project: ws.project, resources: ws.count, providers: wsProviders, runStatus: ws.runStatus, tags: ws.tags, created: ws.created } });
@@ -720,9 +899,18 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
   }
 
   else if (activeType === "Modules") {
+    const filteredMods = conditions.length
+      ? moduleRows.filter(([name, version, source, workspaceCount, workspaces]) =>
+          conditions.every(c => {
+            const col = moduleTableColumns.find(col => col.id === c.fieldId);
+            const val = ({ name, version, source, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
+            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+          })
+        )
+      : moduleRows;
     // Build workspace → modules index for peer connections
     const wsByModule = new Map<string, string[]>();
-    for (const [name, version, , , wsList] of moduleRows) {
+    for (const [name, version, , , wsList] of filteredMods) {
       const nodeId = `mod-${name}-${version}`;
       const shortName = name.split("/").slice(-2).join("/");
       nodes.push({ id: nodeId, label: shortName, type: "module", secondary: `v${version}`, data: { name, version, workspaces: wsList } });
@@ -741,9 +929,18 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
   }
 
   else if (activeType === "Providers") {
+    const filteredProvs = conditions.length
+      ? providerRows.filter(([name, version, source, workspaceCount, workspaces]) =>
+          conditions.every(c => {
+            const col = moduleTableColumns.find(col => col.id === c.fieldId);
+            const val = ({ name, version, source, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
+            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+          })
+        )
+      : providerRows;
     // Add provider nodes and track which workspace connects to each
     const wsNodeIds = new Map<string, string>(); // workspace name → node id
-    for (const [name, version, , wsCount, workspace] of providerRows) {
+    for (const [name, version, , wsCount, workspace] of filteredProvs) {
       const nodeId = `prov-${name.replace("/", "_")}-${version}`;
       const baseName = name.split("/").pop()!;
       nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace } });
@@ -758,7 +955,7 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
     }
     // Connect providers of the same family (azurerm group, tfe group, etc.)
     const families = new Map<string, string[]>();
-    for (const [name, version] of providerRows) {
+    for (const [name, version] of filteredProvs) {
       const base = name.split("/").pop()!;
       const nodeId = `prov-${name.replace("/", "_")}-${version}`;
       if (!families.has(base)) families.set(base, []);
@@ -773,8 +970,17 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
   }
 
   else if (activeType === "Terraform Versions") {
+    const filteredTFV = conditions.length
+      ? terraformVersionRows.filter(([version, workspaceCount, workspaces]) =>
+          conditions.every(c => {
+            const col = terraformVersionTableColumns.find(col => col.id === c.fieldId);
+            const val = ({ version, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
+            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+          })
+        )
+      : terraformVersionRows;
     const wsNodeIds = new Map<string, string>(); // workspace name → node id
-    for (const [version, wsCount, wsList] of terraformVersionRows) {
+    for (const [version, wsCount, wsList] of filteredTFV) {
       const versionNodeId = `tfver-${version}`;
       nodes.push({ id: versionNodeId, label: version, type: "terraform-version", secondary: `${wsCount} ws`, data: { version, workspaces: wsList } });
       // Parse workspace names (strip trailing ellipsis annotations)
@@ -790,7 +996,7 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
     }
     // Connect versions in the same major.minor series (e.g., 1.9.x peers)
     const byMinor = new Map<string, string[]>();
-    for (const [version] of terraformVersionRows) {
+    for (const [version] of filteredTFV) {
       const minor = version.split(".").slice(0, 2).join(".");
       if (!byMinor.has(minor)) byMinor.set(minor, []);
       byMinor.get(minor)!.push(`tfver-${version}`);
@@ -804,11 +1010,20 @@ function buildTopoGraph(activeType: string): { nodes: TopoNode[]; edges: TopoEdg
   }
 
   else if (activeType === "Resources") {
+    const filteredRes = conditions.length
+      ? resourceRows.filter(row =>
+          conditions.every(c => {
+            const col = resourceTableColumns.find(col => col.id === c.fieldId);
+            const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
+            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+          })
+        )
+      : resourceRows;
     const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
     const bySubtype = new Map<string, string[]>();
     const wsNodeIds = new Map<string, string>();
-    for (let i = 0; i < resourceRows.length; i++) {
-      const row = resourceRows[i];
+    for (let i = 0; i < filteredRes.length; i++) {
+      const row = filteredRes[i];
       const subType = SUBTYPES[i % 5];
       const typeKey = `resource-${subType}`;
       const nodeId = `res-${row.id}`;
@@ -1015,13 +1230,14 @@ const DEFAULT_NODE_ICON: LucideIcon = Server;
 
 type TopoLayout = "force" | "stacked" | "radial";
 
-function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { activeType: string; initialWorkspace?: string | null; onViewResources?: (workspaceName: string) => void }) {
+function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">> }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>("force");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
@@ -1032,8 +1248,8 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
   const [providerSourceFilter, setProviderSourceFilter] = useState("");
   const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
-  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType), [activeType]);
-  const forcePositions = useMemo(() => runForceLayout(nodes, edges), [nodes, edges]);
+  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions), [activeType, conditions]);
+  const forcePositions = useMemo(() => runForceLayout(nodes, edges), [nodes, edges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stackedPositions = useMemo(() => runStackedLayout(nodes), [nodes]);
   const radialPositions = useMemo(() => runRadialLayout(nodes), [nodes]);
   const positions = topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
@@ -1157,28 +1373,36 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
   const groupTransform = `translate(${tx},${ty}) scale(${scale})`;
 
   return (
-    <div style={{ position: "relative", width: "100%", flex: 1, minHeight: 0, background: "#13141a", borderRadius: 8, overflow: "hidden" }}>
+    <div style={{
+      position: "relative",
+      width: "100%",
+      height: "100%",
+      flex: 1,
+      minHeight: 0,
+      // The explorer owns the dotted canvas; a transparent graph surface keeps it visible and crisp.
+      backgroundColor: themeMode === "light" ? "transparent" : "#13141a",
+      borderRadius: 8,
+      overflow: "hidden"
+    }}>
+      {/* The page-level dot canvas lives below this graph; keep the SVG surface clear. */}
       <div style={{ position: "absolute", top: 14, left: 16, zIndex: 10, display: "flex", flexDirection: "column", gap: 4, fontFamily: "inherit" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 500, letterSpacing: "0.01em", pointerEvents: "none" }}>
-          {visibleNodes.length} {activeType} · {visibleEdges.length} edges
-        </span>
         {activeType === "Providers" && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>Providers:</span>
+            <span style={{ color: themeMode === "light" ? "#9b9cb8" : "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>Providers:</span>
             <input
               value={providerSourceInput}
               onChange={e => setProviderSourceInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { setProviderSourceFilter(providerSourceInput); setProviderVersionFilter(providerVersionInput); } }}
               placeholder="provider_source"
-              style={{ height: 30, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
+              style={{ height: 30, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
             />
             <input
               value={providerVersionInput}
               onChange={e => setProviderVersionInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") { setProviderSourceFilter(providerSourceInput); setProviderVersionFilter(providerVersionInput); } }}
               placeholder="version_constraint"
-              style={{ height: 30, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
+              style={{ height: 30, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
             />
             <button
               type="button"
@@ -1255,10 +1479,6 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
         onMouseLeave={handleMouseUp}
       >
         <defs>
-          <radialGradient id="topo-center" cx="50%" cy="50%" r="55%">
-            <stop offset="0%" stopColor="#1e2035" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#13141a" stopOpacity="0" />
-          </radialGradient>
           <style>{`
             @keyframes topoNodeIn {
               0%   { opacity: 0; transform: scale(0.25); }
@@ -1269,14 +1489,6 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
             }
           `}</style>
         </defs>
-
-        {/* Static background — not zoomed */}
-        {Array.from({ length: 22 }, (_, row) =>
-          Array.from({ length: 38 }, (_, col) => (
-            <circle key={`d-${row}-${col}`} cx={col * 32 + 16} cy={row * 30 + 15} r={1} fill="#2a2d3a" />
-          ))
-        )}
-        <ellipse cx={VW / 2} cy={VH / 2} rx={VW * 0.55} ry={VH * 0.5} fill="url(#topo-center)" />
 
         {/* Drag + deselect backdrop — outside zoom group so it covers full canvas */}
         <rect
@@ -1301,11 +1513,11 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
                 key={i}
                 d={curvePath(ps.x, ps.y, pt.x, pt.y)}
                 fill="none"
-                stroke="rgba(255,255,255,0.28)"
+                stroke={themeMode === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.28)"}
                 strokeWidth={1 / scale}
                 strokeDasharray={`${5 / scale} ${4 / scale}`}
                 strokeLinecap="round"
-                opacity={activeId ? (isLit ? 1 : 0.06) : 1}
+                opacity={activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1}
                 style={{ transition: "opacity 0.2s ease" }}
               />
             );
@@ -1326,11 +1538,12 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
               : hoveredId
                 ? (!isHovered && !isHoverNeighbor)
                 : (!!selectedId && !isSelected && !isNeighbor);
-            const color = blastRadiusId
-              ? (isBlastOrigin ? SELECTED_COLOR : inBlastRadius ? SELECTED_COLOR : (NODE_COLORS[node.type] ?? "#9b8ff5"))
-              : isSelected ? SELECTED_COLOR : isNeighbor ? NEIGHBOR_COLOR : (NODE_COLORS[node.type] ?? "#9b8ff5");
+            // Interaction states are expressed with an outline, never by replacing the node's category color.
+            const color = NODE_COLORS[node.type] ?? "#9b8ff5";
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
+            const hasNodeGlow = isHovered || isSelected || Boolean(blastRadiusId && inBlastRadius);
+            const nodeOutlineColor = themeMode === "light" ? "#0c0c0e" : "#ffffff";
 
             return (
               <g
@@ -1342,12 +1555,12 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
                 onMouseLeave={() => setHoveredId(null)}
               >
                 <g
-                  key={`${node.id}-${activeType}`}
+                  key={`${node.id}-${activeType}-${refreshKey}`}
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
-                  <circle r={NODE_R + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />
-                  <circle r={NODE_R} fill={color} opacity={1} />
-                  {(isSelected || (blastRadiusId && inBlastRadius)) && <circle r={NODE_R} fill="none" stroke="white" strokeWidth={2} opacity={0.9} />}
+                  {hasNodeGlow && <circle r={NODE_R + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
+                  <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {hasNodeGlow && <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
                   <foreignObject x={-NODE_R} y={-NODE_R} width={NODE_R * 2} height={NODE_R * 2}>
                     {(() => {
                       const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
@@ -1358,8 +1571,8 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
                       );
                     })()}
                   </foreignObject>
-                  <text y={NODE_R + 17} textAnchor="middle" fill="rgba(255,255,255,0.92)" fontSize={13} fontWeight="500" fontFamily="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="-0.01em">{nameLabel}</text>
-                  <text y={NODE_R + 31} textAnchor="middle" fill="rgba(255,255,255,0.38)" fontSize={11} fontWeight="400" fontFamily="-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                  <text y={NODE_R + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={NODE_R + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
               </g>
             );
@@ -1378,18 +1591,18 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
         if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
           const downstreamCount = blastRadiusSet.size - 1; // exclude origin
           return (
-            <div style={{ position: "absolute", top: 14, right: 14, zIndex: 20, width: 300, background: "#161820", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
               {/* Exit button */}
               <button
                 onClick={() => setBlastRadiusId(null)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
               >
                 ← exit blast view
               </button>
               {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 6 }}>{selectedNode.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 6 }}>{selectedNode.label}</div>
               {/* Subtitle */}
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+              <div style={{ fontSize: 13, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)" }}>
                 {downstreamCount > 0 ? `${downstreamCount} downstream workspace${downstreamCount > 1 ? "s" : ""}` : "no downstream workspaces"}
               </div>
             </div>
@@ -1400,36 +1613,36 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
         if (isWorkspace && activeType === "Workspaces") {
           const providers = String(d.providers ?? "").split(",").map(p => p.trim()).filter(Boolean);
           return (
-            <div style={{ position: "absolute", top: 14, right: 14, zIndex: 20, width: 300, background: "#161820", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", padding: "18px 20px 16px", boxShadow: "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "18px 20px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
               {/* Close */}
-              <button onClick={() => { setSelectedId(null); setBlastRadiusId(null); }} style={{ position: "absolute", top: 12, right: 14, color: "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}>✕</button>
+              <button onClick={() => { setSelectedId(null); setBlastRadiusId(null); }} style={{ position: "absolute", top: 12, right: 14, color: themeMode === "light" ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}>✕</button>
 
               {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{selectedNode.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{selectedNode.label}</div>
 
               {/* Key-value rows */}
               <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 14 }}>
                 {[["org", d.org], ["project", d.project], ["resources", d.resources]].map(([k, v]) => (
                   <div key={String(k)} style={{ display: "flex", gap: 0 }}>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", width: 80, flexShrink: 0 }}>{String(k)}</span>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,0.85)", fontFamily: "ui-monospace, 'SF Mono', monospace" }}>{String(v ?? "—")}</span>
+                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", width: 80, flexShrink: 0 }}>{String(k)}</span>
+                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", fontFamily: "ui-monospace, 'SF Mono', monospace" }}>{String(v ?? "—")}</span>
                   </div>
                 ))}
               </div>
 
               {/* Output Consumers box */}
-              <div style={{ background: "rgba(255,255,255,0.04)", borderLeft: "3px solid #4f6ef7", borderRadius: "0 6px 6px 0", padding: "10px 12px", marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Output Consumers</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>no workspaces access this workspace's outputs</div>
+              <div style={{ background: themeMode === "light" ? "rgba(79,110,247,0.06)" : "rgba(255,255,255,0.04)", borderLeft: "3px solid #4f6ef7", borderRadius: "0 6px 6px 0", padding: "10px 12px", marginBottom: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: themeMode === "light" ? "#4f6ef7" : "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Output Consumers</div>
+                <div style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>no workspaces access this workspace's outputs</div>
               </div>
 
               {/* Providers */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 6 }}>providers</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", marginBottom: 6 }}>providers</div>
                 <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
                   {providers.length ? providers.map(p => (
-                    <li key={p} style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>{p}</li>
-                  )) : <li style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>none</li>}
+                    <li key={p} style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>{p}</li>
+                  )) : <li style={{ fontSize: 12, color: themeMode === "light" ? "#9b9cb8" : "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>none</li>}
                 </ul>
               </div>
 
@@ -1437,7 +1650,7 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
                   onClick={() => onViewResources?.(selectedNode.label)}
-                  style={{ height: 38, borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.08)", color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View resources <span>→</span>
                 </button>
@@ -1455,25 +1668,25 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
         // Generic popover for all other node types
         const fields = Object.entries(d);
         return (
-          <div style={{ position: "absolute", top: 14, right: 14, zIndex: 20, width: 272, background: "#1c1e2b", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", padding: "14px 16px", boxShadow: "0 12px 40px rgba(0,0,0,0.65)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 272, background: themeMode === "light" ? "#ffffff" : "#1c1e2b", borderRadius: 10, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "14px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 12px 40px rgba(0,0,0,0.65)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", lineHeight: 1.35, wordBreak: "break-word" }}>{selectedNode.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.35, wordBreak: "break-word" }}>{selectedNode.label}</div>
                 <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 6 }}>
                   <div style={{ width: 7, height: 7, borderRadius: "50%", background: NODE_COLORS[selectedNode.type] ?? "#9b8ff5", flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: "#7b7f99", textTransform: "capitalize" }}>{selectedNode.type.replace(/-/g, " ")}</span>
-                  <span style={{ fontSize: 11, color: "#4b4f66", marginLeft: 2 }}>·</span>
-                  <span style={{ fontSize: 11, color: "#7b7f99" }}>{selectedNode.secondary}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99", textTransform: "capitalize" }}>{selectedNode.type.replace(/-/g, " ")}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#c2c5cb" : "#4b4f66", marginLeft: 2 }}>·</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99" }}>{selectedNode.secondary}</span>
                 </div>
               </div>
-              <button onClick={() => setSelectedId(null)} style={{ color: "#4b4f66", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>✕</button>
+              <button onClick={() => setSelectedId(null)} style={{ color: themeMode === "light" ? "#656a76" : "#4b4f66", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>✕</button>
             </div>
-            <div style={{ height: 1, background: "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
+            <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
               {fields.map(([key, value]) => (
                 <div key={key} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 11, color: "#4b4f66", minWidth: 80, textTransform: "capitalize", lineHeight: 1.5, flexShrink: 0 }}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{String(value)}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, textTransform: "capitalize", lineHeight: 1.5, flexShrink: 0 }}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{String(value)}</span>
                 </div>
               ))}
             </div>
@@ -1481,8 +1694,8 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
         );
       })()}
 
-      {/* Layout switcher — bottom right */}
-      <div style={{ position: "absolute", bottom: 16, right: 16, background: "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+      {/* Layout & Theme switcher — bottom right */}
+      <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
         {(["force", "stacked", "radial"] as TopoLayout[]).map(layout => {
           const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial" };
           const isActive = topoLayout === layout;
@@ -1492,9 +1705,9 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
               onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
               style={{
                 height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
-                borderColor: isActive ? "rgba(255,255,255,0.3)" : "transparent",
-                background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
-                color: isActive ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.5)",
+                borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
+                background: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.12)") : "transparent",
+                color: isActive ? (themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)") : (themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.5)"),
                 fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
                 fontWeight: isActive ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease",
                 whiteSpace: "nowrap",
@@ -1504,17 +1717,69 @@ function TopologyGraph({ activeType, initialWorkspace, onViewResources }: { acti
             </button>
           );
         })}
+        
+        {setThemeMode && (
+          <>
+            <div style={{ width: 1, height: 16, background: themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", margin: "0 4px" }} />
+            {(["light", "dark"] as const).map(mode => {
+              const isActive = themeMode === mode;
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setThemeMode(mode)}
+                  style={{
+                    height: 26, padding: "0 10px", borderRadius: 5, border: "1px solid",
+                    borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
+                    background: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.12)") : "transparent",
+                    color: isActive ? (themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)") : (themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.5)"),
+                    fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+                    fontWeight: isActive ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease",
+                    textTransform: "capitalize"
+                  }}
+                >
+                  {mode}
+                </button>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Zoom controls — bottom right, above layout switcher */}
       <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
+        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
+        <button
+          onClick={() => {
+            const isInitial =
+              !selectedId && !blastRadiusId &&
+              zoom.tx === 0 && zoom.ty === 0 && zoom.scale === 1 &&
+              topoLayout === "force" &&
+              selectedWorkspace === (initialWorkspace ?? null) &&
+              !providerSourceFilter && !providerVersionFilter;
+            if (!isInitial) {
+              setSelectedId(null);
+              setBlastRadiusId(null);
+              setZoom({ tx: 0, ty: 0, scale: 1 });
+              setTopoLayout("force");
+              setSelectedWorkspace(initialWorkspace ?? null);
+              setProviderSourceInput("");
+              setProviderVersionInput("");
+              setProviderSourceFilter("");
+              setProviderVersionFilter("");
+            }
+            setRefreshKey(k => k + 1);
+          }}
+          title="Refresh"
+          style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <RefreshCw size={13} />
+        </button>
       </div>
 
       {/* Legend key — bottom left */}
-      <TopoLegend activeType={activeType} nodes={nodes} />
+      <TopoLegend activeType={activeType} nodes={nodes} themeMode={themeMode} />
     </div>
   );
 }
@@ -1532,7 +1797,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "policy-set": "Policy Set",
 };
 
-function TopoLegend({ activeType: _activeType, nodes }: { activeType: string; nodes: TopoNode[] }) {
+function TopoLegend({ activeType: _activeType, nodes, themeMode = "dark" }: { activeType: string; nodes: TopoNode[]; themeMode?: "light" | "dark" }) {
   const typeItems = useMemo(() => {
     const seen = new Set<string>();
     const items: { color: string; label: string }[] = [];
@@ -1556,19 +1821,490 @@ function TopoLegend({ activeType: _activeType, nodes }: { activeType: string; no
   for (let i = 0; i < allItems.length; i += 4) rows.push(allItems.slice(i, i + 4));
 
   return (
-    <div style={{ position: "absolute", bottom: 16, left: 16, background: "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ position: "absolute", bottom: 16, left: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
       {rows.map((row, ri) => (
         <div key={ri} style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "nowrap" }}>
           {row.map(item => (
             <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <div style={{ width: 11, height: 11, borderRadius: "50%", background: item.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", whiteSpace: "nowrap" }}>{item.label}</span>
+              <span style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.75)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif", whiteSpace: "nowrap" }}>{item.label}</span>
             </div>
           ))}
         </div>
       ))}
     </div>
   );
+}
+
+function InlineQueryBuilder({
+  queryColumns,
+  onApplyConditions
+}: {
+  queryColumns: readonly any[];
+  onApplyConditions?: (conditions: ConditionFilter[]) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [conditions, setConditions] = useState<ConditionFilter[]>([
+    { fieldId: "name", operator: "contains", value: "" }
+  ]);
+  const [openFieldIndex, setOpenFieldIndex] = useState<number | null>(null);
+  const [openOperatorIndex, setOpenOperatorIndex] = useState<number | null>(null);
+
+  const activeCount = conditions.filter(c => c.fieldId && c.operator && (c.operator.includes("empty") || c.value.trim())).length;
+
+  function runQuery(currentConds = conditions) {
+    const valid = currentConds.filter(c => c.fieldId && c.operator && (c.operator.includes("empty") || c.value.trim()));
+    onApplyConditions?.(valid);
+  }
+
+  function handleCancel() {
+    const defaultConds = [{ fieldId: "name", operator: "contains", value: "" }];
+    setConditions(defaultConds);
+    onApplyConditions?.([]);
+  }
+
+  return (
+    <div className="mb-4 rounded-[8px] border border-[#dedfe3] bg-white p-4 shadow-sm text-[12px] text-[#3b3d45]">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setExpanded(e => !e)}
+            className="flex size-[26px] items-center justify-center rounded-[5px] border border-[rgba(59,61,69,0.4)] text-[#3b3d45] hover:bg-[#f1f2f3]"
+            aria-label={expanded ? "Collapse conditions" : "Expand conditions"}
+          >
+            {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+          <div>
+            <span className="block font-semibold text-[13px] text-[#17171a]">
+              {expanded ? "Modify conditions" : "Show conditions"}
+            </span>
+            <span className="text-[11px] text-[#656a76]">
+              {activeCount > 0 ? `${activeCount} condition${activeCount > 1 ? "s" : ""} applied ⓘ` : "No conditions applied ⓘ"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="mt-4 space-y-3">
+          {conditions.map((cond, index) => {
+            const selectedField = queryColumns.find(c => c.id === cond.fieldId) ?? queryColumns[0];
+            const SelectedFieldIcon = selectedField?.valueType === "date" ? CalendarDays : selectedField?.valueType === "number" ? Hash : selectedField?.valueType === "boolean" ? ToggleRight : Type;
+            const availableOperators = operatorsByValueType[(selectedField?.valueType ?? "text") as keyof typeof operatorsByValueType];
+
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <span className="w-[60px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
+                
+                {/* Field selector */}
+                <div className="relative min-w-[190px]">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFieldIndex(openFieldIndex === index ? null : index)}
+                    className="flex h-9 w-full items-center justify-between rounded-l-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]"
+                  >
+                    <span className="flex items-center gap-2"><SelectedFieldIcon size={14} />{selectedField?.label ?? "Name"}</span>
+                    <ChevronDown size={14} />
+                  </button>
+                  {openFieldIndex === index && (
+                    <div className="absolute left-0 top-[38px] z-40 max-h-60 w-60 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md">
+                      {queryColumns.map(col => {
+                        const Icon = col.valueType === "date" ? CalendarDays : col.valueType === "number" ? Hash : col.valueType === "boolean" ? ToggleRight : Type;
+                        return (
+                          <button
+                            key={col.id}
+                            type="button"
+                            onClick={() => {
+                              setConditions(prev => prev.map((c, i) => i === index ? { ...c, fieldId: col.id, operator: operatorsByValueType[col.valueType as keyof typeof operatorsByValueType][0] } : c));
+                              setOpenFieldIndex(null);
+                            }}
+                            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${cond.fieldId === col.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
+                          >
+                            <Icon size={14} /> {col.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Operator selector */}
+                <div className="relative -ml-2 min-w-[140px]">
+                  <button
+                    type="button"
+                    onClick={() => setOpenOperatorIndex(openOperatorIndex === index ? null : index)}
+                    className="flex h-9 w-full items-center justify-between border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]"
+                  >
+                    <span>{cond.operator}</span>
+                    <ChevronDown size={14} />
+                  </button>
+                  {openOperatorIndex === index && (
+                    <div className="absolute left-0 top-[38px] z-40 max-h-60 w-48 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md">
+                      {availableOperators.map(op => (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => {
+                            setConditions(prev => prev.map((c, i) => i === index ? { ...c, operator: op } : c));
+                            setOpenOperatorIndex(null);
+                          }}
+                          className={`flex w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${cond.operator === op ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
+                        >
+                          {op}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Value input */}
+                <input
+                  type="text"
+                  value={cond.value}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const newConds = conditions.map((c, i) => i === index ? { ...c, value: val } : c);
+                    setConditions(newConds);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") runQuery();
+                  }}
+                  placeholder="Enter a value"
+                  className="-ml-2 h-9 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#8c909c] focus:border-[#0f62fe]"
+                />
+
+                {/* Trash button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    let newConds: ConditionFilter[];
+                    if (conditions.length === 1) {
+                      newConds = [{ fieldId: "name", operator: "contains", value: "" }];
+                    } else {
+                      newConds = conditions.filter((_, i) => i !== index);
+                    }
+                    setConditions(newConds);
+                    runQuery(newConds);
+                  }}
+                  className="flex size-9 items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.25)] bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3]"
+                  aria-label="Remove condition"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            );
+          })}
+
+          {/* Add condition link */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setConditions(prev => [...prev, { fieldId: "name", operator: "contains", value: "" }])}
+              className="flex items-center gap-1.5 text-[12px] font-medium text-[#1060ff] hover:underline"
+            >
+              Add condition <Plus size={14} />
+            </button>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => runQuery()}
+              className="h-9 rounded-[6px] bg-[#1060ff] px-4 text-[12px] font-medium text-white shadow-sm hover:bg-[#0c56e9]"
+            >
+              Run Query
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="h-9 rounded-[6px] border border-[rgba(59,61,69,0.4)] bg-white px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f8f9fa]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlideInWorkspacesTable() {
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => tableColumns.map(column => column.id));
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [draftColumnIds, setDraftColumnIds] = useState<string[]>(() => tableColumns.map(column => column.id));
+  const [columnSearch, setColumnSearch] = useState("");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const [page, setPage] = useState(1);
+  const [appliedConditions, setAppliedConditions] = useState<ConditionFilter[]>([]);
+  const pageSize = 10;
+  const columns = tableColumns.filter(column => visibleColumnIds.includes(column.id));
+
+  function valueForColumn(row: typeof workspaceRows[number], columnId: string): string | number | boolean {
+    const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
+    return {
+      name: row.name, project: row.project, run: row.run, runStatus: row.runStatus, currentRunApplied, repository,
+      noCodeModule: row.noCodeModule, moduleCount, modules, providerCount, providers, terraformVersion,
+      drifted: row.drifted, healthChecksSucceeded: row.healthChecksSucceeded, healthChecksPassed: row.healthChecksPassed,
+      healthChecksFailed: row.healthChecksFailed, healthChecksErrored: row.healthChecksErrored,
+      resourcesDrifted: row.resourcesDrifted, resourcesUndrifted: row.resourcesUndrifted,
+      stateTerraformVersion: row.stateTerraformVersion, currentRumCount: row.currentRumCount,
+      resources: row.count, tags: row.tags, created: row.created, updated: row.updated,
+    }[columnId] ?? "";
+  }
+
+  const filteredRows = useMemo(() => {
+    if (!appliedConditions.length) return workspaceRows;
+    return workspaceRows.filter(row =>
+      appliedConditions.every(c => {
+        const col = tableColumns.find(column => column.id === c.fieldId);
+        const val = valueForColumn(row, c.fieldId);
+        return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+      })
+    );
+  }, [appliedConditions]);
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const left = valueForColumn(a, sort.id);
+      const right = valueForColumn(b, sort.id);
+      const numeric = typeof left === "number" || typeof right === "number";
+      const comparison = numeric ? Number(left) - Number(right) : String(left).localeCompare(String(right));
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+  }, [filteredRows, sort]);
+
+  const totalPages = Math.ceil(sortedRows.length / pageSize);
+  const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
+  const pages = Array.from({ length: totalPages }, (_, index) => index + 1);
+
+  function toggleSort(columnId: string) {
+    setSort(current => current?.id === columnId ? { id: columnId, direction: current.direction === "asc" ? "desc" : "asc" } : { id: columnId, direction: "asc" });
+    setPage(1);
+  }
+
+  function renderCell(row: typeof workspaceRows[number], columnId: string) {
+    const value = valueForColumn(row, columnId);
+    if (["name", "project", "run", "moduleCount", "providerCount", "terraformVersion", "resources", "stateTerraformVersion"].includes(columnId)) {
+      return <a href="#workspace-table" onClick={event => event.preventDefault()} className="text-[#1060ff] underline underline-offset-2">{String(value)}</a>;
+    }
+    if (columnId === "runStatus") return <span className={`inline-flex rounded-[4px] border px-1.5 py-0.5 text-[11px] font-medium ${row.runStatus === "errored" ? "border-[#da1e28] text-[#a2191f]" : "border-[#24a148] text-[#198038]"}`}>{row.runStatus}</span>;
+    if (columnId === "drifted") return <span className="rounded-[4px] bg-[#dedfe3] px-1.5 py-0.5 font-medium text-[#52525b]">{value ? "true" : "false"}</span>;
+    return String(value);
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <InlineQueryBuilder queryColumns={tableColumns} onApplyConditions={setAppliedConditions} />
+      <div className="relative mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => { setColumnsOpen(open => !open); setDraftColumnIds(visibleColumnIds); setColumnSearch(""); }}
+          className={`flex h-9 w-9 items-center justify-center rounded-[6px] border bg-white text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${columnsOpen ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] hover:bg-[#f8f9fa]"}`}
+          aria-expanded={columnsOpen}
+          aria-label="View columns"
+          title="View columns"
+        >
+          <MoreHorizontal size={18} />
+        </button>
+        {columnsOpen && <div className="absolute right-0 top-10 z-20 flex h-[370px] w-[220px] flex-col overflow-hidden rounded-[6px] border border-[#b8bcc5] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
+          <div className="flex flex-col py-1">
+            <button
+              type="button"
+              onClick={() => setColumnsOpen(false)}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
+            >
+              <Save size={16} className="text-[#3b3d45]" />
+              <span>Save</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setColumnsOpen(false)}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
+            >
+              <Download size={16} className="text-[#3b3d45]" />
+              <span>Download</span>
+            </button>
+          </div>
+          <div className="border-b border-[#dedfe3]" />
+          <div className="p-2">
+            <label className="flex h-9 items-center gap-2 rounded-[5px] border border-[#8c909c] bg-white px-2 text-[#656a76]">
+              <Search size={15} />
+              <input value={columnSearch} onChange={event => setColumnSearch(event.target.value)} placeholder="Narrow results" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#656a76]" aria-label="Narrow columns" />
+            </label>
+          </div>
+          <button type="button" onClick={() => setDraftColumnIds([])} className="border-b border-[#dedfe3] px-3 pb-3 text-left text-[13px] text-[#656a76] hover:text-[#3b3d45]">Deselect all</button>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
+            {tableColumns.filter(column => column.label.toLowerCase().includes(columnSearch.toLowerCase())).map(column => <label key={column.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-2 text-[13px] text-[#3b3d45] hover:bg-[#f1f2f3]">
+              <input type="checkbox" checked={draftColumnIds.includes(column.id)} onChange={() => setDraftColumnIds(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" />
+              {column.label}
+            </label>)}
+          </div>
+          <div className="border-t border-[#dedfe3] p-2"><button type="button" onClick={() => { setVisibleColumnIds(draftColumnIds); setColumnsOpen(false); }} className="h-7 w-full rounded-[4px] bg-[#0f62fe] text-[12px] font-medium text-white hover:bg-[#0043ce]">Apply</button></div>
+        </div>}
+      </div>
+      <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
+        <table className="min-w-[5000px] table-fixed border-collapse text-left">
+          <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
+            <tr>
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
+              {columns.map(column => (
+                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>
+                  <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
+                    <span>{column.label}</span>
+                    <SortControl />
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map(column => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      <TablePagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={sortedRows.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        pageSizeOptions={[10, 20, 50, 100]}
+      />
+    </div>
+  );
+}
+
+function SlideInTypeDataTable({ columns: sourceColumns, rows, tableMinWidth = "min-w-[1600px]" }: { columns: ReadonlyArray<{ id: string; label: string; width?: string }>; rows: ReadonlyArray<Record<string, unknown>>; tableMinWidth?: string }) {
+  const [visibleIds, setVisibleIds] = useState<string[]>(() => sourceColumns.map(column => column.id));
+  const [draftIds, setDraftIds] = useState<string[]>(() => sourceColumns.map(column => column.id));
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const [page, setPage] = useState(1);
+  const [appliedConditions, setAppliedConditions] = useState<ConditionFilter[]>([]);
+  const pageSize = 10;
+  const columns = sourceColumns.filter(column => visibleIds.includes(column.id));
+
+  const filteredRows = useMemo(() => {
+    if (!appliedConditions.length) return rows;
+    return rows.filter(row =>
+      appliedConditions.every(c => {
+        const col = sourceColumns.find(column => column.id === c.fieldId);
+        const val = row[c.fieldId];
+        return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
+      })
+    );
+  }, [rows, appliedConditions]);
+
+  const sorted = useMemo(() => {
+    if (!sort) return filteredRows;
+    return [...filteredRows].sort((left, right) => {
+      const a = String(left[sort.id] ?? ""); const b = String(right[sort.id] ?? "");
+      const comparison = a.localeCompare(b, undefined, { numeric: true });
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+  }, [filteredRows, sort]);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
+
+  function toggleSort(id: string) { setSort(current => current?.id === id ? { id, direction: current.direction === "asc" ? "desc" : "asc" } : { id, direction: "asc" }); setPage(1); }
+  function displayValue(row: Record<string, unknown>, id: string) {
+    const value = row[id];
+    if (["name", "workspace", "workspaces", "provider", "version", "workspaceCount", "policyCount", "projects"].includes(id)) return <a href="#table-cell" onClick={event => event.preventDefault()} className="text-[#1060ff] underline underline-offset-2">{String(value ?? "—")}</a>;
+    if (typeof value === "boolean") return value ? "true" : "false";
+    return String(value ?? "—");
+  }
+
+  return <div className="flex min-h-0 flex-1 flex-col">
+    <InlineQueryBuilder queryColumns={sourceColumns} onApplyConditions={setAppliedConditions} />
+    <div className="relative mb-4 flex justify-end">
+      <button
+        type="button"
+        onClick={() => { setOpen(value => !value); setDraftIds(visibleIds); setQuery(""); }}
+        className={`flex h-9 w-9 items-center justify-center rounded-[6px] border bg-white text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${open ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] hover:bg-[#f8f9fa]"}`}
+        aria-expanded={open}
+        aria-label="View columns"
+        title="View columns"
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open && <div className="absolute right-0 top-10 z-20 flex h-[370px] w-[220px] flex-col overflow-hidden rounded-[6px] border border-[#b8bcc5] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
+        <div className="flex flex-col py-1">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
+          >
+            <Save size={16} className="text-[#3b3d45]" />
+            <span>Save</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
+          >
+            <Download size={16} className="text-[#3b3d45]" />
+            <span>Download</span>
+          </button>
+        </div>
+        <div className="border-b border-[#dedfe3]" />
+        <div className="p-2"><label className="flex h-9 items-center gap-2 rounded-[5px] border border-[#8c909c] bg-white px-2 text-[#656a76]"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Narrow results" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#656a76]" /></label></div>
+        <button type="button" onClick={() => setDraftIds([])} className="border-b border-[#dedfe3] px-3 pb-3 text-left text-[13px] text-[#656a76]">Deselect all</button>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">{sourceColumns.filter(column => column.label.toLowerCase().includes(query.toLowerCase())).map(column => <label key={column.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-2 text-[13px] text-[#3b3d45] hover:bg-[#f1f2f3]"><input type="checkbox" checked={draftIds.includes(column.id)} onChange={() => setDraftIds(ids => ids.includes(column.id) ? ids.filter(id => id !== column.id) : [...ids, column.id])} className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" />{column.label}</label>)}</div>
+        <div className="border-t border-[#dedfe3] p-2"><button type="button" onClick={() => { setVisibleIds(draftIds); setOpen(false); }} className="h-7 w-full rounded-[4px] bg-[#0f62fe] text-[12px] font-medium text-white hover:bg-[#0043ce]">Apply</button></div>
+      </div>}
+    </div>
+    <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
+      <table className={`${tableMinWidth} table-fixed border-collapse text-left`}>
+        <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
+          <tr>
+            
+            {columns.map(column => (
+              <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width ?? "w-[180px]"}`}>
+                <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
+                  <span>{column.label}</span>
+                  <SortControl />
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="text-[12px] text-[#52525b]">
+          {pageRows.map((row, index) => (
+            <tr key={String(row.id ?? `${index}-${page}`)} className="h-12 border-t border-[#dedfe3] bg-white">
+              
+              {columns.map(column => (
+                <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width ?? "w-[180px]"}`}>
+                  {displayValue(row, column.id)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <TablePagination
+      currentPage={page}
+      totalPages={totalPages}
+      totalItems={sorted.length}
+      pageSize={pageSize}
+      onPageChange={setPage}
+      onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+      pageSizeOptions={[10, 20, 50, 100]}
+    />
+  </div>;
+}
+
+function TopologyTableView({ type, onNavigate }: { type: string; onNavigate: (type: string) => void }) {
+  // Reuse the Type details tables directly so the split Table View cannot drift from them.
+  if (type === "Policy Sets") return <PolicySetsTable conditions={[]} onNavigate={onNavigate} />;
+  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={terraformVersionTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
+  if (type === "Resources") return <ResourcesTable visibleColumnIds={resourceTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
+  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={moduleTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
+  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={providerTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
+  return <SlideInWorkspacesTable />;
 }
 
 // ── Explorer Splash ──────────────────────────────────────────────────────────
@@ -1583,6 +2319,29 @@ const splashItems = [
 ] as const;
 
 // Map splash label → navItem label for routing into detail view
+const savedViews = [
+  { name: "name/rum/resource count - workspace has resources", type: "Workspaces", owner: "lyn_kotuby-e2f5b9c9", updated: "May 27 2026" },
+  { name: "modules with multiple workspaces", type: "Modules", owner: "ken-cox", updated: "Apr 29 2026" },
+  { name: "Ange Test 87", type: "Modules", owner: "angekaplanchambers", updated: "Oct 16 2025" },
+  { name: "child saved", type: "Workspaces", owner: "ashtronaut", updated: "Oct 1 2025" },
+  { name: "test", type: "Workspaces", owner: "simonxmhuang", updated: "Jul 28 2025" },
+  { name: "red", type: "Workspaces", owner: "simonxmhuang", updated: "Jul 25 2025" },
+  { name: "test2", type: "Workspaces", owner: "simonxmhuang", updated: "Jul 25 2025" },
+  { name: "rum_test", type: "Workspaces", owner: "simonxmhuang", updated: "Jul 25 2025" },
+  { name: "random stuff", type: "Workspaces", owner: "lyn_kotuby-e2f5b9c9", updated: "Jun 4 2025" },
+  { name: "sim", type: "Workspaces", owner: "simonxmhuang", updated: "Jun 2 2025" },
+  { name: "testing tf version bug", type: "Terraform Versions", owner: "jondavidjohn", updated: "Nov 14 2024" },
+  { name: "new view", type: "Terraform Versions", owner: "jondavidjohn", updated: "Nov 14 2024" },
+  { name: "try again", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "yet another one", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "new test name", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "super duper errored workspaces", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "another new name", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "new name", type: "Workspaces", owner: "jondavidjohn", updated: "Nov 12 2024" },
+  { name: "tf test", type: "Terraform Versions", owner: "aditisl", updated: "Nov 12 2024" },
+  { name: "new tf versions", type: "Terraform Versions", owner: "martinhenry", updated: "Nov 12 2024" },
+] as const;
+
 const splashToNavLabel: Record<string, string> = {
   "Workspaces":        "Workspaces",
   "Policy sets":       "Policy Sets",
@@ -1592,250 +2351,787 @@ const splashToNavLabel: Record<string, string> = {
   "Terraform versions":"Terraform Versions",
 };
 
-function ExplorerSplashView({ onSelectType, onSelectUseCase }: { onSelectType: (type: string) => void; onSelectUseCase: (type: string, title: string) => void }) {
-  const [activeTab, setActiveTab] = useState<"types" | "usecases" | "saved">("types");
+
+// Shared catalog for every pre-defined Explorer view. The splash tab and HUD menu
+// deliberately read from the same source so their navigation stays in sync.
+const USE_CASE_CATEGORIES = [
+  {
+    heading: "Workspaces",
+    Icon: WorkspaceIcon,
+    type: "Workspaces",
+    items: [
+      "Workspaces without VCS", "Workspace VCS source",
+      "Workspaces with failed checks", "Drifted Workspaces",
+      "All workspace versions", "Workspaces by run status",
+      "Latest updated workspaces", "Oldest applied workspaces",
+      "Latest Terraform versions",
+    ],
+  },
+  {
+    heading: "Policy Sets",
+    Icon: Shield,
+    type: "Policy Sets",
+    items: [
+      "Policy sets with failures", "Policy sets with overrides",
+      "Policy sets with runtime errors", "Global policy sets",
+      "Recently updated policy sets", "tf-policy sets",
+      "Sentinel policy sets", "OPA sets",
+    ],
+  },
+  { heading: "Modules", Icon: ModuleIcon, type: "Modules", items: ["Top module versions"] },
+  { heading: "Providers", Icon: Globe, type: "Providers", items: ["Loremipsum"] },
+  { heading: "Resources", Icon: ResourcesIcon, type: "Resources", items: ["Loremipsum"] },
+  { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: ["Top Terraform versions"] },
+ ] as const;
+
+type SuggestedQuery = {
+  type: string;
+  label: string;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+  color: string;
+};
+
+const SUGGESTED_QUERIES: SuggestedQuery[] = [
+  { type: "Workspaces", label: "Workspaces with failed checks", Icon: WorkspaceIcon, color: "#9b8ff5" },
+  { type: "Workspaces", label: "Drifted Workspaces", Icon: WorkspaceIcon, color: "#9b8ff5" },
+  { type: "Workspaces", label: "Workspace VCS source", Icon: WorkspaceIcon, color: "#9b8ff5" },
+  { type: "Terraform Versions", label: "Top Terraform versions", Icon: TerraformIcon, color: "#38bdf8" },
+  { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#818cf8" },
+];
+
+function ExplorerSplashView({
+  onSelectType,
+  onSelectUseCase,
+  conditionsExpanded, setConditionsExpanded,
+  conditionCount, setConditionCount,
+  openFieldIndex, setOpenFieldIndex,
+  conditionFields, setConditionFields,
+  openOperatorIndex, setOpenOperatorIndex,
+  conditionOperators, setConditionOperators,
+  conditionValues, setConditionValues,
+  queryColumns,
+  themeMode, setThemeMode
+}: {
+  onSelectType: (type: string) => void;
+  onSelectUseCase: (type: string, title: string) => void;
+  conditionsExpanded: boolean; setConditionsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  conditionCount: number; setConditionCount: React.Dispatch<React.SetStateAction<number>>;
+  openFieldIndex: number | null; setOpenFieldIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  conditionFields: string[]; setConditionFields: React.Dispatch<React.SetStateAction<string[]>>;
+  openOperatorIndex: number | null; setOpenOperatorIndex: React.Dispatch<React.SetStateAction<number | null>>;
+  conditionOperators: string[]; setConditionOperators: React.Dispatch<React.SetStateAction<string[]>>;
+  conditionValues: string[]; setConditionValues: React.Dispatch<React.SetStateAction<string[]>>;
+  queryColumns: readonly any[];
+  themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
+}) {
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
+  const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
+  const useCaseMenuRef = useRef<HTMLDivElement>(null);
+  const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
+  const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
+  const [tableViewOpen, setTableViewOpen] = useState(false);
+  const [tableQuery, setTableQuery] = useState("");
+  const [tableActionsOpen, setTableActionsOpen] = useState(false);
+  useEffect(() => {
+    if (tableViewOpen) { setConditionsExpanded(false); setTableQuery(""); setTableActionsOpen(false); }
+  }, [tableViewOpen, setConditionsExpanded]);
+  const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
+  const [hudDragging, setHudDragging] = useState(false);
+  const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
+  const [savedSearch, setSavedSearch] = useState("");
+  const [savedType, setSavedType] = useState("All types");
+  const [suggestedQueriesVisible, setSuggestedQueriesVisible] = useState(false);
+  const filteredSavedViews = useMemo(() => savedViews.filter(view => {
+    const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
+    const matchesType = savedType === "All types" || view.type === savedType;
+    return matchesSearch && matchesType;
+  }), [savedSearch, savedType]);
+
+  function openGraph(type: string, title = type) {
+    setSelectedGraphType(type);
+    setSelectedGraphTitle(title);
+    setSavedViewsOpen(false);
+    setUseCaseMenuOpen(false);
+  }
+
+function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, select, a")) return;
+
+    const element = event.currentTarget;
+    const canvas = element.parentElement;
+    if (!canvas) return;
+    const bounds = element.getBoundingClientRect();
+    hudDragRef.current = {
+      element,
+      canvas,
+      offsetX: event.clientX - bounds.left,
+      offsetY: event.clientY - bounds.top,
+    };
+    setHudDragging(true);
+    event.preventDefault();
+  }
+
+
+  useEffect(() => {
+    function closeUseCaseMenu(event: MouseEvent) {
+      if (useCaseMenuRef.current && !useCaseMenuRef.current.contains(event.target as Node)) {
+        setUseCaseMenuOpen(false);
+      }
+    }
+    window.addEventListener("mousedown", closeUseCaseMenu);
+    return () => window.removeEventListener("mousedown", closeUseCaseMenu);
+  }, []);
+
+useEffect(() => {
+    function moveHud(event: MouseEvent) {
+      const drag = hudDragRef.current;
+      if (!drag) return;
+      const canvasBounds = drag.canvas.getBoundingClientRect();
+      const pillBounds = drag.element.getBoundingClientRect();
+      const nextX = Math.max(0, Math.min(event.clientX - canvasBounds.left - drag.offsetX, canvasBounds.width - pillBounds.width));
+      const nextY = Math.max(0, Math.min(event.clientY - canvasBounds.top - drag.offsetY, canvasBounds.height - pillBounds.height));
+      setHudPosition({ x: nextX, y: nextY });
+    }
+
+
+
+    function stopDragging() {
+      if (hudDragRef.current) {
+        hudDragRef.current = null;
+        setHudDragging(false);
+      }
+    }
+
+    window.addEventListener("mousemove", moveHud);
+    window.addEventListener("mouseup", stopDragging);
+    return () => {
+      window.removeEventListener("mousemove", moveHud);
+      window.removeEventListener("mouseup", stopDragging);
+    };
+  }, []);
+
+  const tableResultCount = selectedGraphType === "Policy Sets" ? policySetRows.length
+    : selectedGraphType === "Modules" ? moduleRows.length
+    : selectedGraphType === "Providers" ? providerRows.length
+    : selectedGraphType === "Resources" ? resourceRows.length
+    : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
+    : workspaceRows.length;
+
+  const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
+  const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
+  const glassText = themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)";
+  const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
 
   return (
-    <div className="flex h-full flex-col overflow-auto bg-white px-8 py-7 font-sans text-[#0c0c0e]" style={{ minWidth: "1200px" }}>
-      {/* Breadcrumb */}
-      <div className="mb-5 flex items-center gap-1.5 text-[12px] text-[#656a76]">
+    <div className="relative isolate h-full min-h-[640px] min-w-[1200px] overflow-hidden bg-[#fafafa] font-sans" style={{ color: glassText }}>
+      {/* One canvas for the full Explorer. It is deliberately behind every graph, HUD, and panel. */}
+      <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        {/* The imported canvas is 650px tall; repeat it so the same dot cadence reaches every viewport height. */}
+        {[0, 650, 1300, 1950].map(offset => (
+          <div key={offset} className="absolute inset-x-0 h-[650px]" style={{ top: offset }}>
+            <DotBackgroundGraph />
+          </div>
+        ))}
+      </div>
+
+      {/* Topology graph */}
+      <div
+        className="absolute bottom-0 left-0 right-0 top-0 z-10 overflow-hidden"
+        style={{ background: themeMode === "light" ? "transparent" : "#13141a" }}
+      >
+        {selectedGraphType ? (
+          <TopologyGraph
+            activeType={selectedGraphType}
+            conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
+            themeMode={themeMode} setThemeMode={setThemeMode}
+          />
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
+            <div className="flex size-14 items-center justify-center rounded-[14px] border bg-white shadow-[0_12px_32px_rgba(23,23,26,0.14)]" style={{ borderColor: glassBorder }}>
+              <ChartNoAxesCombined size={25} strokeWidth={1.65} />
+            </div>
+            <div className="max-w-[320px] text-center">
+              <p className="text-[15px] font-semibold">Get started.</p>
+              <p className="mt-1 text-[13px] leading-5" style={{ color: glassMuted }}>Select a Type or Use case to explore your Infrastructure.</p>
+            </div>
+
+            {/* Suggested queries — only in empty state, hidden by default */}
+            <div className="w-full max-w-[480px]">
+              <div className="flex items-center justify-center gap-1 px-1 mb-2">
+                <span className="text-[13px] font-semibold" style={{ color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.9)" }}>
+                  Try the following queries based on your usage.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSuggestedQueriesVisible(v => !v)}
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-white/40 shadow-sm backdrop-blur-md transition-colors hover:bg-white/60"
+                  style={{ color: glassMuted, borderColor: themeMode === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)" }}
+                  aria-label={suggestedQueriesVisible ? "Hide suggested queries" : "Show suggested queries"}
+                >
+                  <ChevronDown
+                    size={13}
+                    style={{
+                      transition: "transform 0.2s ease",
+                      transform: suggestedQueriesVisible ? "rotate(0deg)" : "rotate(-90deg)",
+                    }}
+                  />
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {suggestedQueriesVisible && (
+                  <motion.div
+                    key="suggested-queries-list"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="flex flex-col gap-1.5"
+                  >
+                    {SUGGESTED_QUERIES.map(query => {
+                      const Icon = query.Icon;
+                      return (
+                        <button
+                          key={`${query.type}::${query.label}`}
+                          type="button"
+                          onClick={() => {
+                            openGraph(query.type, query.label);
+                            setSuggestedQueriesVisible(false);
+                          }}
+                          className="group flex w-full items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3 text-left shadow-[0_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] active:translate-y-[0px] active:scale-[0.99] active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                          style={{
+                            background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+                            borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+                          }}
+                        >
+                          <span
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-white shadow-sm ring-1 ring-black/5"
+                            style={{ background: query.color }}
+                          >
+                            <Icon size={13} />
+                          </span>
+                          <span className="flex-1 text-[13px] font-medium" style={{ color: glassText }}>
+                            {query.label}
+                          </span>
+                          <div className="flex size-6 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100 dark:bg-white/5 dark:group-hover:bg-white/10">
+                            <ChevronRight size={14} className="shrink-0" style={{ color: glassMuted }} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Table view tab */}
+      <button
+        type="button"
+        disabled={!selectedGraphType}
+        onClick={() => {
+          setTableViewOpen(open => !open);
+          if (!tableViewOpen) setConditionsExpanded(false);
+        }}
+        style={{
+          position: "fixed",
+          top: 76,
+          right: 0,
+          width: 36,
+          height: 40,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 2,
+          background: "#fafafa",
+          border: "1px solid #DEDFE3",
+          borderRight: "none",
+          borderRadius: "6px 0 0 6px",
+          boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
+          cursor: "pointer",
+          color: "#656a76",
+          zIndex: 50,
+        }}
+        aria-label={tableViewOpen ? "Close table view" : "Open table view"}
+        title={selectedGraphType ? (tableViewOpen ? "Close table view" : "Open table view") : "Select a Type or Use case first"}
+      >
+        {tableViewOpen && selectedGraphType ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        <ListOrdered size={13} />
+      </button>
+
+      {/* Graph table view — centered modal */}
+      <AnimatePresence>
+        {tableViewOpen && selectedGraphType && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="table-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setTableViewOpen(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                top: 60,
+                zIndex: 40,
+                background: "rgba(0,0,0,0.35)",
+                backdropFilter: "blur(2px)",
+              }}
+            />
+            {/* Centering shell — owns position, pointer-events pass through to backdrop */}
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                top: 60,
+                zIndex: 41,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "none",
+              }}
+            >
+              {/* Modal — motion only animates opacity + scale, never transform-origin */}
+              <motion.div
+                key="table-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Table view"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.22, ease: [0.25, 0.8, 0.25, 1] }}
+                style={{
+                  width: "85vw",
+                  maxWidth: 1400,
+                  height: "80vh",
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: 12,
+                  border: `1px solid ${glassBorder}`,
+                  boxShadow: "0 24px 64px rgba(0,0,0,0.28)",
+                  background: glassSurface,
+                  overflow: "hidden",
+                  pointerEvents: "auto",
+                }}
+              >
+                {/* Modal header */}
+                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
+                  <div>
+                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>{selectedGraphTitle ?? selectedGraphType}</p>
+                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                  </div>
+                  <button type="button" onClick={() => setTableViewOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Shared table-query toolbar. Search is reserved for Saved Views. */}
+                <div className="flex items-center gap-2 border-b px-5 py-3" style={{ borderColor: glassBorder }}>
+                  <label className="flex h-8 w-[360px] cursor-text items-center gap-2 rounded-[6px] border border-[rgba(59,61,69,0.35)] bg-white px-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                    <span className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[#656a76]">Query</span>
+                    <span className="h-4 w-px bg-[#d7d9de]" aria-hidden="true" />
+                    <input
+                      value={tableQuery}
+                      onChange={e => setTableQuery(e.target.value)}
+                      placeholder="Add a query condition"
+                      className="min-w-0 flex-1 bg-transparent text-[12px] text-[#3b3d45] outline-none placeholder:text-[#9b9cb8]"
+                      aria-label={`Query ${selectedGraphTitle ?? selectedGraphType} table`}
+                    />
+                    {tableQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setTableQuery("")}
+                        className="flex size-4 items-center justify-center rounded-full hover:bg-[#f1f2f3]"
+                        style={{ color: "#9b9cb8" }}
+                        aria-label="Clear query"
+                      >
+                        <X size={11} />
+                      </button>
+                    )}
+                  </label>
+
+                  <div className="flex-1" />
+
+                  {/* 3-dot actions */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setTableActionsOpen(o => !o)}
+                      className={`flex size-8 items-center justify-center rounded-[6px] border transition-colors ${tableActionsOpen ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.35)] hover:bg-[#f8f9fa]"} bg-white`}
+                      style={{ color: "#3b3d45" }}
+                      aria-label="Table actions"
+                      aria-expanded={tableActionsOpen}
+                    >
+                      <MoreHorizontal size={16} strokeWidth={1.8} />
+                    </button>
+                    {tableActionsOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setTableActionsOpen(false)}
+                          aria-hidden="true"
+                        />
+                        <div
+                          role="menu"
+                          className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-[8px] border border-[#dedfe3] bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
+                        >
+                          <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#9b9cb8]">Actions</p>
+                          <button
+                            role="menuitem"
+                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-[#3b3d45] hover:bg-[#f8f9fa]"
+                          >
+                            <Save size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+                            Save view
+                          </button>
+                          <button
+                            role="menuitem"
+                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-[#3b3d45] hover:bg-[#f8f9fa]"
+                          >
+                            <Download size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+                            Download CSV
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-auto p-5">
+                  <TopologyTableView type={selectedGraphType} onNavigate={(type) => openGraph(type, type)} />
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Saved Views table panel */}
+      <aside
+        className={`absolute bottom-0 right-0 top-0 z-40 flex flex-col border-l shadow-[-18px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-300 ease-out ${savedViewsOpen ? "translate-x-0" : "pointer-events-none translate-x-full"}`}
+        style={{ width: "50%", background: glassSurface, borderColor: glassBorder }}
+        aria-hidden={!savedViewsOpen}
+      >
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
+          <div>
+            <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
+            <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
+          </div>
+          <button type="button" onClick={() => setSavedViewsOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="min-w-0">
+            <div className="mb-4 flex items-center">
+              <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <Search size={16} strokeWidth={2} />
+                <input
+                  value={savedSearch}
+                  onChange={event => setSavedSearch(event.target.value)}
+                  placeholder="Search"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
+                  aria-label="Search saved views"
+                />
+              </label>
+              <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
+                  <option>All types</option>
+                  <option>Workspaces</option>
+                  <option>Modules</option>
+                  <option>Terraform Versions</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
+              </label>
+            </div>
+            <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
+            <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
+              <table className="w-full table-fixed border-collapse text-left text-[12px]">
+                <thead className="bg-[#f1f2f3] text-[#17171a]">
+                  <tr>
+                    <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
+                    <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
+                    <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
+                    <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
+                    <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[#555964]">
+                  {filteredSavedViews.map(view => (
+                    <tr key={view.name} className="border-t border-[#d7d9de]">
+                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
+                      <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
+                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
+                      <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
+                      <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
+                    </tr>
+                  ))}
+                  {filteredSavedViews.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Compact Explorer context HUD */}
+      <div
+        className="absolute z-30 w-[50vw] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
+        style={{ left: hudPosition.x, top: hudPosition.y, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
+        onMouseDown={startHudDrag}
+      >
+      <div className="flex items-center gap-1.5 text-[11px]" style={{ color: glassMuted }}>
         <span>ILM_Demo_Space</span>
         <span>/</span>
         <span>Explorer</span>
         <span>/</span>
-        <span className="font-medium text-[#3b3d45]">{activeTab === "usecases" ? "Use cases" : activeTab === "saved" ? "Saved views" : "Types"}</span>
+        <span className="font-medium" style={{ color: glassText }}>{savedViewsOpen ? "Saved views" : "Types"}</span>
       </div>
 
       {/* Title row */}
-      <div className="mb-2 flex items-start justify-between">
+      <div className="mt-2 flex items-start justify-between gap-4">
         <div>
-          <h1 className="m-0 text-[28px] font-bold leading-8 text-[#0c0c0e]">Explorer</h1>
-          <p className="mt-2 text-[14px] text-[#656a76]">Explore your data to analyze your Organization&apos;s Terraform usage.</p>
+          <h1 className="m-0 text-[20px] font-semibold leading-6" style={{ color: glassText }}>Explorer</h1>
+          <p className="mt-1 text-[12px] leading-4" style={{ color: glassMuted }}>Explore your data to analyze your organization&apos;s Terraform usage.</p>
         </div>
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-[5px] bg-[#1060ff] px-4 py-2 text-[13px] font-medium text-white shadow-sm hover:bg-[#0c56e9]"
-        >
-          New query <ChevronDown size={14} />
-        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="mt-5 flex items-center gap-0 border-b border-[#dedfe3]">
-        {(["types", "usecases", "saved"] as const).map(tab => {
-          const labels = { types: "Types", usecases: "Use cases", saved: "Saved views" };
-          const isActive = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`relative px-4 pb-3 pt-2.5 text-[14px] font-medium transition-colors ${isActive ? "text-[#1060ff]" : "text-[#656a76] hover:text-[#3b3d45]"}`}
-            >
-              {labels[tab]}
-              {tab === "saved" && (
-                <span className="ml-1.5 rounded-full bg-[#f1f2f3] px-1.5 py-0.5 text-[11px] font-medium text-[#656a76]">52</span>
-              )}
-              {isActive && <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-t-[2px] bg-[#1060ff]" />}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Types list */}
-      {activeTab === "types" && (
-        <div className="mt-6">
-          <h2 className="mb-4 text-[16px] font-semibold text-[#0c0c0e]">Types</h2>
-          <div className="flex flex-col gap-3">
-            {splashItems.map(({ Icon, label, badge }) => (
+      {/* Entity type group — temporarily hidden; keep its direct graph navigation available for later. */}
+      <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
+        <div className="hidden w-full overflow-hidden rounded-[6px] border border-[#aeb1b8] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
+          {splashItems.map(({ Icon, label }) => {
+            const type = splashToNavLabel[label] ?? label;
+            const displayLabel = label === "Policy sets" ? "Policy Sets" : label === "Terraform versions" ? "Terraform Versions" : label;
+            const isSelected = selectedGraphType === type;
+            return (
               <button
                 key={label}
                 type="button"
-                onClick={() => onSelectType(splashToNavLabel[label])}
-                className="flex w-full items-center justify-between rounded-[8px] border border-[#dedfe3] bg-white px-5 py-[18px] text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:bg-[#f8f9fa] hover:shadow-[0_1px_4px_rgba(0,0,0,0.08)]"
+                onClick={() => openGraph(type, displayLabel)}
+                aria-pressed={isSelected}
+                className={`-ml-px flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 border-l px-2 text-[10px] font-semibold leading-none transition-colors first:ml-0 first:border-l-0 ${isSelected ? "relative z-10 border-[#0f62fe] bg-[#f0f6ff] text-[#0f62fe]" : "border-[#aeb1b8] bg-white text-[#656a76] hover:bg-[#f5f6f7] hover:text-[#3b3d45]"}`}
               >
-                <span className="flex items-center gap-3">
-                  <Icon size={18} strokeWidth={1.6} className="text-[#3b3d45]" />
-                  <span className="text-[15px] font-medium text-[#0c0c0e]">{label}</span>
-                  {badge && (
-                    <span className="rounded-full border border-[rgba(59,61,69,0.3)] px-2 py-0.5 text-[11px] font-medium text-[#656a76]">{badge}</span>
-                  )}
-                </span>
-                <ChevronRight size={18} className="text-[#1060ff]" />
+                <Icon size={15} strokeWidth={1.65} className="shrink-0" />
+                <span className="whitespace-nowrap">{displayLabel}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      )}
 
-      {activeTab === "usecases" && (
-        <div className="mt-5">
-          <p className="mb-6 text-[14px] text-[#656a76]">
-            Get started with a pre-defined view. Want a view not listed?{" "}
-            <a href="#feedback" className="inline-flex items-center gap-1 text-[#1060ff] hover:underline">
-              Send us feedback <ExternalLink size={12} />
-            </a>
-          </p>
 
-          {[
-            {
-              heading: "Workspaces",
-              Icon: WorkspaceIcon,
-              type: "Workspaces",
-              items: [
-                "Workspaces without VCS", "Workspace VCS source",
-                "Workspaces with failed checks", "Drifted Workspaces",
-                "All workspace versions", "Workspaces by run status",
-                "Latest updated workspaces", "Oldest applied workspaces",
-                "Latest Terraform versions",
-              ],
-            },
-            {
-              heading: "Policy Sets",
-              Icon: Shield,
-              type: "Policy Sets",
-              items: [
-                "Policy sets with failures", "Policy sets with overrides",
-                "Policy sets with runtime errors", "Global policy sets",
-                "Recently updated policy sets", "tf-policy sets",
-                "Sentinel policy sets", "OPA sets",
-              ],
-            },
-            {
-              heading: "Modules",
-              Icon: ModuleIcon,
-              type: "Modules",
-              items: ["Top module versions"],
-            },
-            {
-              heading: "Providers",
-              Icon: Globe,
-              type: "Providers",
-              items: ["Loremipsum"],
-            },
-            {
-              heading: "Resources",
-              Icon: ResourcesIcon,
-              type: "Resources",
-              items: ["Loremipsum"],
-            },
-            {
-              heading: "Terraform versions",
-              Icon: TerraformIcon,
-              type: "Terraform Versions",
-              items: ["Top Terraform versions"],
-            },
-          ].map(({ heading, Icon, type, items }) => (
-            <div key={heading} className="mb-8">
-              <h2 className="mb-3 text-[16px] font-semibold text-[#0c0c0e]">{heading}</h2>
-              <div className="grid grid-cols-2 gap-3">
-                {items.map(label => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => onSelectUseCase(type, label)}
-                    className="flex w-full items-center justify-between rounded-[8px] border border-[#dedfe3] bg-white px-5 py-[18px] text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:bg-[#f8f9fa] hover:shadow-[0_1px_4px_rgba(0,0,0,0.08)]"
-                  >
-                    <span className="flex items-center gap-3">
-                      <Icon size={18} strokeWidth={1.6} className="text-[#3b3d45]" />
-                      <span className="text-[15px] font-medium text-[#0c0c0e]">{label}</span>
-                    </span>
-                    <ChevronRight size={18} className="text-[#1060ff]" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {activeTab === "saved" && (
-        <div className="mt-5">
-          {/* Toolbar */}
-          <div className="mb-3 flex items-center gap-3">
-            <label className="flex h-8 w-[220px] items-center gap-2 rounded-[5px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[#656a76]">
-              <Search size={14} strokeWidth={1.7} />
-              <input placeholder="Search" className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#656a76]" />
-            </label>
-            <button type="button" className="flex h-8 items-center gap-1.5 rounded-[5px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[13px] text-[#3b3d45] hover:bg-[#f1f2f3]">
-              Type <ChevronDown size={13} />
+      </div>
+      {/* Collapsible query builder */}
+      <div className="mt-3">
+        <section className="rounded-[8px] border" style={{ background: glassSurface, borderColor: glassBorder, color: glassText }}>
+          <div className="flex items-center gap-3 px-3 py-3">
+            <button
+              type="button"
+              onClick={() => setConditionsExpanded(expanded => !expanded)}
+              aria-expanded={conditionsExpanded}
+              aria-label={conditionsExpanded ? "Collapse conditions" : "Expand conditions"}
+              className={`flex size-[18px] items-center justify-center rounded-[3px] border ${conditionsExpanded ? "border-[#0f62fe] text-[#3b3d45] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] text-[#3b3d45]"}`}
+            >
+              {conditionsExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
+            <span><strong className="block text-[12px] font-semibold leading-4">{conditionsExpanded ? "Modify conditions" : "Show conditions"}</strong><span className="text-[11px]" style={{ color: glassMuted }}>No conditions applied&nbsp; ⓘ</span></span>
           </div>
-          <p className="mb-4 flex items-center gap-1.5 text-[13px] text-[#656a76]">
-            No filters applied
-            <span className="inline-flex size-[16px] items-center justify-center rounded-full border border-[#c2c5cb] text-[10px] text-[#656a76]">i</span>
-          </p>
+          {conditionsExpanded && (
+            <div className="border-t border-[rgba(101,106,118,0.12)] px-5 pb-4 pt-3">
+              <div ref={useCaseMenuRef} className="relative mb-4">
+                <button
+                  type="button"
+                  onClick={() => setUseCaseMenuOpen(open => !open)}
+                  aria-expanded={useCaseMenuOpen}
+                  aria-haspopup="menu"
+                  className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
+                  style={{ borderColor: "rgba(59,61,69,0.4)" }}
+                >
+                  <span className="flex items-center gap-2"><Compass size={14} />Browse Types, Use Cases and Saved Views</span>
+                  <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
+                </button>
 
-          {/* Table */}
-          <div className="overflow-hidden rounded-[8px] border border-[#dedfe3]">
-            <table className="w-full border-collapse text-left">
-              <thead className="bg-[#f8f9fa]">
-                <tr>
-                  <th className="border-b border-[#dedfe3] px-5 py-3 text-[13px] font-semibold text-[#0c0c0e]">Name</th>
-                  <th className="border-b border-[#dedfe3] px-5 py-3 text-[13px] font-semibold text-[#0c0c0e]">Type</th>
-                  <th className="border-b border-[#dedfe3] px-5 py-3 text-[13px] font-semibold text-[#0c0c0e]">Owner</th>
-                  <th className="border-b border-[#dedfe3] px-5 py-3 text-[13px] font-semibold text-[#0c0c0e]">Last Updated</th>
-                  <th className="border-b border-[#dedfe3] px-5 py-3 text-[13px] font-semibold text-[#0c0c0e]">Options</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { name: "name/rum/resource count - workspace has resources", type: "Workspaces",         owner: "lyn_kotuby-e2f5b9c9",  updated: "May 27 2026" },
-                  { name: "modules with multiple workspaces",                  type: "Modules",            owner: "ken-cox",               updated: "Apr 29 2026" },
-                  { name: "Ange Test 87",                                       type: "Modules",            owner: "angekaplanchambers",    updated: "Oct 16 2025" },
-                  { name: "child saved",                                        type: "Workspaces",         owner: "ashtronaut",            updated: "Oct 1 2025"  },
-                  { name: "test",                                               type: "Workspaces",         owner: "simonxmhuang",          updated: "Jul 28 2025" },
-                  { name: "red",                                                type: "Workspaces",         owner: "simonxmhuang",          updated: "Jul 25 2025" },
-                  { name: "test2",                                              type: "Workspaces",         owner: "simonxmhuang",          updated: "Jul 25 2025" },
-                  { name: "rum_test",                                           type: "Workspaces",         owner: "simonxmhuang",          updated: "Jul 25 2025" },
-                  { name: "random stuff",                                       type: "Workspaces",         owner: "lyn_kotuby-e2f5b9c9",  updated: "Jun 4 2025"  },
-                  { name: "sim",                                                type: "Workspaces",         owner: "simonxmhuang",          updated: "Jun 2 2025"  },
-                  { name: "testing tf version bug",                             type: "Terraform Versions", owner: "jondavidjohn",          updated: "Nov 14 2024" },
-                  { name: "new view",                                           type: "Terraform Versions", owner: "jondavidjohn",          updated: "Nov 14 2024" },
-                  { name: "try again",                                          type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "yet another one",                                    type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "new test name",                                      type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "super duper errored workspaces",                     type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "another new name",                                   type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "new name",                                           type: "Workspaces",         owner: "jondavidjohn",          updated: "Nov 12 2024" },
-                  { name: "tf test",                                            type: "Terraform Versions", owner: "aditisl",               updated: "Nov 12 2024" },
-                  { name: "new tf versions",                                    type: "Terraform Versions", owner: "martinhenry",            updated: "Nov 12 2024" },
-                ].map((row, i) => (
-                  <tr key={row.name + i} className={`group transition-colors hover:bg-[#f8f9fa] ${i > 0 ? "border-t border-[#dedfe3]" : ""}`}>
-                    <td className="px-5 py-3.5">
-                      <button type="button" className="text-left text-[13px] font-medium text-[#1060ff] hover:underline">{row.name}</button>
-                    </td>
-                    <td className="px-5 py-3.5 text-[13px] text-[#3b3d45]">{row.type}</td>
-                    <td className="px-5 py-3.5 text-[13px] text-[#3b3d45]">{row.owner}</td>
-                    <td className="px-5 py-3.5 text-[13px] text-[#3b3d45]">{row.updated}</td>
-                    <td className="px-5 py-3.5">
-                      <button type="button" className="flex size-[28px] items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-white text-[#3b3d45] hover:bg-[#f1f2f3]">
-                        <span className="text-[14px] leading-none tracking-widest">···</span>
+                {useCaseMenuOpen && (() => {
+                  const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
+                  return (
+                    <div
+                      role="menu"
+                      aria-label="Pre-defined Explorer views"
+                      className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
+                      style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
+                    >
+                      <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
+                        <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
+                        {USE_CASE_CATEGORIES.map(category => {
+                          const CategoryIcon = category.Icon;
+                          const isHovered = category.type === activeCategory.type;
+                          return (
+                            <button
+                              key={category.type}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => setHoveredUseCaseType(category.type)}
+                              className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
+                              style={!isHovered ? { color: glassText } : undefined}
+                            >
+                              <span className="flex items-center gap-2"><CategoryIcon size={14} className="shrink-0" />{category.heading}</span>
+                              <ChevronRight size={14} className={isHovered ? "opacity-90" : "opacity-45"} />
+                            </button>
+                          );
+                        })}
+                        <div className="my-1.5 border-t" style={{ borderColor: glassBorder }} />
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                                              setSavedViewsOpen(true);
+                            setUseCaseMenuOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
+                          style={{ color: glassText }}
+                        >
+                          <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
+                          <ChevronRight size={14} className="opacity-45" />
+                        </button>
+                      </div>
+                      <div className="p-3">
+                        <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
+                        <div className="space-y-0.5">
+                          {(() => {
+                            const viewAllLabel = `View All ${activeCategory.type}`;
+                            const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                            return (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openGraph(activeCategory.type, viewAllLabel)}
+                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                                style={!isViewAllSelected ? { color: glassText } : undefined}
+                              >
+                                <span>{viewAllLabel}</span><ChevronRight size={13} className={isViewAllSelected ? "opacity-100" : "opacity-50"} />
+                              </button>
+                            );
+                          })()}
+                          {activeCategory.items.map(view => {
+                            const isSelected = selectedGraphTitle === view;
+                            return (
+                              <button
+                                key={view}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openGraph(activeCategory.type, view)}
+                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                                style={!isSelected ? { color: glassText } : undefined}
+                              >
+                                <span>{view}</span><ChevronRight size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {selectedGraphTitle && (() => {
+                const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
+                return (
+                  <div className="mb-3 flex items-center">
+                    <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
+                      <span className="flex size-4 items-center justify-center text-[#656a76]">
+                        <ActiveIcon size={14} />
+                      </span>
+                      {selectedGraphTitle}
+                      <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
+                        <X size={13} />
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </span>
+                  </div>
+                );
+              })()}
+              <hr className="mb-4 mt-2 border-t border-[rgba(101,106,118,0.12)] w-full" />
+                    <div className="space-y-3">
+                      {Array.from({ length: conditionCount }, (_, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="w-[78px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
+                          {(() => {
+                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
+                            const SelectedFieldIcon = selectedField.valueType === "date" ? CalendarDays : selectedField.valueType === "number" ? Hash : selectedField.valueType === "boolean" ? ToggleRight : Type;
+                            return (
+                              <div className="relative min-w-[190px]">
+                                <button type="button" onClick={() => setOpenFieldIndex(current => current === index ? null : index)} aria-expanded={openFieldIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 rounded-l-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">
+                                  <span className="flex items-center gap-2"><SelectedFieldIcon size={14} />{selectedField.label}</span><ChevronDown size={14} />
+                                </button>
+                                {openFieldIndex === index && (
+                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
+                                    {queryColumns.map(column => {
+                                      const FieldIcon = column.valueType === "date" ? CalendarDays : column.valueType === "number" ? Hash : column.valueType === "boolean" ? ToggleRight : Type;
+                                      return <button key={column.id} type="button" role="option" aria-selected={selectedField.id === column.id} onClick={() => { setConditionFields(fields => fields.map((field, fieldIndex) => fieldIndex === index ? column.id : field)); setConditionOperators(operators => operators.map((operator, operatorIndex) => operatorIndex === index ? operatorsByValueType[column.valueType as keyof typeof operatorsByValueType][0] : operator)); setOpenFieldIndex(null); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedField.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}><FieldIcon size={14} />{column.label}</button>;
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {(() => {
+                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
+                            const selectedOperator = conditionOperators[index] ?? operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType][0];
+                            const availableOperators = operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType];
+                            return (
+                              <div className="relative -ml-2 min-w-[150px]">
+                                <button type="button" onClick={() => setOpenOperatorIndex(current => current === index ? null : index)} aria-expanded={openOperatorIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">{selectedOperator}<ChevronDown size={14} /></button>
+                                {openOperatorIndex === index && (
+                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
+                                    {availableOperators.map(operator => <button key={operator} type="button" role="option" aria-selected={selectedOperator === operator} onClick={() => { setConditionOperators(operators => operators.map((current, operatorIndex) => operatorIndex === index ? operator : current)); setOpenOperatorIndex(null); }} className={`flex w-full px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedOperator === operator ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}>{operator}</button>)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {(() => {
+                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
+                            return selectedField.valueType === "date" ? (
+                              <input type="datetime-local" step="1" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition date and time" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none focus:border-[#0f62fe]" />
+                            ) : (
+                              <input type="text" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition value" placeholder="Enter a value" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#656a76] focus:border-[#0f62fe]" />
+                            );
+                          })()}
+                          <button type="button" onClick={() => {
+                            if (conditionCount === 1) {
+                              setConditionFields(["name"]);
+                              setConditionOperators(["is"]);
+                              setConditionValues([""]);
+                            } else {
+                              setConditionCount(count => count - 1);
+                              setConditionFields(fields => fields.filter((_, fieldIndex) => fieldIndex !== index));
+                              setConditionOperators(operators => operators.filter((_, operatorIndex) => operatorIndex !== index));
+                              setConditionValues(values => values.filter((_, valueIndex) => valueIndex !== index));
+                            }
+                            setOpenFieldIndex(null);
+                            setOpenOperatorIndex(null);
+                          }} aria-label={conditionCount === 1 ? "Clear condition" : "Remove condition"} className="flex size-8 items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.25)] bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3]"><Trash2 size={15} /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => { setConditionCount(count => count + 1); setConditionFields(fields => [...fields, "name"]); setConditionOperators(operators => [...operators, "is"]); setConditionValues(values => [...values, ""]); }} className="mt-4 flex items-center gap-1.5 text-[12px] font-medium text-[#0f62fe] hover:underline"><Plus size={15} />Add condition</button>
+                      <div className="mt-6 flex items-center gap-3">
+                        <button type="button" onClick={() => { setConditionsExpanded(false); openGraph("Workspaces", "Workspaces"); }} className="h-8 rounded-[4px] bg-[#0f62fe] px-4 text-[12px] font-medium text-white hover:bg-[#0043ce]">Run Query</button>
+                        <button type="button" onClick={() => { setConditionCount(1); setConditionFields(["name"]); setConditionOperators(["is"]); setConditionValues([""]); setOpenFieldIndex(null); setOpenOperatorIndex(null); setConditionsExpanded(false); }} className="h-8 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f1f2f3]">Cancel</button>
+                      </div>
+                    </div>
+            )}
+          </section>
+      </div>
+      </div>
 
-          {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between text-[13px] text-[#656a76]">
-            <span>1–20 of 52</span>
-            <div className="flex items-center gap-1">
-              <button type="button" className="flex size-[28px] items-center justify-center rounded text-[#c2c5cb]"><ChevronLeft size={15} /></button>
-              {[1, 2, 3].map(p => (
-                <button key={p} type="button" className={`flex size-[28px] items-center justify-center rounded text-[13px] ${p === 1 ? "border-b-2 border-[#1060ff] font-medium text-[#1060ff]" : "text-[#3b3d45] hover:bg-[#f1f2f3]"}`}>{p}</button>
-              ))}
-              <button type="button" className="flex size-[28px] items-center justify-center rounded text-[#3b3d45]"><ChevronRight size={15} /></button>
-            </div>
-            <span className="flex items-center gap-2">
-              Items per page
-              <span className="flex items-center gap-1 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-2 py-1 text-[13px] text-[#3b3d45]">20 <ChevronDown size={12} /></span>
-            </span>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
@@ -1843,7 +3139,8 @@ function ExplorerSplashView({ onSelectType, onSelectUseCase }: { onSelectType: (
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
 export function WorkspacesExplorerView() {
-  const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("detail");
+  const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
   const [conditionCount, setConditionCount] = useState(1);
   const [openFieldIndex, setOpenFieldIndex] = useState<number | null>(null);
@@ -2005,14 +3302,20 @@ export function WorkspacesExplorerView() {
 
   if (explorerPage === "splash") {
     return (
-      <div className="flex h-full min-w-[1200px] bg-white font-sans text-[#0c0c0e]">
-        <aside className="w-[220px] shrink-0 border-r border-[#dedfe3] bg-[#fafafa] px-3 pt-3">
-          <div className="mb-4 flex items-center justify-between px-1.5 text-[12px] font-medium text-[#3b3d45]">
-            <span className="flex items-center gap-2 text-[#1060ff] font-semibold"><ChevronLeft size={15} />Explorer</span>
-            <ChevronLeft size={14} />
-          </div>
-        </aside>
-        <ExplorerSplashView onSelectType={navigateToType} onSelectUseCase={navigateToUseCase} />
+      <div className="h-full min-w-[1200px] bg-white font-sans text-[#0c0c0e]">
+        <ExplorerSplashView
+          onSelectType={navigateToType}
+          onSelectUseCase={navigateToUseCase}
+          conditionsExpanded={conditionsExpanded} setConditionsExpanded={setConditionsExpanded}
+          conditionCount={conditionCount} setConditionCount={setConditionCount}
+          openFieldIndex={openFieldIndex} setOpenFieldIndex={setOpenFieldIndex}
+          conditionFields={conditionFields} setConditionFields={setConditionFields}
+          openOperatorIndex={openOperatorIndex} setOpenOperatorIndex={setOpenOperatorIndex}
+          conditionOperators={conditionOperators} setConditionOperators={setConditionOperators}
+          conditionValues={conditionValues} setConditionValues={setConditionValues}
+          queryColumns={tableColumns}
+          themeMode={themeMode} setThemeMode={setThemeMode}
+        />
       </div>
     );
   }
@@ -2028,7 +3331,6 @@ export function WorkspacesExplorerView() {
           >
             <ChevronLeft size={15} />Explorer
           </button>
-          <ChevronLeft size={14} />
         </div>
 
         {/* Types section */}
@@ -2102,7 +3404,7 @@ export function WorkspacesExplorerView() {
                     <div key={index} className="flex items-center gap-2">
                       <span className="w-[78px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
                       {(() => {
-                        const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
+                        const selectedField = activeTableColumns.find(column => column.id === conditionFields[index]) ?? activeTableColumns[0];
                         const SelectedFieldIcon = selectedField.valueType === "date" ? CalendarDays : selectedField.valueType === "number" ? Hash : selectedField.valueType === "boolean" ? ToggleRight : Type;
                         return (
                           <div className="relative min-w-[190px]">
@@ -2111,9 +3413,9 @@ export function WorkspacesExplorerView() {
                             </button>
                             {openFieldIndex === index && (
                               <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                                {queryColumns.map(column => {
+                                {activeTableColumns.map(column => {
                                   const FieldIcon = column.valueType === "date" ? CalendarDays : column.valueType === "number" ? Hash : column.valueType === "boolean" ? ToggleRight : Type;
-                                  return <button key={column.id} type="button" role="option" aria-selected={selectedField.id === column.id} onClick={() => { setConditionFields(fields => fields.map((field, fieldIndex) => fieldIndex === index ? column.id : field)); setConditionOperators(operators => operators.map((operator, operatorIndex) => operatorIndex === index ? operatorsByValueType[column.valueType][0] : operator)); setOpenFieldIndex(null); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedField.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}><FieldIcon size={14} />{column.label}</button>;
+                                  return <button key={column.id} type="button" role="option" aria-selected={selectedField.id === column.id} onClick={() => { setConditionFields(fields => fields.map((field, fieldIndex) => fieldIndex === index ? column.id : field)); setConditionOperators(operators => operators.map((operator, operatorIndex) => operatorIndex === index ? operatorsByValueType[column.valueType as keyof typeof operatorsByValueType][0] : operator)); setOpenFieldIndex(null); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedField.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}><FieldIcon size={14} />{column.label}</button>;
                                 })}
                               </div>
                             )}
@@ -2121,9 +3423,9 @@ export function WorkspacesExplorerView() {
                         );
                       })()}
                       {(() => {
-                        const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                        const selectedOperator = conditionOperators[index] ?? operatorsByValueType[selectedField.valueType][0];
-                        const availableOperators = operatorsByValueType[selectedField.valueType];
+                        const selectedField = activeTableColumns.find(column => column.id === conditionFields[index]) ?? activeTableColumns[0];
+                        const selectedOperator = conditionOperators[index] ?? operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType][0];
+                        const availableOperators = operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType];
                         return (
                           <div className="relative -ml-2 min-w-[150px]">
                             <button type="button" onClick={() => setOpenOperatorIndex(current => current === index ? null : index)} aria-expanded={openOperatorIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">{selectedOperator}<ChevronDown size={14} /></button>
@@ -2136,7 +3438,7 @@ export function WorkspacesExplorerView() {
                         );
                       })()}
                       {(() => {
-                        const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
+                        const selectedField = activeTableColumns.find(column => column.id === conditionFields[index]) ?? activeTableColumns[0];
                         return selectedField.valueType === "date" ? (
                           <input type="datetime-local" step="1" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition date and time" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none focus:border-[#0f62fe]" />
                         ) : (
@@ -2251,6 +3553,7 @@ export function WorkspacesExplorerView() {
               <TopologyGraph
                 activeType={activeType}
                 initialWorkspace={graphInitialWorkspace}
+                conditions={draftConditions}
                 onViewResources={(workspaceName) => {
                   setGraphInitialWorkspace(workspaceName);
                   setActiveType("Resources");
@@ -2263,9 +3566,10 @@ export function WorkspacesExplorerView() {
             <table className="min-w-[5000px] table-fixed border-collapse text-left">
               <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
                 <tr>
+                  <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
                   {shownColumns.map(column => (
-                    <th key={column.id} className={`h-12 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>
-                      <span className="flex items-center gap-2 whitespace-nowrap">{column.label}<SortControl /></span>
+                    <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>
+                      <span className="flex items-center justify-between gap-2 whitespace-nowrap text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span>
                     </th>
                   ))}
                 </tr>
@@ -2275,6 +3579,7 @@ export function WorkspacesExplorerView() {
                   const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = metadata;
                   return (
                     <tr key={id} className="h-12 border-t border-[#dedfe3] bg-white">
+                      <td className="border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>
                       {shownColumns.map(column => {
                         const contentByColumn = {
                           name: <a href="#workspace" className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{name}</a>,
@@ -2302,30 +3607,15 @@ export function WorkspacesExplorerView() {
             </table>
           </div>
 
-          <div className="mt-6 flex items-center justify-between text-[11px] text-[#3b3d45]">
-            <span>{filteredWorkspaceRows.length === 0 ? 0 : (page - 1) * itemsPerPage + 1}-{Math.min(page * itemsPerPage, filteredWorkspaceRows.length)} of {filteredWorkspaceRows.length}</span>
-            <div className="flex items-center gap-2">
-              <button type="button" aria-label="Previous page" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="p-1 text-[#656a76] disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={15} /></button>
-              {pageNumbers.map(value => <button key={value} type="button" onClick={() => setPage(value)} className={`min-w-5 border-b-2 px-1 py-1 text-[11px] font-normal text-[#3b3d45] ${page === value ? "border-[#1060ff]" : "border-transparent"}`}>{value}</button>)}
-              <button type="button" aria-label="Next page" onClick={() => setPage(current => Math.min(totalPages, current + 1))} disabled={page === totalPages} className="p-1 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight size={15} /></button>
-            </div>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setItemsMenuOpen(open => !open)}
-                aria-expanded={itemsMenuOpen}
-                aria-haspopup="menu"
-                className="flex h-7 items-center gap-1.5 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-3 text-[12px] font-medium text-[#3b3d45]"
-              >
-                Items per page: {itemsPerPage} <ChevronDown size={14} />
-              </button>
-              {itemsMenuOpen && (
-                <div role="menu" className="absolute bottom-[32px] right-0 z-30 w-36 overflow-hidden rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                  {[20, 50, 100].map(option => <button key={option} type="button" role="menuitem" onClick={() => { setItemsPerPage(option); setPage(1); setItemsMenuOpen(false); }} className={`flex w-full items-center px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${itemsPerPage === option ? "font-medium text-[#1060ff]" : "text-[#3b3d45]"}`}>{option}</button>)}
-                </div>
-              )}
-            </div>
-          </div>
+          <TablePagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filteredWorkspaceRows.length}
+            pageSize={itemsPerPage}
+            onPageChange={setPage}
+            onPageSizeChange={size => { setItemsPerPage(size); setPage(1); }}
+            pageSizeOptions={[20, 50, 100]}
+          />
           </>}
         </div>
       </main>

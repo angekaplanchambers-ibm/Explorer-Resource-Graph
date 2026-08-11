@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: explorer-resource-graph/package-lock.json
+          cache-dependency-path: ERG/package-lock.json
 
       - name: Build Pages bundle
         run: ./scripts/build-pages.sh
