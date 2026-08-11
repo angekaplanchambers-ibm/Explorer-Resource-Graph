@@ -2671,6 +2671,7 @@ useEffect(() => {
 
       {/* Browse Types dropdown + selected tag */}
       <div className="mt-3" ref={useCaseMenuRef} onMouseDown={event => event.stopPropagation()}>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Browse</p>
         <div className="relative">
           <button
             type="button"
