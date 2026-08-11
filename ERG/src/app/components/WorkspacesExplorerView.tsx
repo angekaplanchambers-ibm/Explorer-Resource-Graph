@@ -2030,14 +2030,10 @@ function InlineQueryBuilder({
   );
 }
 
-function SlideInWorkspacesTable() {
+function WorkspacesTable({ conditions = [] }: { conditions?: ConditionFilter[] }) {
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => tableColumns.map(column => column.id));
-  const [columnsOpen, setColumnsOpen] = useState(false);
-  const [draftColumnIds, setDraftColumnIds] = useState<string[]>(() => tableColumns.map(column => column.id));
-  const [columnSearch, setColumnSearch] = useState("");
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
-  const [appliedConditions, setAppliedConditions] = useState<ConditionFilter[]>([]);
   const pageSize = 10;
   const columns = tableColumns.filter(column => visibleColumnIds.includes(column.id));
 
@@ -2055,15 +2051,15 @@ function SlideInWorkspacesTable() {
   }
 
   const filteredRows = useMemo(() => {
-    if (!appliedConditions.length) return workspaceRows;
+    if (!conditions.length) return workspaceRows;
     return workspaceRows.filter(row =>
-      appliedConditions.every(c => {
+      conditions.every(c => {
         const col = tableColumns.find(column => column.id === c.fieldId);
         const val = valueForColumn(row, c.fieldId);
         return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
       })
     );
-  }, [appliedConditions]);
+  }, [conditions]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -2097,54 +2093,6 @@ function SlideInWorkspacesTable() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <InlineQueryBuilder queryColumns={tableColumns} onApplyConditions={setAppliedConditions} />
-      <div className="relative mb-4 flex justify-end">
-        <button
-          type="button"
-          onClick={() => { setColumnsOpen(open => !open); setDraftColumnIds(visibleColumnIds); setColumnSearch(""); }}
-          className={`flex h-9 w-9 items-center justify-center rounded-[6px] border bg-white text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${columnsOpen ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] hover:bg-[#f8f9fa]"}`}
-          aria-expanded={columnsOpen}
-          aria-label="View columns"
-          title="View columns"
-        >
-          <MoreHorizontal size={18} />
-        </button>
-        {columnsOpen && <div className="absolute right-0 top-10 z-20 flex h-[370px] w-[220px] flex-col overflow-hidden rounded-[6px] border border-[#b8bcc5] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
-          <div className="flex flex-col py-1">
-            <button
-              type="button"
-              onClick={() => setColumnsOpen(false)}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
-            >
-              <Save size={16} className="text-[#3b3d45]" />
-              <span>Save</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setColumnsOpen(false)}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
-            >
-              <Download size={16} className="text-[#3b3d45]" />
-              <span>Download</span>
-            </button>
-          </div>
-          <div className="border-b border-[#dedfe3]" />
-          <div className="p-2">
-            <label className="flex h-9 items-center gap-2 rounded-[5px] border border-[#8c909c] bg-white px-2 text-[#656a76]">
-              <Search size={15} />
-              <input value={columnSearch} onChange={event => setColumnSearch(event.target.value)} placeholder="Narrow results" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#656a76]" aria-label="Narrow columns" />
-            </label>
-          </div>
-          <button type="button" onClick={() => setDraftColumnIds([])} className="border-b border-[#dedfe3] px-3 pb-3 text-left text-[13px] text-[#656a76] hover:text-[#3b3d45]">Deselect all</button>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
-            {tableColumns.filter(column => column.label.toLowerCase().includes(columnSearch.toLowerCase())).map(column => <label key={column.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-2 text-[13px] text-[#3b3d45] hover:bg-[#f1f2f3]">
-              <input type="checkbox" checked={draftColumnIds.includes(column.id)} onChange={() => setDraftColumnIds(current => current.includes(column.id) ? current.filter(id => id !== column.id) : [...current, column.id])} className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" />
-              {column.label}
-            </label>)}
-          </div>
-          <div className="border-t border-[#dedfe3] p-2"><button type="button" onClick={() => { setVisibleColumnIds(draftColumnIds); setColumnsOpen(false); }} className="h-7 w-full rounded-[4px] bg-[#0f62fe] text-[12px] font-medium text-white hover:bg-[#0043ce]">Apply</button></div>
-        </div>}
-      </div>
       <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[5000px] table-fixed border-collapse text-left">
           <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
@@ -2169,142 +2117,21 @@ function SlideInWorkspacesTable() {
         totalItems={sortedRows.length}
         pageSize={pageSize}
         onPageChange={setPage}
-        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        onPageSizeChange={_size => { setPage(1); }}
         pageSizeOptions={[10, 20, 50, 100]}
       />
     </div>
   );
 }
 
-function SlideInTypeDataTable({ columns: sourceColumns, rows, tableMinWidth = "min-w-[1600px]" }: { columns: ReadonlyArray<{ id: string; label: string; width?: string }>; rows: ReadonlyArray<Record<string, unknown>>; tableMinWidth?: string }) {
-  const [visibleIds, setVisibleIds] = useState<string[]>(() => sourceColumns.map(column => column.id));
-  const [draftIds, setDraftIds] = useState<string[]>(() => sourceColumns.map(column => column.id));
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
-  const [page, setPage] = useState(1);
-  const [appliedConditions, setAppliedConditions] = useState<ConditionFilter[]>([]);
-  const pageSize = 10;
-  const columns = sourceColumns.filter(column => visibleIds.includes(column.id));
-
-  const filteredRows = useMemo(() => {
-    if (!appliedConditions.length) return rows;
-    return rows.filter(row =>
-      appliedConditions.every(c => {
-        const col = sourceColumns.find(column => column.id === c.fieldId);
-        const val = row[c.fieldId];
-        return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-      })
-    );
-  }, [rows, appliedConditions]);
-
-  const sorted = useMemo(() => {
-    if (!sort) return filteredRows;
-    return [...filteredRows].sort((left, right) => {
-      const a = String(left[sort.id] ?? ""); const b = String(right[sort.id] ?? "");
-      const comparison = a.localeCompare(b, undefined, { numeric: true });
-      return sort.direction === "asc" ? comparison : -comparison;
-    });
-  }, [filteredRows, sort]);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
-
-  function toggleSort(id: string) { setSort(current => current?.id === id ? { id, direction: current.direction === "asc" ? "desc" : "asc" } : { id, direction: "asc" }); setPage(1); }
-  function displayValue(row: Record<string, unknown>, id: string) {
-    const value = row[id];
-    if (["name", "workspace", "workspaces", "provider", "version", "workspaceCount", "policyCount", "projects"].includes(id)) return <a href="#table-cell" onClick={event => event.preventDefault()} className="text-[#1060ff] underline underline-offset-2">{String(value ?? "—")}</a>;
-    if (typeof value === "boolean") return value ? "true" : "false";
-    return String(value ?? "—");
-  }
-
-  return <div className="flex min-h-0 flex-1 flex-col">
-    <InlineQueryBuilder queryColumns={sourceColumns} onApplyConditions={setAppliedConditions} />
-    <div className="relative mb-4 flex justify-end">
-      <button
-        type="button"
-        onClick={() => { setOpen(value => !value); setDraftIds(visibleIds); setQuery(""); }}
-        className={`flex h-9 w-9 items-center justify-center rounded-[6px] border bg-white text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${open ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] hover:bg-[#f8f9fa]"}`}
-        aria-expanded={open}
-        aria-label="View columns"
-        title="View columns"
-      >
-        <MoreHorizontal size={18} />
-      </button>
-      {open && <div className="absolute right-0 top-10 z-20 flex h-[370px] w-[220px] flex-col overflow-hidden rounded-[6px] border border-[#b8bcc5] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
-        <div className="flex flex-col py-1">
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
-          >
-            <Save size={16} className="text-[#3b3d45]" />
-            <span>Save</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] font-normal text-[#17171a] hover:bg-[#f1f2f3]"
-          >
-            <Download size={16} className="text-[#3b3d45]" />
-            <span>Download</span>
-          </button>
-        </div>
-        <div className="border-b border-[#dedfe3]" />
-        <div className="p-2"><label className="flex h-9 items-center gap-2 rounded-[5px] border border-[#8c909c] bg-white px-2 text-[#656a76]"><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Narrow results" className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#656a76]" /></label></div>
-        <button type="button" onClick={() => setDraftIds([])} className="border-b border-[#dedfe3] px-3 pb-3 text-left text-[13px] text-[#656a76]">Deselect all</button>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">{sourceColumns.filter(column => column.label.toLowerCase().includes(query.toLowerCase())).map(column => <label key={column.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-2 text-[13px] text-[#3b3d45] hover:bg-[#f1f2f3]"><input type="checkbox" checked={draftIds.includes(column.id)} onChange={() => setDraftIds(ids => ids.includes(column.id) ? ids.filter(id => id !== column.id) : [...ids, column.id])} className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" />{column.label}</label>)}</div>
-        <div className="border-t border-[#dedfe3] p-2"><button type="button" onClick={() => { setVisibleIds(draftIds); setOpen(false); }} className="h-7 w-full rounded-[4px] bg-[#0f62fe] text-[12px] font-medium text-white hover:bg-[#0043ce]">Apply</button></div>
-      </div>}
-    </div>
-    <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
-      <table className={`${tableMinWidth} table-fixed border-collapse text-left`}>
-        <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
-          <tr>
-            
-            {columns.map(column => (
-              <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width ?? "w-[180px]"}`}>
-                <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
-                  <span>{column.label}</span>
-                  <SortControl />
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="text-[12px] text-[#52525b]">
-          {pageRows.map((row, index) => (
-            <tr key={String(row.id ?? `${index}-${page}`)} className="h-12 border-t border-[#dedfe3] bg-white">
-              
-              {columns.map(column => (
-                <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width ?? "w-[180px]"}`}>
-                  {displayValue(row, column.id)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <TablePagination
-      currentPage={page}
-      totalPages={totalPages}
-      totalItems={sorted.length}
-      pageSize={pageSize}
-      onPageChange={setPage}
-      onPageSizeChange={size => { setPageSize(size); setPage(1); }}
-      pageSizeOptions={[10, 20, 50, 100]}
-    />
-  </div>;
-}
-
-function TopologyTableView({ type, onNavigate }: { type: string; onNavigate: (type: string) => void }) {
+function TopologyTableView({ type, conditions = [], onNavigate }: { type: string; conditions?: ConditionFilter[]; onNavigate: (type: string) => void }) {
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
-  if (type === "Policy Sets") return <PolicySetsTable conditions={[]} onNavigate={onNavigate} />;
-  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={terraformVersionTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
-  if (type === "Resources") return <ResourcesTable visibleColumnIds={resourceTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
-  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={moduleTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
-  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={providerTableColumns.map(column => column.id)} conditions={[]} onNavigate={onNavigate} />;
-  return <SlideInWorkspacesTable />;
+  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={terraformVersionTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Resources") return <ResourcesTable visibleColumnIds={resourceTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={moduleTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={providerTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
+  return <WorkspacesTable conditions={conditions} />;
 }
 
 // ── Explorer Splash ──────────────────────────────────────────────────────────
@@ -2431,17 +2258,25 @@ function ExplorerSplashView({
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
-  const [tableQuery, setTableQuery] = useState("");
-  const [tableActionsOpen, setTableActionsOpen] = useState(false);
+  const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
-    if (tableViewOpen) { setConditionsExpanded(false); setTableQuery(""); setTableActionsOpen(false); }
+    if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
+  useEffect(() => { setModalConditions([]); }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const [suggestedQueriesVisible, setSuggestedQueriesVisible] = useState(false);
+  const modalQueryColumns =
+    selectedGraphType === "Policy Sets" ? policySetColumns :
+    selectedGraphType === "Modules" ? moduleTableColumns :
+    selectedGraphType === "Providers" ? providerTableColumns :
+    selectedGraphType === "Terraform Versions" ? terraformVersionTableColumns :
+    selectedGraphType === "Resources" ? resourceTableColumns :
+    tableColumns;
+
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
     const matchesType = savedType === "All types" || view.type === savedType;
@@ -2733,79 +2568,9 @@ useEffect(() => {
                   </button>
                 </div>
 
-                {/* Shared table-query toolbar. Search is reserved for Saved Views. */}
-                <div className="flex items-center gap-2 border-b px-5 py-3" style={{ borderColor: glassBorder }}>
-                  <label className="flex h-8 w-[360px] cursor-text items-center gap-2 rounded-[6px] border border-[rgba(59,61,69,0.35)] bg-white px-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                    <span className="font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-[#656a76]">Query</span>
-                    <span className="h-4 w-px bg-[#d7d9de]" aria-hidden="true" />
-                    <input
-                      value={tableQuery}
-                      onChange={e => setTableQuery(e.target.value)}
-                      placeholder="Add a query condition"
-                      className="min-w-0 flex-1 bg-transparent text-[12px] text-[#3b3d45] outline-none placeholder:text-[#9b9cb8]"
-                      aria-label={`Query ${selectedGraphTitle ?? selectedGraphType} table`}
-                    />
-                    {tableQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setTableQuery("")}
-                        className="flex size-4 items-center justify-center rounded-full hover:bg-[#f1f2f3]"
-                        style={{ color: "#9b9cb8" }}
-                        aria-label="Clear query"
-                      >
-                        <X size={11} />
-                      </button>
-                    )}
-                  </label>
-
-                  <div className="flex-1" />
-
-                  {/* 3-dot actions */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setTableActionsOpen(o => !o)}
-                      className={`flex size-8 items-center justify-center rounded-[6px] border transition-colors ${tableActionsOpen ? "border-[#0f62fe] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.35)] hover:bg-[#f8f9fa]"} bg-white`}
-                      style={{ color: "#3b3d45" }}
-                      aria-label="Table actions"
-                      aria-expanded={tableActionsOpen}
-                    >
-                      <MoreHorizontal size={16} strokeWidth={1.8} />
-                    </button>
-                    {tableActionsOpen && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setTableActionsOpen(false)}
-                          aria-hidden="true"
-                        />
-                        <div
-                          role="menu"
-                          className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-[8px] border border-[#dedfe3] bg-white py-1 shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
-                        >
-                          <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#9b9cb8]">Actions</p>
-                          <button
-                            role="menuitem"
-                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-[#3b3d45] hover:bg-[#f8f9fa]"
-                          >
-                            <Save size={14} style={{ color: "#656a76", flexShrink: 0 }} />
-                            Save view
-                          </button>
-                          <button
-                            role="menuitem"
-                            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-[#3b3d45] hover:bg-[#f8f9fa]"
-                          >
-                            <Download size={14} style={{ color: "#656a76", flexShrink: 0 }} />
-                            Download CSV
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-
                 <div className="min-h-0 flex-1 overflow-auto p-5">
-                  <TopologyTableView type={selectedGraphType} onNavigate={(type) => openGraph(type, type)} />
+                  <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                  <TopologyTableView type={selectedGraphType} conditions={modalConditions} onNavigate={(type) => openGraph(type, type)} />
                 </div>
               </motion.div>
             </div>
@@ -2903,231 +2668,117 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Entity type group — temporarily hidden; keep its direct graph navigation available for later. */}
-      <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
-        <div className="hidden w-full overflow-hidden rounded-[6px] border border-[#aeb1b8] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-          {splashItems.map(({ Icon, label }) => {
-            const type = splashToNavLabel[label] ?? label;
-            const displayLabel = label === "Policy sets" ? "Policy Sets" : label === "Terraform versions" ? "Terraform Versions" : label;
-            const isSelected = selectedGraphType === type;
+      {/* Browse Types dropdown + selected tag */}
+      <div className="mt-3" ref={useCaseMenuRef} onMouseDown={event => event.stopPropagation()}>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setUseCaseMenuOpen(open => !open)}
+            aria-expanded={useCaseMenuOpen}
+            aria-haspopup="menu"
+            className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
+            style={{ borderColor: "rgba(59,61,69,0.4)" }}
+          >
+            <span className="flex items-center gap-2"><Compass size={14} />Browse Types, Use Cases and Saved Views</span>
+            <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {useCaseMenuOpen && (() => {
+            const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
             return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => openGraph(type, displayLabel)}
-                aria-pressed={isSelected}
-                className={`-ml-px flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 border-l px-2 text-[10px] font-semibold leading-none transition-colors first:ml-0 first:border-l-0 ${isSelected ? "relative z-10 border-[#0f62fe] bg-[#f0f6ff] text-[#0f62fe]" : "border-[#aeb1b8] bg-white text-[#656a76] hover:bg-[#f5f6f7] hover:text-[#3b3d45]"}`}
+              <div
+                role="menu"
+                aria-label="Pre-defined Explorer views"
+                className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
+                style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
               >
-                <Icon size={15} strokeWidth={1.65} className="shrink-0" />
-                <span className="whitespace-nowrap">{displayLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-
-
-      </div>
-      {/* Collapsible query builder */}
-      <div className="mt-3">
-        <section className="rounded-[8px] border" style={{ background: glassSurface, borderColor: glassBorder, color: glassText }}>
-          <div className="flex items-center gap-3 px-3 py-3">
-            <button
-              type="button"
-              onClick={() => setConditionsExpanded(expanded => !expanded)}
-              aria-expanded={conditionsExpanded}
-              aria-label={conditionsExpanded ? "Collapse conditions" : "Expand conditions"}
-              className={`flex size-[18px] items-center justify-center rounded-[3px] border ${conditionsExpanded ? "border-[#0f62fe] text-[#3b3d45] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] text-[#3b3d45]"}`}
-            >
-              {conditionsExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </button>
-            <span><strong className="block text-[12px] font-semibold leading-4">{conditionsExpanded ? "Modify conditions" : "Show conditions"}</strong><span className="text-[11px]" style={{ color: glassMuted }}>No conditions applied&nbsp; ⓘ</span></span>
-          </div>
-          {conditionsExpanded && (
-            <div className="border-t border-[rgba(101,106,118,0.12)] px-5 pb-4 pt-3">
-              <div ref={useCaseMenuRef} className="relative mb-4">
-                <button
-                  type="button"
-                  onClick={() => setUseCaseMenuOpen(open => !open)}
-                  aria-expanded={useCaseMenuOpen}
-                  aria-haspopup="menu"
-                  className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
-                  style={{ borderColor: "rgba(59,61,69,0.4)" }}
-                >
-                  <span className="flex items-center gap-2"><Compass size={14} />Browse Types, Use Cases and Saved Views</span>
-                  <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {useCaseMenuOpen && (() => {
-                  const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
-                  return (
-                    <div
-                      role="menu"
-                      aria-label="Pre-defined Explorer views"
-                      className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
-                      style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
-                    >
-                      <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
-                        <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
-                        {USE_CASE_CATEGORIES.map(category => {
-                          const CategoryIcon = category.Icon;
-                          const isHovered = category.type === activeCategory.type;
-                          return (
-                            <button
-                              key={category.type}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => setHoveredUseCaseType(category.type)}
-                              className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
-                              style={!isHovered ? { color: glassText } : undefined}
-                            >
-                              <span className="flex items-center gap-2"><CategoryIcon size={14} className="shrink-0" />{category.heading}</span>
-                              <ChevronRight size={14} className={isHovered ? "opacity-90" : "opacity-45"} />
-                            </button>
-                          );
-                        })}
-                        <div className="my-1.5 border-t" style={{ borderColor: glassBorder }} />
+                <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
+                  <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
+                  {USE_CASE_CATEGORIES.map(category => {
+                    const CategoryIcon = category.Icon;
+                    const isHovered = category.type === activeCategory.type;
+                    return (
+                      <button
+                        key={category.type}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => setHoveredUseCaseType(category.type)}
+                        className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
+                        style={!isHovered ? { color: glassText } : undefined}
+                      >
+                        <span className="flex items-center gap-2"><CategoryIcon size={14} className="shrink-0" />{category.heading}</span>
+                        <ChevronRight size={14} className={isHovered ? "opacity-90" : "opacity-45"} />
+                      </button>
+                    );
+                  })}
+                  <div className="my-1.5 border-t" style={{ borderColor: glassBorder }} />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setSavedViewsOpen(true); setUseCaseMenuOpen(false); }}
+                    className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
+                    style={{ color: glassText }}
+                  >
+                    <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
+                    <ChevronRight size={14} className="opacity-45" />
+                  </button>
+                </div>
+                <div className="p-3">
+                  <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
+                  <div className="space-y-0.5">
+                    {(() => {
+                      const viewAllLabel = `View All ${activeCategory.type}`;
+                      const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                      return (
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={() => {
-                                              setSavedViewsOpen(true);
-                            setUseCaseMenuOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
-                          style={{ color: glassText }}
+                          onClick={() => openGraph(activeCategory.type, viewAllLabel)}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
-                          <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
-                          <ChevronRight size={14} className="opacity-45" />
+                          <span>{viewAllLabel}</span><ChevronRight size={13} className={isViewAllSelected ? "opacity-100" : "opacity-50"} />
                         </button>
-                      </div>
-                      <div className="p-3">
-                        <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
-                        <div className="space-y-0.5">
-                          {(() => {
-                            const viewAllLabel = `View All ${activeCategory.type}`;
-                            const isViewAllSelected = selectedGraphTitle === viewAllLabel;
-                            return (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => openGraph(activeCategory.type, viewAllLabel)}
-                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                                style={!isViewAllSelected ? { color: glassText } : undefined}
-                              >
-                                <span>{viewAllLabel}</span><ChevronRight size={13} className={isViewAllSelected ? "opacity-100" : "opacity-50"} />
-                              </button>
-                            );
-                          })()}
-                          {activeCategory.items.map(view => {
-                            const isSelected = selectedGraphTitle === view;
-                            return (
-                              <button
-                                key={view}
-                                type="button"
-                                role="menuitem"
-                                onClick={() => openGraph(activeCategory.type, view)}
-                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                                style={!isSelected ? { color: glassText } : undefined}
-                              >
-                                <span>{view}</span><ChevronRight size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {selectedGraphTitle && (() => {
-                const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
-                return (
-                  <div className="mb-3 flex items-center">
-                    <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
-                      <span className="flex size-4 items-center justify-center text-[#656a76]">
-                        <ActiveIcon size={14} />
-                      </span>
-                      {selectedGraphTitle}
-                      <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
-                        <X size={13} />
-                      </button>
-                    </span>
+                      );
+                    })()}
+                    {activeCategory.items.map(view => {
+                      const isSelected = selectedGraphTitle === view;
+                      return (
+                        <button
+                          key={view}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => openGraph(activeCategory.type, view)}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isSelected ? { color: glassText } : undefined}
+                        >
+                          <span>{view}</span><ChevronRight size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
+                        </button>
+                      );
+                    })}
                   </div>
-                );
-              })()}
-              <hr className="mb-4 mt-2 border-t border-[rgba(101,106,118,0.12)] w-full" />
-                    <div className="space-y-3">
-                      {Array.from({ length: conditionCount }, (_, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="w-[78px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            const SelectedFieldIcon = selectedField.valueType === "date" ? CalendarDays : selectedField.valueType === "number" ? Hash : selectedField.valueType === "boolean" ? ToggleRight : Type;
-                            return (
-                              <div className="relative min-w-[190px]">
-                                <button type="button" onClick={() => setOpenFieldIndex(current => current === index ? null : index)} aria-expanded={openFieldIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 rounded-l-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">
-                                  <span className="flex items-center gap-2"><SelectedFieldIcon size={14} />{selectedField.label}</span><ChevronDown size={14} />
-                                </button>
-                                {openFieldIndex === index && (
-                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                                    {queryColumns.map(column => {
-                                      const FieldIcon = column.valueType === "date" ? CalendarDays : column.valueType === "number" ? Hash : column.valueType === "boolean" ? ToggleRight : Type;
-                                      return <button key={column.id} type="button" role="option" aria-selected={selectedField.id === column.id} onClick={() => { setConditionFields(fields => fields.map((field, fieldIndex) => fieldIndex === index ? column.id : field)); setConditionOperators(operators => operators.map((operator, operatorIndex) => operatorIndex === index ? operatorsByValueType[column.valueType as keyof typeof operatorsByValueType][0] : operator)); setOpenFieldIndex(null); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedField.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}><FieldIcon size={14} />{column.label}</button>;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            const selectedOperator = conditionOperators[index] ?? operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType][0];
-                            const availableOperators = operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType];
-                            return (
-                              <div className="relative -ml-2 min-w-[150px]">
-                                <button type="button" onClick={() => setOpenOperatorIndex(current => current === index ? null : index)} aria-expanded={openOperatorIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">{selectedOperator}<ChevronDown size={14} /></button>
-                                {openOperatorIndex === index && (
-                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                                    {availableOperators.map(operator => <button key={operator} type="button" role="option" aria-selected={selectedOperator === operator} onClick={() => { setConditionOperators(operators => operators.map((current, operatorIndex) => operatorIndex === index ? operator : current)); setOpenOperatorIndex(null); }} className={`flex w-full px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedOperator === operator ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}>{operator}</button>)}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            return selectedField.valueType === "date" ? (
-                              <input type="datetime-local" step="1" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition date and time" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none focus:border-[#0f62fe]" />
-                            ) : (
-                              <input type="text" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition value" placeholder="Enter a value" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#656a76] focus:border-[#0f62fe]" />
-                            );
-                          })()}
-                          <button type="button" onClick={() => {
-                            if (conditionCount === 1) {
-                              setConditionFields(["name"]);
-                              setConditionOperators(["is"]);
-                              setConditionValues([""]);
-                            } else {
-                              setConditionCount(count => count - 1);
-                              setConditionFields(fields => fields.filter((_, fieldIndex) => fieldIndex !== index));
-                              setConditionOperators(operators => operators.filter((_, operatorIndex) => operatorIndex !== index));
-                              setConditionValues(values => values.filter((_, valueIndex) => valueIndex !== index));
-                            }
-                            setOpenFieldIndex(null);
-                            setOpenOperatorIndex(null);
-                          }} aria-label={conditionCount === 1 ? "Clear condition" : "Remove condition"} className="flex size-8 items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.25)] bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3]"><Trash2 size={15} /></button>
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => { setConditionCount(count => count + 1); setConditionFields(fields => [...fields, "name"]); setConditionOperators(operators => [...operators, "is"]); setConditionValues(values => [...values, ""]); }} className="mt-4 flex items-center gap-1.5 text-[12px] font-medium text-[#0f62fe] hover:underline"><Plus size={15} />Add condition</button>
-                      <div className="mt-6 flex items-center gap-3">
-                        <button type="button" onClick={() => { setConditionsExpanded(false); openGraph("Workspaces", "Workspaces"); }} className="h-8 rounded-[4px] bg-[#0f62fe] px-4 text-[12px] font-medium text-white hover:bg-[#0043ce]">Run Query</button>
-                        <button type="button" onClick={() => { setConditionCount(1); setConditionFields(["name"]); setConditionOperators(["is"]); setConditionValues([""]); setOpenFieldIndex(null); setOpenOperatorIndex(null); setConditionsExpanded(false); }} className="h-8 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f1f2f3]">Cancel</button>
-                      </div>
-                    </div>
-            )}
-          </section>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {selectedGraphTitle && (() => {
+          const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
+          return (
+            <div className="mt-2 flex items-center">
+              <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
+                <span className="flex size-4 items-center justify-center text-[#656a76]">
+                  <ActiveIcon size={14} />
+                </span>
+                {selectedGraphTitle}
+                <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
+                  <X size={13} />
+                </button>
+              </span>
+            </div>
+          );
+        })()}
       </div>
       </div>
 
