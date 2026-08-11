@@ -2782,14 +2782,12 @@ useEffect(() => {
           );
         })()}
 
-        {!selectedGraphTitle && (
-          <SuggestedQueriesList
-            themeMode={themeMode}
-            glassText={glassText}
-            glassMuted={glassMuted}
-            onSelect={openGraph}
-          />
-        )}
+        <SuggestedQueriesList
+          themeMode={themeMode}
+          glassText={glassText}
+          glassMuted={glassMuted}
+          onSelect={openGraph}
+        />
       </div>
       </div>
 
