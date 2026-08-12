@@ -1368,6 +1368,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
+  const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>("radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
@@ -1392,7 +1393,16 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   // of all resourceRows belonging to that workspace, plus the workspace node itself.
   const resourceOverlay = useMemo(() => {
     if (!viewResourcesWsName) return null;
-    const wsRows = resourceRows.filter(r => r.workspace === viewResourcesWsName);
+    // Use the count stored on the node (matches "Resource count" in the popover).
+    // Generate that many synthetic resource rows so the list matches exactly.
+    const count = viewResourcesCount;
+    const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
+    const baseRows = resourceRows.filter(r => r.workspace === viewResourcesWsName);
+    // Build a list of `count` rows: real rows first, then synthetic repeats with unique ids.
+    const syntheticRows = Array.from({ length: count }, (_, i) => {
+      const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
+      return { ...base, id: `syn-${i}`, workspace: viewResourcesWsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
+    });
     const overlayNodes: TopoNode[] = [];
     const overlayEdgeSet = new Set<string>();
     const overlayEdges: TopoEdge[] = [];
@@ -1400,11 +1410,10 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
       const key = a < b ? `${a}|${b}` : `${b}|${a}`;
       if (!overlayEdgeSet.has(key)) { overlayEdgeSet.add(key); overlayEdges.push({ source: a, target: b }); }
     }
-    const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
     const bySubtype = new Map<string, string[]>();
     const wsNodeId = `ws-res-ov-${viewResourcesWsName}`;
-    overlayNodes.push({ id: wsNodeId, label: viewResourcesWsName, type: "workspace", secondary: `${wsRows.length} res`, data: { name: viewResourcesWsName } });
-    wsRows.forEach((row, i) => {
+    overlayNodes.push({ id: wsNodeId, label: viewResourcesWsName, type: "workspace", secondary: `${count} res`, data: { name: viewResourcesWsName } });
+    syntheticRows.forEach((row, i) => {
       const subType = SUBTYPES[i % 5];
       const nodeId = `res-ov-${row.id}`;
       overlayNodes.push({ id: nodeId, label: row.address, type: `resource-${subType}`, secondary: subType, data: {
@@ -1421,7 +1430,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
       for (let i = 0; i < ids.length - 1; i++) addOEdge(ids[i], ids[i + 1]);
     }
     return { nodes: overlayNodes, edges: overlayEdges };
-  }, [viewResourcesWsName]);
+  }, [viewResourcesWsName, viewResourcesCount]);
   const activeNodes = resourceOverlay ? resourceOverlay.nodes : nodes;
   const activeEdges = resourceOverlay ? resourceOverlay.edges : edges;
   const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1848,7 +1857,13 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
               {/* Action buttons */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
-                  onClick={() => { setViewResourcesWsName(selectedNode.label); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+                  onClick={() => {
+                    const count = Number((selectedNode.data as Record<string, unknown>).resources ?? 0);
+                    setViewResourcesWsName(selectedNode.label);
+                    setViewResourcesCount(count);
+                    setSelectedId(null);
+                    setZoom({ tx: 0, ty: 0, scale: 1 });
+                  }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View resources <span>→</span>
