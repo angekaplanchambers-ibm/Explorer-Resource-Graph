@@ -1079,7 +1079,17 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
     for (const aId of advisory) addEdge(aId, enforced[0]);
   }
 
-  return { nodes, edges };
+  // Make ~30% of nodes isolated: remove all edges that touch them.
+  // Use a deterministic stride (every 3rd node starting at index 2) so the
+  // result is stable across renders and consistent across all Types.
+  const isolatedIds = new Set(
+    nodes.filter((_, i) => i % 3 === 2).map(n => n.id)
+  );
+  const connectedEdges = edges.filter(
+    e => !isolatedIds.has(e.source) && !isolatedIds.has(e.target)
+  );
+
+  return { nodes, edges: connectedEdges };
 }
 
 function runForceLayout(nodes: TopoNode[], edges: TopoEdge[]): Map<string, { x: number; y: number }> {
