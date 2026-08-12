@@ -961,20 +961,11 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
           })
         )
       : providerRows;
-    // Add provider nodes and track which workspace connects to each
-    const wsNodeIds = new Map<string, string>(); // workspace name → node id
+    // Add provider nodes only
     for (const [name, version, , wsCount, workspace] of filteredProvs) {
       const nodeId = `prov-${name.replace("/", "_")}-${version}`;
       const baseName = name.split("/").pop()!;
       nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace } });
-      // Add workspace node if not already added
-      if (!wsNodeIds.has(workspace)) {
-        const wsId = `ws-prov-${workspace}`;
-        wsNodeIds.set(workspace, wsId);
-        nodes.push({ id: wsId, label: workspace, type: "workspace", secondary: "workspace", data: { name: workspace } });
-      }
-      // Connect provider → its workspace
-      addEdge(nodeId, wsNodeIds.get(workspace)!);
     }
     // Connect providers of the same family (azurerm group, tfe group, etc.)
     const families = new Map<string, string[]>();
