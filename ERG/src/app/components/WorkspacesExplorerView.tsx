@@ -814,11 +814,7 @@ const NODE_COLORS: Record<string, string> = {
   module: "#818cf8",
   provider: "#34d399",
   "terraform-version": "#38bdf8",
-  "resource-compute": "#f472b6",
-  "resource-identity": "#fb923c",
-  "resource-networking": "#60a5fa",
-  "resource-security": "#c084fc",
-  "resource-storage": "#2dd4bf",
+  "resource": "#f472b6",
   "policy-set": "#fbbf24",
 };
 
@@ -1040,10 +1036,10 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
     const wsNodeIds = new Map<string, string>();
     for (let i = 0; i < filteredRes.length; i++) {
       const row = filteredRes[i];
-      const subType = SUBTYPES[i % 5];
+      const subType = SUBTYPES[i % 5]; // used only for edge-grouping
       const typeKey = `resource-${subType}`;
       const nodeId = `res-${row.id}`;
-      nodes.push({ id: nodeId, label: row.address, type: typeKey, secondary: subType, data: {
+      nodes.push({ id: nodeId, label: row.address, type: "resource", secondary: row.type, data: {
         type: row.type,
         name: row.name,
         address: row.address,
@@ -1071,12 +1067,9 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
     for (const [, ids] of bySubtype) {
       for (let i = 0; i < ids.length - 1; i++) addEdge(ids[i], ids[i + 1]);
     }
-    // Connect subtype leaders to each other (star from networking, which is the "core")
+    // Connect subtype leaders to each other in a chain
     const leaders = [...bySubtype.entries()].map(([, ids]) => ids[0]);
-    const netLeader = bySubtype.get("resource-networking")?.[0];
-    if (netLeader) {
-      for (const ldr of leaders) { if (ldr !== netLeader) addEdge(netLeader, ldr); }
-    }
+    for (let i = 0; i < leaders.length - 1; i++) addEdge(leaders[i], leaders[i + 1]);
   }
 
   else if (activeType === "Policy Sets") {
@@ -1257,11 +1250,7 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
   module: ModuleIcon,
   provider: Globe,
   "terraform-version": TerraformIcon,
-  "resource-compute": Cpu,
-  "resource-identity": User,
-  "resource-networking": Globe,
-  "resource-security": Lock,
-  "resource-storage": HardDrive,
+  "resource": ResourcesIcon,
 };
 
 // Fallback for unknown types
@@ -2002,11 +1991,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   module: "Module",
   provider: "Provider",
   "terraform-version": "TF Version",
-  "resource-compute": "Compute",
-  "resource-identity": "Identity",
-  "resource-networking": "Networking",
-  "resource-security": "Security",
-  "resource-storage": "Storage & Data",
+  "resource": "Resource",
   "policy-set": "Policy Set",
 };
 
