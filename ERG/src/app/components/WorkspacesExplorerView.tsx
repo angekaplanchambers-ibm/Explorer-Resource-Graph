@@ -2232,12 +2232,13 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
 
           <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
 
-          {/* Deselect all */}
+          {/* Deselect / Select all toggle */}
           <div style={{ padding: "4px 12px" }}>
-            <button type="button" onClick={() => setPending([])}
+            <button type="button"
+              onClick={() => pending.length === 0 ? setPending(columns.map(c => c.id)) : setPending([])}
               style={{ background: "none", border: "none", padding: "4px 0", fontSize: 12, color: "#656a76", cursor: "pointer", fontWeight: 500 }}
             >
-              Deselect all
+              {pending.length === 0 ? "Select all" : "Deselect all"}
             </button>
           </div>
 
