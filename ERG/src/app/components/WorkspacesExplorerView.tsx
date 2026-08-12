@@ -1767,40 +1767,40 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
         {/* End zoomable content */}
       </svg>
 
-      {/* Popover — top right, fixed position */}
-      {selectedNode && (() => {
+      {/* Resource-view popover — independent of selectedNode, shown whenever overlay is active */}
+      {viewResourcesWsName && (() => {
+        const resNodes = resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
+        return (
+          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <button
+              onClick={() => { setViewResourcesWsName(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              ← exit resource view
+            </button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewResourcesWsName}</div>
+            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+              {resNodes.length} resource{resNodes.length !== 1 ? "s" : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+              {resNodes.map(n => (
+                <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                    <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: "capitalize" }}>{n.secondary}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Popover — top right, fixed position, for selected nodes */}
+      {selectedNode && !viewResourcesWsName && (() => {
         const isWorkspace = selectedNode.type === "workspace";
         const d = selectedNode.data as Record<string, unknown>;
-
-        // Resource-view popover — replaces the canvas with workspace's resources
-        if (viewResourcesWsName) {
-          const resNodes = resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
-          return (
-            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-              <button
-                onClick={() => { setViewResourcesWsName(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-              >
-                ← exit resource view
-              </button>
-              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewResourcesWsName}</div>
-              <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-                {resNodes.length} resource{resNodes.length !== 1 ? "s" : ""}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-                {resNodes.map(n => (
-                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
-                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: "capitalize" }}>{n.secondary}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        }
 
         // Workspace blast radius popover
         if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
