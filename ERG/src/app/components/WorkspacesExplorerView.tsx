@@ -1033,7 +1033,6 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       : resourceRows;
     const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
     const bySubtype = new Map<string, string[]>();
-    const wsNodeIds = new Map<string, string>();
     for (let i = 0; i < filteredRes.length; i++) {
       const row = filteredRes[i];
       const subType = SUBTYPES[i % 5]; // used only for edge-grouping
@@ -1055,13 +1054,6 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       } });
       if (!bySubtype.has(typeKey)) bySubtype.set(typeKey, []);
       bySubtype.get(typeKey)!.push(nodeId);
-      // Add workspace node and connect
-      if (!wsNodeIds.has(row.workspace)) {
-        const wsId = `ws-res-${row.workspace}`;
-        wsNodeIds.set(row.workspace, wsId);
-        nodes.push({ id: wsId, label: row.workspace, type: "workspace", secondary: "workspace", data: { name: row.workspace } });
-      }
-      addEdge(nodeId, wsNodeIds.get(row.workspace)!);
     }
     // Chain resources within each sub-type
     for (const [, ids] of bySubtype) {
