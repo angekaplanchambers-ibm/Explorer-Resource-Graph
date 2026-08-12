@@ -2487,8 +2487,6 @@ function ExplorerSplashView({
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
   useEffect(() => { setModalConditions([]); }, [selectedGraphType]);
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
-  useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
@@ -2501,6 +2499,8 @@ function ExplorerSplashView({
     selectedGraphType === "Terraform Versions" ? terraformVersionTableColumns :
     selectedGraphType === "Resources" ? resourceTableColumns :
     tableColumns;
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
+  useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
