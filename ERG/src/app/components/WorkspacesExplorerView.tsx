@@ -2235,7 +2235,11 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
           {/* Deselect / Select all toggle */}
           <div style={{ padding: "4px 12px" }}>
             <button type="button"
-              onClick={() => pending.length === 0 ? setPending(columns.map(c => c.id)) : setPending([])}
+              onClick={() => {
+                const next = pending.length === 0 ? columns.map(c => c.id) : [];
+                setPending(next);
+                onApply(next.length > 0 ? next : columns.map(c => c.id));
+              }}
               style={{ background: "none", border: "none", padding: "4px 0", fontSize: 12, color: "#656a76", cursor: "pointer", fontWeight: 500 }}
             >
               {pending.length === 0 ? "Select all" : "Deselect all"}
@@ -2264,7 +2268,11 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => setPending(prev => checked ? prev.filter(id => id !== col.id) : [...prev, col.id])}
+                    onChange={() => {
+                      const next = checked ? pending.filter(id => id !== col.id) : [...pending, col.id];
+                      setPending(next);
+                      onApply(next.length > 0 ? next : columns.map(c => c.id));
+                    }}
                     style={{ accentColor: "#0f62fe", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
                   />
                   {col.label}
