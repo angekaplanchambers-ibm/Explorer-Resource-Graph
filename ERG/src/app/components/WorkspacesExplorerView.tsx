@@ -1006,20 +1006,9 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
           })
         )
       : terraformVersionRows;
-    const wsNodeIds = new Map<string, string>(); // workspace name → node id
     for (const [version, wsCount, wsList] of filteredTFV) {
       const versionNodeId = `tfver-${version}`;
       nodes.push({ id: versionNodeId, label: version, type: "terraform-version", secondary: `${wsCount} ws`, data: { version, workspaces: wsList } });
-      // Parse workspace names (strip trailing ellipsis annotations)
-      const wsNames = wsList.split(",").map(s => s.trim().replace(/…$/, "").trim()).filter(Boolean);
-      for (const wsName of wsNames) {
-        if (!wsNodeIds.has(wsName)) {
-          const wsId = `ws-tfver-${wsName}`;
-          wsNodeIds.set(wsName, wsId);
-          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
-        }
-        addEdge(versionNodeId, wsNodeIds.get(wsName)!);
-      }
     }
     // Connect versions in the same major.minor series (e.g., 1.9.x peers)
     const byMinor = new Map<string, string[]>();
