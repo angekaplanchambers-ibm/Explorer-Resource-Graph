@@ -1368,7 +1368,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
     syntheticRows.forEach((row, i) => {
       const subType = SUBTYPES[i % 5];
       const nodeId = `res-ov-${row.id}`;
-      overlayNodes.push({ id: nodeId, label: row.address, type: `resource-${subType}`, secondary: subType, data: {
+      overlayNodes.push({ id: nodeId, label: row.address, type: "resource", secondary: row.type, data: {
         type: row.type, name: row.name, address: row.address, workspace: row.workspace,
         project: row.project, moduleName: row.moduleName, provider: row.provider,
         terraformVersion: row.terraformVersion, billableRum: row.billableRum,
