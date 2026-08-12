@@ -1240,6 +1240,64 @@ const DEFAULT_NODE_ICON: LucideIcon = Server;
 
 type TopoLayout = "force" | "stacked" | "radial";
 
+// Returns key-value pairs for a node's popover, using the column labels for the active type.
+function getNodeFields(node: TopoNode, activeType: string): { label: string; value: string }[] {
+  const d = (node.data ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (v === undefined || v === null || v === "") ? "—" : String(v);
+
+  if (activeType === "Workspaces") {
+    return [
+      { label: "Name",       value: str(node.label) },
+      { label: "Project",    value: str(d.project) },
+      { label: "Run status", value: str(d.runStatus) },
+      { label: "Resources",  value: str(d.resources) },
+      { label: "Providers",  value: str(d.providers) },
+      { label: "Tags",       value: str(d.tags) },
+      { label: "Created",    value: str(d.created) },
+    ];
+  }
+  if (activeType === "Modules") {
+    return [
+      { label: "Name",            value: str(node.label) },
+      { label: "Version",         value: str(node.secondary) },
+      { label: "Workspaces",      value: str(d.workspaces) },
+    ];
+  }
+  if (activeType === "Providers") {
+    return [
+      { label: "Name",            value: str(d.name ?? node.label) },
+      { label: "Version",         value: str(d.version) },
+      { label: "Workspace",       value: str(d.workspace) },
+    ];
+  }
+  if (activeType === "Terraform Versions") {
+    return [
+      { label: "Version",         value: str(d.version ?? node.label) },
+      { label: "Workspace count", value: str(node.secondary?.replace(" ws", "")) },
+      { label: "Workspaces",      value: str(d.workspaces) },
+    ];
+  }
+  if (activeType === "Resources") {
+    return [
+      { label: "Name",      value: str(d.name) },
+      { label: "Workspace", value: str(d.workspace) },
+      { label: "Provider",  value: str(d.provider) },
+      { label: "TF version",value: str(d.version) },
+    ];
+  }
+  if (activeType === "Policy Sets") {
+    return [
+      { label: "Name",       value: str(node.label) },
+      { label: "Policies",   value: str(node.secondary) },
+      { label: "Mode",       value: str(d.mode) },
+      { label: "Scope",      value: str(d.scope) },
+      { label: "Workspaces", value: str(d.workspaces) },
+    ];
+  }
+  // Generic fallback
+  return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
+}
+
 function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
@@ -1283,6 +1341,13 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
     }
     return nodes;
   }, [nodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace]);
+
+  // Mirror the same 30% isolation stride used in buildTopoGraph.
+  // We compute against the full nodes array (pre-filter) so the isolated set is stable.
+  const isolatedNodeIds = useMemo(() => {
+    const connectedIds = new Set(edges.flatMap(e => [e.source, e.target]));
+    return new Set(nodes.filter(n => !connectedIds.has(n.id)).map(n => n.id));
+  }, [nodes, edges]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes]);
 
@@ -1543,6 +1608,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             const isSelected = node.id === selectedId;
             const isNeighbor = neighborSet.has(node.id);
             const isHovered = node.id === hoveredId;
+            const isIsolated = isolatedNodeIds.has(node.id);
             const isHoverNeighbor = hoverNeighborSet.has(node.id);
             const inBlastRadius = blastRadiusId ? blastRadiusSet.has(node.id) : false;
             const isBlastOrigin = node.id === blastRadiusId;
@@ -1587,6 +1653,42 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                   <text y={NODE_R + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
                   <text y={NODE_R + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
+
+                {/* Isolated-node hover popover — only shown when hovered and has no edges */}
+                {isHovered && isIsolated && (() => {
+                  const fields = getNodeFields(node, activeType);
+                  const PW = 200;
+                  const ROW_H = 18;
+                  const PAD = 10;
+                  const PH = PAD * 2 + fields.length * ROW_H;
+                  // Flip to left side if node is in the right 30% of the canvas
+                  const flipLeft = pos.x > VW * 0.7;
+                  const px = flipLeft ? -(PW + NODE_R + 10) : NODE_R + 10;
+                  const py = -PH / 2;
+                  return (
+                    <foreignObject x={px} y={py} width={PW} height={PH} style={{ overflow: "visible", pointerEvents: "none" }}>
+                      <div style={{
+                        width: PW,
+                        background: themeMode === "light" ? "#ffffff" : "#1c1e2b",
+                        border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        padding: `${PAD}px 12px`,
+                        boxShadow: themeMode === "light" ? "0 4px 16px rgba(0,0,0,0.12)" : "0 4px 20px rgba(0,0,0,0.6)",
+                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}>
+                        {fields.map(({ label, value }) => (
+                          <div key={label} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", whiteSpace: "nowrap", minWidth: 70, flexShrink: 0 }}>{label}</span>
+                            <span style={{ fontSize: 10, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.4 }}>{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </foreignObject>
+                  );
+                })()}
               </g>
             );
           })}
