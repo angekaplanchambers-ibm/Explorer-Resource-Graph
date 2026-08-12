@@ -2033,8 +2033,7 @@ function InlineQueryBuilder({
   );
 }
 
-function WorkspacesTable({ conditions = [] }: { conditions?: ConditionFilter[] }) {
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => tableColumns.map(column => column.id));
+function WorkspacesTable({ conditions = [], visibleColumnIds }: { conditions?: ConditionFilter[]; visibleColumnIds: string[] }) {
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -2127,14 +2126,166 @@ function WorkspacesTable({ conditions = [] }: { conditions?: ConditionFilter[] }
   );
 }
 
-function TopologyTableView({ type, conditions = [], onNavigate }: { type: string; conditions?: ConditionFilter[]; onNavigate: (type: string) => void }) {
+function TopologyTableView({ type, conditions = [], visibleColumnIds, onNavigate }: { type: string; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void }) {
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
   if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={terraformVersionTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Resources") return <ResourcesTable visibleColumnIds={resourceTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={moduleTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={providerTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  return <WorkspacesTable conditions={conditions} />;
+  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} />;
+}
+
+// ── ActionsDropdown ──────────────────────────────────────────────────────────
+
+function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
+  columns: readonly { id: string; label: string }[];
+  visibleColumnIds: string[];
+  onApply: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [pending, setPending] = useState<string[]>(visibleColumnIds);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync pending when visible columns change from outside (type switch)
+  useEffect(() => { setPending(visibleColumnIds); }, [visibleColumnIds]);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filteredColumns = search.trim()
+    ? columns.filter(c => c.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : columns;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          height: 32, padding: "0 12px", borderRadius: 6,
+          border: "1px solid rgba(0,0,0,0.15)",
+          background: open ? "rgba(0,0,0,0.05)" : "#fff",
+          color: "#3b3d45", fontSize: 13, fontWeight: 500,
+          cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        Actions
+        <ChevronDown size={13} style={{ opacity: 0.6, transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", right: 0,
+          width: 240, zIndex: 60,
+          background: "#fff", borderRadius: 8,
+          border: "1px solid rgba(0,0,0,0.12)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+          overflow: "hidden",
+        }}>
+          {/* Save */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Save size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Save
+          </button>
+
+          {/* Download */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Download size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Download
+          </button>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* Narrow results search */}
+          <div style={{ padding: "8px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, border: "1px solid #d1d5db", borderRadius: 5, padding: "5px 9px", background: "#fafafa" }}>
+              <Search size={12} style={{ color: "#9ca3af", flexShrink: 0 }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Narrow results"
+                style={{ flex: 1, border: "none", background: "none", outline: "none", fontSize: 12, color: "#374151" }}
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#9ca3af", lineHeight: 1, display: "flex" }}>
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* Deselect all */}
+          <div style={{ padding: "4px 12px" }}>
+            <button type="button" onClick={() => setPending([])}
+              style={{ background: "none", border: "none", padding: "4px 0", fontSize: 12, color: "#656a76", cursor: "pointer", fontWeight: 500 }}
+            >
+              Deselect all
+            </button>
+          </div>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* View columns header */}
+          <div style={{ padding: "6px 14px 3px", fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            View columns
+          </div>
+
+          {/* Checkbox list */}
+          <div style={{ maxHeight: 200, overflowY: "auto", padding: "2px 0 4px" }}>
+            {filteredColumns.length === 0 && (
+              <div style={{ padding: "8px 14px", fontSize: 12, color: "#9ca3af" }}>No columns match.</div>
+            )}
+            {filteredColumns.map(col => {
+              const checked = pending.includes(col.id);
+              return (
+                <label key={col.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#3b3d45" }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = "#f5f5f7")}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "none")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => setPending(prev => checked ? prev.filter(id => id !== col.id) : [...prev, col.id])}
+                    style={{ accentColor: "#0f62fe", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                  />
+                  {col.label}
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Apply */}
+          <div style={{ padding: "8px 12px", borderTop: "1px solid #e5e7eb" }}>
+            <button
+              type="button"
+              onClick={() => { onApply(pending.length > 0 ? pending : columns.map(c => c.id)); setOpen(false); }}
+              style={{ width: "100%", height: 32, borderRadius: 6, background: "#0f62fe", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Explorer Splash ──────────────────────────────────────────────────────────
@@ -2336,6 +2487,8 @@ function ExplorerSplashView({
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
   useEffect(() => { setModalConditions([]); }, [selectedGraphType]);
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
+  useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
@@ -2567,14 +2720,21 @@ useEffect(() => {
                     <p className="text-[15px] font-semibold" style={{ color: glassText }}>{selectedGraphTitle ?? selectedGraphType}</p>
                     <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
                   </div>
-                  <button type="button" onClick={() => setTableViewOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
-                    <X size={18} />
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <ActionsDropdown
+                      columns={modalQueryColumns}
+                      visibleColumnIds={visibleColumnIds}
+                      onApply={setVisibleColumnIds}
+                    />
+                    <button type="button" onClick={() => setTableViewOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
+                      <X size={18} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto p-5">
                   <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                  <TopologyTableView type={selectedGraphType} conditions={modalConditions} onNavigate={(type) => openGraph(type, type)} />
+                  <TopologyTableView type={selectedGraphType} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} />
                 </div>
               </motion.div>
             </div>
