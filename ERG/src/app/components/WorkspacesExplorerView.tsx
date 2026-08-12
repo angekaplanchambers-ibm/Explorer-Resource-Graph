@@ -826,7 +826,7 @@ const SELECTED_COLOR = "#f97316";
 const NEIGHBOR_COLOR = "#22c55e";
 const VW = 1200;
 const VH = 660;
-const NODE_SIZE = 16;
+const NODE_SIZE = 40;
 const NODE_RADIUS = 20;
 const NODE_R = NODE_SIZE / 2;
 
@@ -1234,10 +1234,13 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>("force");
+  const [topoLayout, setTopoLayout] = useState<TopoLayout>("radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Reset zoom to 100% whenever activeType or refreshKey changes
+  useEffect(() => { setZoom({ tx: 0, ty: 0, scale: 1 }); }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
@@ -1702,7 +1705,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
           return (
             <button
               key={layout}
-              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }} // zoom already resets
               style={{
                 height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
                 borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
@@ -1755,14 +1758,14 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             const isInitial =
               !selectedId && !blastRadiusId &&
               zoom.tx === 0 && zoom.ty === 0 && zoom.scale === 1 &&
-              topoLayout === "force" &&
+              topoLayout === "radial" &&
               selectedWorkspace === (initialWorkspace ?? null) &&
               !providerSourceFilter && !providerVersionFilter;
             if (!isInitial) {
               setSelectedId(null);
               setBlastRadiusId(null);
               setZoom({ tx: 0, ty: 0, scale: 1 });
-              setTopoLayout("force");
+              setTopoLayout("radial");
               setSelectedWorkspace(initialWorkspace ?? null);
               setProviderSourceInput("");
               setProviderVersionInput("");

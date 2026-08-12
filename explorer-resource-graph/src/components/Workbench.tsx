@@ -2546,7 +2546,7 @@ function getGraphData(title: string): GraphData {
 }
 
 function InfragraphTab({ scenario }: { scenario: Scenario }) {
-  const [layout, setLayout] = React.useState("Force directed");
+  const [layout, setLayout] = React.useState("Radial");
   const graph = getGraphData(scenario.sessionTitle);
   const R = 26; // node radius
 
