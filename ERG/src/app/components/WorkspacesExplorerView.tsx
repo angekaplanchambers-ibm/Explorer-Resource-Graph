@@ -1422,6 +1422,8 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
     }
     return { nodes: overlayNodes, edges: overlayEdges };
   }, [viewResourcesWsName]);
+  const activeNodes = resourceOverlay ? resourceOverlay.nodes : nodes;
+  const activeEdges = resourceOverlay ? resourceOverlay.edges : edges;
   const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
