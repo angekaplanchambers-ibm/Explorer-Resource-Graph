@@ -1230,7 +1230,7 @@ const DEFAULT_NODE_ICON: LucideIcon = Server;
 
 type TopoLayout = "force" | "stacked" | "radial";
 
-function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">> }) {
+function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -1750,6 +1750,16 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
 
       {/* Zoom controls — bottom right, above layout switcher */}
       <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* Table view toggle */}
+        {onTableViewToggle && (
+          <button
+            onClick={onTableViewToggle}
+            title={tableViewOpen ? "Close table view" : "Open table view"}
+            style={{ width: 30, height: 30, borderRadius: 6, border: tableViewOpen ? "1px solid rgba(16,96,255,0.4)" : (themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)"), background: tableViewOpen ? "rgba(16,96,255,0.12)" : (themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)"), color: tableViewOpen ? "#1060ff" : (themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <ListOrdered size={13} />
+          </button>
+        )}
         <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
         <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
         <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
@@ -2607,6 +2617,11 @@ useEffect(() => {
             activeType={selectedGraphType}
             conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
             themeMode={themeMode} setThemeMode={setThemeMode}
+            tableViewOpen={tableViewOpen}
+            onTableViewToggle={() => {
+              setTableViewOpen(open => !open);
+              if (!tableViewOpen) setConditionsExpanded(false);
+            }}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
@@ -2621,41 +2636,6 @@ useEffect(() => {
           </div>
         )}
       </div>
-
-      {/* Table view tab */}
-      <button
-        type="button"
-        disabled={!selectedGraphType}
-        onClick={() => {
-          setTableViewOpen(open => !open);
-          if (!tableViewOpen) setConditionsExpanded(false);
-        }}
-        style={{
-          position: "fixed",
-          top: 76,
-          right: 0,
-          width: 36,
-          height: 40,
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 2,
-          background: "#fafafa",
-          border: "1px solid #DEDFE3",
-          borderRight: "none",
-          borderRadius: "6px 0 0 6px",
-          boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
-          cursor: "pointer",
-          color: "#656a76",
-          zIndex: 50,
-        }}
-        aria-label={tableViewOpen ? "Close table view" : "Open table view"}
-        title={selectedGraphType ? (tableViewOpen ? "Close table view" : "Open table view") : "Select a Type or Use case first"}
-      >
-        {tableViewOpen && selectedGraphType ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        <ListOrdered size={13} />
-      </button>
 
       {/* Graph table view — centered modal */}
       <AnimatePresence>
