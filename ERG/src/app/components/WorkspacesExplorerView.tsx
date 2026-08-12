@@ -1653,42 +1653,6 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                   <text y={NODE_R + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
                   <text y={NODE_R + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
-
-                {/* Isolated-node hover popover — only shown when hovered and has no edges */}
-                {isHovered && isIsolated && (() => {
-                  const fields = getNodeFields(node, activeType);
-                  const PW = 200;
-                  const ROW_H = 18;
-                  const PAD = 10;
-                  const PH = PAD * 2 + fields.length * ROW_H;
-                  // Flip to left side if node is in the right 30% of the canvas
-                  const flipLeft = pos.x > VW * 0.7;
-                  const px = flipLeft ? -(PW + NODE_R + 10) : NODE_R + 10;
-                  const py = -PH / 2;
-                  return (
-                    <foreignObject x={px} y={py} width={PW} height={PH} style={{ overflow: "visible", pointerEvents: "none" }}>
-                      <div style={{
-                        width: PW,
-                        background: themeMode === "light" ? "#ffffff" : "#1c1e2b",
-                        border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 8,
-                        padding: `${PAD}px 12px`,
-                        boxShadow: themeMode === "light" ? "0 4px 16px rgba(0,0,0,0.12)" : "0 4px 20px rgba(0,0,0,0.6)",
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}>
-                        {fields.map(({ label, value }) => (
-                          <div key={label} style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", whiteSpace: "nowrap", minWidth: 70, flexShrink: 0 }}>{label}</span>
-                            <span style={{ fontSize: 10, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.4 }}>{value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </foreignObject>
-                  );
-                })()}
               </g>
             );
           })}
@@ -1780,8 +1744,8 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
           );
         }
 
-        // Generic popover for all other node types
-        const fields = Object.entries(d);
+        // Generic popover for all other node types — uses column-label key-value pairs
+        const fields = getNodeFields(selectedNode, activeType);
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 272, background: themeMode === "light" ? "#ffffff" : "#1c1e2b", borderRadius: 10, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "14px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 12px 40px rgba(0,0,0,0.65)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1798,10 +1762,10 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             </div>
             <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
-              {fields.map(([key, value]) => (
-                <div key={key} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, textTransform: "capitalize", lineHeight: 1.5, flexShrink: 0 }}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{String(value)}</span>
+              {fields.map(({ label, value }) => (
+                <div key={label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, lineHeight: 1.5, flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
                 </div>
               ))}
             </div>
