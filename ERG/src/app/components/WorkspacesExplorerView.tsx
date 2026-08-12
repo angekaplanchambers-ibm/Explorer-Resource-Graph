@@ -1367,6 +1367,7 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
 function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
+  const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>("radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
@@ -1386,46 +1387,83 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
   const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions), [activeType, conditions]);
-  const forcePositions = useMemo(() => runForceLayout(nodes, edges), [nodes, edges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const stackedPositions = useMemo(() => runStackedLayout(nodes), [nodes]);
-  const radialPositions = useMemo(() => runRadialLayout(nodes), [nodes]);
+
+  // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
+  // of all resourceRows belonging to that workspace, plus the workspace node itself.
+  const resourceOverlay = useMemo(() => {
+    if (!viewResourcesWsName) return null;
+    const wsRows = resourceRows.filter(r => r.workspace === viewResourcesWsName);
+    const overlayNodes: TopoNode[] = [];
+    const overlayEdgeSet = new Set<string>();
+    const overlayEdges: TopoEdge[] = [];
+    function addOEdge(a: string, b: string) {
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!overlayEdgeSet.has(key)) { overlayEdgeSet.add(key); overlayEdges.push({ source: a, target: b }); }
+    }
+    const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
+    const bySubtype = new Map<string, string[]>();
+    const wsNodeId = `ws-res-ov-${viewResourcesWsName}`;
+    overlayNodes.push({ id: wsNodeId, label: viewResourcesWsName, type: "workspace", secondary: `${wsRows.length} res`, data: { name: viewResourcesWsName } });
+    wsRows.forEach((row, i) => {
+      const subType = SUBTYPES[i % 5];
+      const nodeId = `res-ov-${row.id}`;
+      overlayNodes.push({ id: nodeId, label: row.address, type: `resource-${subType}`, secondary: subType, data: {
+        type: row.type, name: row.name, address: row.address, workspace: row.workspace,
+        project: row.project, moduleName: row.moduleName, provider: row.provider,
+        terraformVersion: row.terraformVersion, billableRum: row.billableRum,
+        sourceType: row.sourceType, sourceId: row.sourceId, sourceUpdatedAt: row.sourceUpdatedAt,
+      } });
+      if (!bySubtype.has(`resource-${subType}`)) bySubtype.set(`resource-${subType}`, []);
+      bySubtype.get(`resource-${subType}`)!.push(nodeId);
+      addOEdge(nodeId, wsNodeId);
+    });
+    for (const [, ids] of bySubtype) {
+      for (let i = 0; i < ids.length - 1; i++) addOEdge(ids[i], ids[i + 1]);
+    }
+    return { nodes: overlayNodes, edges: overlayEdges };
+  }, [viewResourcesWsName]);
+  const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
+  const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
+
   const positions = topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
+    if (resourceOverlay) return activeNodes;
     if (activeType === "Providers" && (providerSourceFilter || providerVersionFilter)) {
-      return nodes.filter(n =>
+      return activeNodes.filter(n =>
         (!providerSourceFilter || String(n.data?.name ?? "").toLowerCase().includes(providerSourceFilter.toLowerCase())) &&
         (!providerVersionFilter || String(n.data?.version ?? "").toLowerCase().includes(providerVersionFilter.toLowerCase()))
       );
     }
     if (activeType === "Resources" && selectedWorkspace !== null) {
-      return nodes.filter(n =>
+      return activeNodes.filter(n =>
         n.data?.workspace === selectedWorkspace ||
         (n.type === "workspace" && n.data?.name === selectedWorkspace)
       );
     }
-    return nodes;
-  }, [nodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace]);
+    return activeNodes;
+  }, [activeNodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace, resourceOverlay]);
 
   // Mirror the same 30% isolation stride used in buildTopoGraph.
   // We compute against the full nodes array (pre-filter) so the isolated set is stable.
   const isolatedNodeIds = useMemo(() => {
-    const connectedIds = new Set(edges.flatMap(e => [e.source, e.target]));
-    return new Set(nodes.filter(n => !connectedIds.has(n.id)).map(n => n.id));
-  }, [nodes, edges]);
+    const connectedIds = new Set(activeEdges.flatMap(e => [e.source, e.target]));
+    return new Set(activeNodes.filter(n => !connectedIds.has(n.id)).map(n => n.id));
+  }, [activeNodes, activeEdges]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes]);
 
   const visibleEdges = useMemo(() =>
-    edges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
-    [edges, visibleNodeIds]
+    activeEdges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
+    [activeEdges, visibleNodeIds]
   );
 
   const neighborSet = useMemo(() => {
     if (!selectedId) return new Set<string>();
     const s = new Set<string>();
-    for (const e of edges) {
+    for (const e of activeEdges) {
       if (e.source === selectedId) s.add(e.target);
       if (e.target === selectedId) s.add(e.source);
     }
@@ -1435,7 +1473,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const hoverNeighborSet = useMemo(() => {
     if (!hoveredId) return new Set<string>();
     const s = new Set<string>();
-    for (const e of edges) {
+    for (const e of activeEdges) {
       if (e.source === hoveredId) s.add(e.target);
       if (e.target === hoveredId) s.add(e.source);
     }
@@ -1449,15 +1487,15 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
     const queue = [blastRadiusId];
     while (queue.length) {
       const cur = queue.shift()!;
-      for (const e of edges) {
+      for (const e of activeEdges) {
         const neighbor = e.source === cur ? e.target : e.target === cur ? e.source : null;
         if (neighbor && !visited.has(neighbor)) { visited.add(neighbor); queue.push(neighbor); }
       }
     }
     return visited;
-  }, [blastRadiusId, edges]);
+  }, [blastRadiusId, activeEdges]);
 
-  const selectedNode = nodes.find(n => n.id === selectedId) ?? null;
+  const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
 
   function getSVGPoint(clientX: number, clientY: number) {
@@ -1732,6 +1770,36 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
         const isWorkspace = selectedNode.type === "workspace";
         const d = selectedNode.data as Record<string, unknown>;
 
+        // Resource-view popover — replaces the canvas with workspace's resources
+        if (viewResourcesWsName) {
+          const resNodes = resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
+          return (
+            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+              <button
+                onClick={() => { setViewResourcesWsName(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+              >
+                ← exit resource view
+              </button>
+              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewResourcesWsName}</div>
+              <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+                {resNodes.length} resource{resNodes.length !== 1 ? "s" : ""}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+                {resNodes.map(n => (
+                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: "capitalize" }}>{n.secondary}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
         // Workspace blast radius popover
         if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
           const downstreamCount = blastRadiusSet.size - 1; // exclude origin
@@ -1778,7 +1846,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
               {/* Action buttons */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
-                  onClick={() => onViewResources?.(selectedNode.label)}
+                  onClick={() => { setViewResourcesWsName(selectedNode.label); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View resources <span>→</span>
