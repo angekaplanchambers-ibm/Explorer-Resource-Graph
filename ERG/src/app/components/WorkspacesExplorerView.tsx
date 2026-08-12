@@ -1065,17 +1065,8 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       { id: "ps-6", label: "compliance-hipaa",      secondary: "10 policies", wsList: ["auth-service-prod", "data-pipeline-prod"],                                       data: { mode: "enforced", workspaces: "5",  policies: "10", scope: "compliance"  } },
       { id: "ps-7", label: "data-governance",       secondary: "6 policies",  wsList: ["data-pipeline-prod", "inventory-svc-stg", "payments-prod"],                      data: { mode: "enforced", workspaces: "7",  policies: "6",  scope: "data"        } },
     ];
-    const wsNodeIds = new Map<string, string>();
     for (const ps of mockPS) {
       nodes.push({ id: ps.id, label: ps.label, type: "policy-set", secondary: ps.secondary, data: ps.data });
-      for (const wsName of ps.wsList) {
-        if (!wsNodeIds.has(wsName)) {
-          const wsId = `ws-ps-${wsName}`;
-          wsNodeIds.set(wsName, wsId);
-          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
-        }
-        addEdge(ps.id, wsNodeIds.get(wsName)!);
-      }
     }
     // Connect enforced policies in a ring, advisory to enforced neighbors
     const enforced = mockPS.filter(p => p.data.mode === "enforced").map(p => p.id);
