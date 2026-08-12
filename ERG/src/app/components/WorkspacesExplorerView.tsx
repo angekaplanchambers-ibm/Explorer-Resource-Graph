@@ -873,8 +873,35 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       : workspaceRows;
     const subset = filteredWs.slice(0, 16);
     for (const ws of subset) {
+      const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = ws.metadata;
       const wsProviders = ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/google", "registry.terraform.io/hashicorp/azurerm", "registry.terraform.io/hashicorp/kubernetes"][ws.count % 4];
-      nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: { org: "hashicorp-demo", project: ws.project, resources: ws.count, providers: wsProviders, runStatus: ws.runStatus, tags: ws.tags, created: ws.created } });
+      nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: {
+        org: "hashicorp-demo",
+        project: ws.project,
+        run: ws.run,
+        runStatus: ws.runStatus,
+        currentRunApplied,
+        repository,
+        noCodeModule: ws.noCodeModule,
+        moduleCount,
+        modules,
+        providerCount,
+        providers: wsProviders,
+        terraformVersion,
+        drifted: ws.drifted,
+        healthChecksSucceeded: ws.healthChecksSucceeded,
+        healthChecksPassed: ws.healthChecksPassed,
+        healthChecksFailed: ws.healthChecksFailed,
+        healthChecksErrored: ws.healthChecksErrored,
+        resourcesDrifted: ws.resourcesDrifted,
+        resourcesUndrifted: ws.resourcesUndrifted,
+        stateTerraformVersion: ws.stateTerraformVersion,
+        currentRumCount: ws.currentRumCount,
+        resources: ws.count,
+        tags: ws.tags,
+        created: ws.created,
+        updated: ws.updated,
+      } });
     }
     // Connect workspaces sharing a project (peer-to-peer within each project cluster)
     const byProject = new Map<string, string[]>();
@@ -1247,13 +1274,31 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
 
   if (activeType === "Workspaces") {
     return [
-      { label: "Name",       value: str(node.label) },
-      { label: "Project",    value: str(d.project) },
-      { label: "Run status", value: str(d.runStatus) },
-      { label: "Resources",  value: str(d.resources) },
-      { label: "Providers",  value: str(d.providers) },
-      { label: "Tags",       value: str(d.tags) },
-      { label: "Created",    value: str(d.created) },
+      { label: "Name",                    value: str(node.label) },
+      { label: "Project name",            value: str(d.project) },
+      { label: "Current run ID",          value: str(d.run) },
+      { label: "Run status",              value: str(d.runStatus) },
+      { label: "Current run applied",     value: str(d.currentRunApplied) },
+      { label: "VCS repo",                value: str(d.repository) },
+      { label: "No-code module",          value: str(d.noCodeModule) },
+      { label: "Module count",            value: str(d.moduleCount) },
+      { label: "Modules",                 value: str(d.modules) },
+      { label: "Provider count",          value: str(d.providerCount) },
+      { label: "Providers",               value: str(d.providers) },
+      { label: "Terraform version",       value: str(d.terraformVersion) },
+      { label: "Drifted",                 value: str(d.drifted) },
+      { label: "Health checks succeeded", value: str(d.healthChecksSucceeded) },
+      { label: "Health checks passed",    value: str(d.healthChecksPassed) },
+      { label: "Health checks failed",    value: str(d.healthChecksFailed) },
+      { label: "Health checks errored",   value: str(d.healthChecksErrored) },
+      { label: "Resources drifted",       value: str(d.resourcesDrifted) },
+      { label: "Resources undrifted",     value: str(d.resourcesUndrifted) },
+      { label: "State TF version",        value: str(d.stateTerraformVersion) },
+      { label: "Current RUM count",       value: str(d.currentRumCount) },
+      { label: "Resource count",          value: str(d.resources) },
+      { label: "Tags",                    value: str(d.tags) },
+      { label: "Created",                 value: str(d.created) },
+      { label: "Updated",                 value: str(d.updated) },
     ];
   }
   if (activeType === "Modules") {
@@ -1699,30 +1744,14 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
               {/* Title */}
               <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{selectedNode.label}</div>
 
-              {/* Key-value rows */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 14 }}>
-                {[["org", d.org], ["project", d.project], ["resources", d.resources]].map(([k, v]) => (
-                  <div key={String(k)} style={{ display: "flex", gap: 0 }}>
-                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", width: 80, flexShrink: 0 }}>{String(k)}</span>
-                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", fontFamily: "ui-monospace, 'SF Mono', monospace" }}>{String(v ?? "—")}</span>
+              {/* Key-value rows — all table columns */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, maxHeight: 340, overflowY: "auto" }}>
+                {getNodeFields(selectedNode, activeType).map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
+                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
                   </div>
                 ))}
-              </div>
-
-              {/* Output Consumers box */}
-              <div style={{ background: themeMode === "light" ? "rgba(79,110,247,0.06)" : "rgba(255,255,255,0.04)", borderLeft: "3px solid #4f6ef7", borderRadius: "0 6px 6px 0", padding: "10px 12px", marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: themeMode === "light" ? "#4f6ef7" : "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Output Consumers</div>
-                <div style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>no workspaces access this workspace's outputs</div>
-              </div>
-
-              {/* Providers */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", marginBottom: 6 }}>providers</div>
-                <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
-                  {providers.length ? providers.map(p => (
-                    <li key={p} style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>{p}</li>
-                  )) : <li style={{ fontSize: 12, color: themeMode === "light" ? "#9b9cb8" : "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>none</li>}
-                </ul>
               </div>
 
               {/* Action buttons */}
