@@ -1054,7 +1054,20 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       const subType = SUBTYPES[i % 5];
       const typeKey = `resource-${subType}`;
       const nodeId = `res-${row.id}`;
-      nodes.push({ id: nodeId, label: row.address, type: typeKey, secondary: subType, data: { name: row.name, workspace: row.workspace, provider: row.provider, version: row.terraformVersion } });
+      nodes.push({ id: nodeId, label: row.address, type: typeKey, secondary: subType, data: {
+        type: row.type,
+        name: row.name,
+        address: row.address,
+        workspace: row.workspace,
+        project: row.project,
+        moduleName: row.moduleName,
+        provider: row.provider,
+        terraformVersion: row.terraformVersion,
+        billableRum: row.billableRum,
+        sourceType: row.sourceType,
+        sourceId: row.sourceId,
+        sourceUpdatedAt: row.sourceUpdatedAt,
+      } });
       if (!bySubtype.has(typeKey)) bySubtype.set(typeKey, []);
       bySubtype.get(typeKey)!.push(nodeId);
       // Add workspace node and connect
@@ -1324,10 +1337,18 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
   }
   if (activeType === "Resources") {
     return [
-      { label: "Name",      value: str(d.name) },
-      { label: "Workspace", value: str(d.workspace) },
-      { label: "Provider",  value: str(d.provider) },
-      { label: "TF version",value: str(d.version) },
+      { label: "Type",              value: str(d.type) },
+      { label: "Name",              value: str(d.name) },
+      { label: "Address",           value: str(node.label) },
+      { label: "Workspace",         value: str(d.workspace) },
+      { label: "Project",           value: str(d.project) },
+      { label: "Module name",       value: str(d.moduleName) },
+      { label: "Provider",          value: str(d.provider) },
+      { label: "Terraform version", value: str(d.terraformVersion) },
+      { label: "Billable RUM",      value: str(d.billableRum) },
+      { label: "Source type",       value: str(d.sourceType) },
+      { label: "Source ID",         value: str(d.sourceId) },
+      { label: "Source updated at", value: str(d.sourceUpdatedAt) },
     ];
   }
   if (activeType === "Policy Sets") {
