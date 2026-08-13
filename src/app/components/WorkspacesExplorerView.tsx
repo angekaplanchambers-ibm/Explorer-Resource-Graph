@@ -2781,6 +2781,14 @@ useEffect(() => {
 
                 {useCaseMenuOpen && (() => {
                   const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
+                  const typeRowCounts: Record<string, number> = {
+                    "Workspaces": workspaceRows.length,
+                    "Policy Sets": policySetRows.length,
+                    "Modules": moduleRows.length,
+                    "Providers": providerRows.length,
+                    "Resources": resourceRows.length,
+                    "Terraform Versions": terraformVersionRows.length,
+                  };
                   return (
                     <div
                       role="menu"
@@ -2828,6 +2836,7 @@ useEffect(() => {
                           {(() => {
                             const viewAllLabel = `View All ${activeCategory.type}`;
                             const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                            const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
                             return (
                               <button
                                 type="button"
@@ -2836,7 +2845,8 @@ useEffect(() => {
                                 className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                                 style={!isViewAllSelected ? { color: glassText } : undefined}
                               >
-                                <span>{viewAllLabel}</span><ChevronRight size={13} className={isViewAllSelected ? "opacity-100" : "opacity-50"} />
+                                <span>{viewAllLabel}</span>
+                                <span style={{ background: "red", color: "white", borderRadius: "999px", padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{viewAllCount}</span>
                               </button>
                             );
                           })()}

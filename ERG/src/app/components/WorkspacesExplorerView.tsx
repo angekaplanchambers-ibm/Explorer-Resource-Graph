@@ -102,6 +102,28 @@ const workspaceRows = Array.from({ length: 100 }, (_, index) => {
   };
 });
 
+// Per-view title filter for workspace pre-defined views.
+// Each function receives a workspaceRow and returns true if it belongs to that view.
+type WsRow = typeof workspaceRows[number];
+const VIEW_TITLE_FILTER: Record<string, (row: WsRow, index?: number) => boolean> = {
+  "Workspaces without VCS": row => !row.metadata[1] || row.metadata[1] === "",
+  "Workspace VCS source":   row => !!(row.metadata[1] && row.metadata[1] !== ""),
+  "Workspaces with failed checks": row => row.healthChecksFailed > 0 || row.healthChecksErrored > 0,
+  "Drifted Workspaces":     row => row.drifted === true,
+  "All workspace versions": () => true,
+  "Workspaces by run status": () => true,
+  "Latest updated workspaces": (_row, index) => (index ?? 0) < 20,
+  "Oldest applied workspaces": row => row.status === "applied",
+  "Latest Terraform versions": () => true,
+};
+
+// Returns the filtered workspace rows for a given view title (or all rows if no filter defined).
+function getWorkspaceRowsForTitle(title: string | null): WsRow[] {
+  if (!title || !VIEW_TITLE_FILTER[title]) return workspaceRows;
+  const fn = VIEW_TITLE_FILTER[title];
+  return workspaceRows.filter((row, i) => fn(row, i));
+}
+
 const tableColumns = [
   { id: "name", label: "Name", width: "w-[201px]", valueType: "text" },
   { id: "project", label: "Project name", width: "w-[244px]", valueType: "text" },
@@ -672,6 +694,23 @@ const policySetRows: PolicySetRow[] = [
   },
 ];
 
+// Per-view title filter for Policy Sets pre-defined views.
+const PS_TITLE_FILTER: Record<string, (row: PolicySetRow) => boolean> = {
+  "Policy sets with failures":       row => row.failCount > 0,
+  "Policy sets with overrides":      row => row.enforcementLevel === "Soft Mandatory" && row.failCount > 0,
+  "Policy sets with runtime errors": row => row.errorCount > 0,
+  "Global policy sets":              row => row.sourceType === "Global",
+  "Recently updated policy sets":    () => true,
+  "tf-policy sets":                  row => row.framework === "tf-policy",
+  "Sentinel policy sets":            row => row.framework === "Sentinel",
+  "OPA sets":                        row => row.framework === "OPA",
+};
+
+function getPolicySetRowsForTitle(title: string | null): PolicySetRow[] {
+  if (!title || !PS_TITLE_FILTER[title]) return policySetRows;
+  return policySetRows.filter(row => PS_TITLE_FILTER[title](row));
+}
+
 const policySetColumns = [
   { id: "name", label: "Name", width: "w-[200px]" },
   { id: "framework", label: "Policy framework", width: "w-[160px]" },
@@ -686,18 +725,19 @@ const policySetColumns = [
   { id: "errorCount", label: "Error count", width: "w-[130px]" },
 ] as const;
 
-function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void; rows?: PolicySetRow[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const baseRows = rowsOverride ?? policySetRows;
   const filteredRows = conditions.length
-    ? policySetRows.filter(row =>
+    ? baseRows.filter(row =>
         conditions.every(c => {
           const col = policySetColumns.find(col => col.id === c.fieldId);
           const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
           return matchValue(val, col ? "text" : "text", c.operator, c.value);
         })
       )
-    : policySetRows;
+    : baseRows;
 
   return (
     <>
@@ -835,7 +875,7 @@ type TopoNode = {
 };
 type TopoEdge = { source: string; target: string };
 
-function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []): { nodes: TopoNode[]; edges: TopoEdge[] } {
+function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], graphTitle: string | null = null): { nodes: TopoNode[]; edges: TopoEdge[] } {
   const nodes: TopoNode[] = [];
   const edgeSet = new Set<string>();
   const edges: TopoEdge[] = [];
@@ -847,8 +887,9 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
   }
 
   if (activeType === "Workspaces") {
+    const titleRows = getWorkspaceRowsForTitle(graphTitle);
     const filteredWs = conditions.length
-      ? workspaceRows.filter(row => {
+      ? titleRows.filter(row => {
           const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
           return conditions.every(c => {
             const col = tableColumns.find(col => col.id === c.fieldId);
@@ -866,8 +907,8 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
             return matchValue(fieldMap[c.fieldId] ?? "", col?.valueType ?? "text", c.operator, c.value);
           });
         })
-      : workspaceRows;
-    const subset = filteredWs.slice(0, 16);
+      : titleRows;
+    const subset = graphTitle && VIEW_TITLE_FILTER[graphTitle] ? filteredWs : filteredWs.slice(0, 16);
     for (const ws of subset) {
       const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = ws.metadata;
       const wsProviders = ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/google", "registry.terraform.io/hashicorp/azurerm", "registry.terraform.io/hashicorp/kubernetes"][ws.count % 4];
@@ -1056,23 +1097,24 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
   }
 
   else if (activeType === "Policy Sets") {
-    const mockPS = [
-      { id: "ps-1", label: "production-policies",  secondary: "8 policies",  wsList: ["payments-prod", "api-gateway-prod", "auth-service-prod"],                         data: { mode: "enforced", workspaces: "12", policies: "8",  scope: "global"      } },
-      { id: "ps-2", label: "staging-policies",      secondary: "5 policies",  wsList: ["payments-staging", "api-gateway-staging"],                                        data: { mode: "advisory", workspaces: "6",  policies: "5",  scope: "staging"     } },
-      { id: "ps-3", label: "networking-policies",   secondary: "3 policies",  wsList: ["networking-prod-core", "cdn-global-prod"],                                        data: { mode: "enforced", workspaces: "4",  policies: "3",  scope: "network"     } },
-      { id: "ps-4", label: "security-baseline",     secondary: "12 policies", wsList: ["payments-prod", "auth-service-prod", "data-pipeline-prod", "inventory-svc-stg"], data: { mode: "enforced", workspaces: "18", policies: "12", scope: "global"      } },
-      { id: "ps-5", label: "cost-controls",         secondary: "4 policies",  wsList: ["api-gateway-prod", "cdn-global-prod"],                                           data: { mode: "advisory", workspaces: "8",  policies: "4",  scope: "billing"     } },
-      { id: "ps-6", label: "compliance-hipaa",      secondary: "10 policies", wsList: ["auth-service-prod", "data-pipeline-prod"],                                       data: { mode: "enforced", workspaces: "5",  policies: "10", scope: "compliance"  } },
-      { id: "ps-7", label: "data-governance",       secondary: "6 policies",  wsList: ["data-pipeline-prod", "inventory-svc-stg", "payments-prod"],                      data: { mode: "enforced", workspaces: "7",  policies: "6",  scope: "data"        } },
-    ];
-    for (const ps of mockPS) {
-      nodes.push({ id: ps.id, label: ps.label, type: "policy-set", secondary: ps.secondary, data: ps.data });
+    const filteredPS = getPolicySetRowsForTitle(graphTitle);
+    for (const row of filteredPS) {
+      nodes.push({ id: `ps-${row.id}`, label: row.name, type: "policy-set", secondary: `${row.policyCount} policies`, data: {
+        mode: row.enforcementLevel.toLowerCase().includes("hard") ? "enforced" : "advisory",
+        framework: row.framework,
+        scope: row.scope,
+        sourceType: row.sourceType,
+        passCount: row.passCount,
+        failCount: row.failCount,
+        errorCount: row.errorCount,
+      } });
     }
-    // Connect enforced policies in a ring, advisory to enforced neighbors
-    const enforced = mockPS.filter(p => p.data.mode === "enforced").map(p => p.id);
-    const advisory = mockPS.filter(p => p.data.mode === "advisory").map(p => p.id);
+    // Connect Hard Mandatory in a ring, others to first Hard Mandatory
+    const enforced = filteredPS.filter(r => r.enforcementLevel.toLowerCase().includes("hard")).map(r => `ps-${r.id}`);
+    const advisory = filteredPS.filter(r => !r.enforcementLevel.toLowerCase().includes("hard")).map(r => `ps-${r.id}`);
     for (let i = 0; i < enforced.length; i++) addEdge(enforced[i], enforced[(i + 1) % enforced.length]);
-    for (const aId of advisory) addEdge(aId, enforced[0]);
+    if (enforced.length) for (const aId of advisory) addEdge(aId, enforced[0]);
+    else for (let i = 0; i < advisory.length - 1; i++) addEdge(advisory[i], advisory[i + 1]);
   }
 
   // Make ~30% of nodes isolated: remove all edges that touch them.
@@ -1316,7 +1358,7 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
   return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
 }
 
-function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1339,7 +1381,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [providerSourceFilter, setProviderSourceFilter] = useState("");
   const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
-  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions), [activeType, conditions]);
+  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
 
   // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
   // of all resourceRows belonging to that workspace, plus the workspace node itself.
@@ -2202,7 +2244,7 @@ function InlineQueryBuilder({
   );
 }
 
-function WorkspacesTable({ conditions = [], visibleColumnIds }: { conditions?: ConditionFilter[]; visibleColumnIds: string[] }) {
+function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[] }) {
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -2221,9 +2263,10 @@ function WorkspacesTable({ conditions = [], visibleColumnIds }: { conditions?: C
     }[columnId] ?? "";
   }
 
+  const baseRows = rowsOverride ?? workspaceRows;
   const filteredRows = useMemo(() => {
-    if (!conditions.length) return workspaceRows;
-    return workspaceRows.filter(row =>
+    if (!conditions.length) return baseRows;
+    return baseRows.filter(row =>
       conditions.every(c => {
         const col = tableColumns.find(column => column.id === c.fieldId);
         const val = valueForColumn(row, c.fieldId);
@@ -2295,14 +2338,14 @@ function WorkspacesTable({ conditions = [], visibleColumnIds }: { conditions?: C
   );
 }
 
-function TopologyTableView({ type, conditions = [], visibleColumnIds, onNavigate }: { type: string; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void }) {
+function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void }) {
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
-  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
   if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
-  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} />;
 }
 
 // ── ActionsDropdown ──────────────────────────────────────────────────────────
@@ -2529,10 +2572,10 @@ const USE_CASE_CATEGORIES = [
       "Sentinel policy sets", "OPA sets",
     ],
   },
-  { heading: "Modules", Icon: ModuleIcon, type: "Modules", items: ["Top module versions"] },
-  { heading: "Providers", Icon: Globe, type: "Providers", items: ["Loremipsum"] },
-  { heading: "Resources", Icon: ResourcesIcon, type: "Resources", items: ["Loremipsum"] },
-  { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: ["Top Terraform versions"] },
+  { heading: "Modules", Icon: ModuleIcon, type: "Modules", items: [] },
+  { heading: "Providers", Icon: Globe, type: "Providers", items: [] },
+  { heading: "Resources", Icon: ResourcesIcon, type: "Resources", items: [] },
+  { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: [] },
  ] as const;
 
 type SuggestedQuery = {
@@ -2582,6 +2625,15 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
         >
           {SUGGESTED_QUERIES.map(query => {
             const Icon = query.Icon;
+            const queryCount = query.type === "Workspaces"
+              ? getWorkspaceRowsForTitle(query.label).length
+              : query.type === "Policy Sets"
+                ? getPolicySetRowsForTitle(query.label).length
+                : query.type === "Modules" ? moduleRows.length
+                : query.type === "Providers" ? providerRows.length
+                : query.type === "Resources" ? resourceRows.length
+                : query.type === "Terraform Versions" ? terraformVersionRows.length
+                : 0;
             return (
               <button
                 key={`${query.type}::${query.label}`}
@@ -2602,9 +2654,7 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
                 <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
                   {query.label}
                 </span>
-                <div className="flex size-5 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100">
-                  <ChevronRight size={11} className="shrink-0" style={{ color: glassMuted }} />
-                </div>
+                <span className="shrink-0 rounded-full bg-[#e8eaf0] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#656a76]">{queryCount}</span>
               </button>
             );
           })}
@@ -2742,12 +2792,12 @@ useEffect(() => {
     };
   }, []);
 
-  const tableResultCount = selectedGraphType === "Policy Sets" ? policySetRows.length
+  const tableResultCount = selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
     : selectedGraphType === "Providers" ? providerRows.length
     : selectedGraphType === "Resources" ? resourceRows.length
     : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
-    : workspaceRows.length;
+    : getWorkspaceRowsForTitle(selectedGraphTitle).length;
 
   const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
@@ -2774,6 +2824,7 @@ useEffect(() => {
         {selectedGraphType ? (
           <TopologyGraph
             activeType={selectedGraphType}
+            graphTitle={selectedGraphTitle}
             conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
             themeMode={themeMode} setThemeMode={setThemeMode}
             tableViewOpen={tableViewOpen}
@@ -2874,7 +2925,7 @@ useEffect(() => {
 
                 <div className="min-h-0 flex-1 overflow-auto p-5">
                   <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                  <TopologyTableView type={selectedGraphType} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} />
+                  <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} />
                 </div>
               </motion.div>
             </div>
@@ -2990,6 +3041,14 @@ useEffect(() => {
 
           {useCaseMenuOpen && (() => {
             const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
+            const typeRowCounts: Record<string, number> = {
+              "Workspaces": workspaceRows.length,
+              "Policy Sets": policySetRows.length,
+              "Modules": moduleRows.length,
+              "Providers": providerRows.length,
+              "Resources": resourceRows.length,
+              "Terraform Versions": terraformVersionRows.length,
+            };
             return (
               <div
                 role="menu"
@@ -3034,6 +3093,7 @@ useEffect(() => {
                     {(() => {
                       const viewAllLabel = `View All ${activeCategory.type}`;
                       const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                      const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
                       return (
                         <button
                           type="button"
@@ -3042,12 +3102,18 @@ useEffect(() => {
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                           style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
-                          <span>{viewAllLabel}</span><ChevronRight size={13} className={isViewAllSelected ? "opacity-100" : "opacity-50"} />
+                          <span>{viewAllLabel}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
                         </button>
                       );
                     })()}
                     {activeCategory.items.map(view => {
                       const isSelected = selectedGraphTitle === view;
+                      const viewCount = activeCategory.type === "Workspaces"
+                        ? getWorkspaceRowsForTitle(view).length
+                        : activeCategory.type === "Policy Sets"
+                          ? getPolicySetRowsForTitle(view).length
+                          : typeRowCounts[activeCategory.type] ?? 0;
                       return (
                         <button
                           key={view}
@@ -3057,7 +3123,8 @@ useEffect(() => {
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                           style={!isSelected ? { color: glassText } : undefined}
                         >
-                          <span>{view}</span><ChevronRight size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
+                          <span>{view}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewCount}</span>
                         </button>
                       );
                     })}
