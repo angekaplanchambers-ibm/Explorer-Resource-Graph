@@ -1485,19 +1485,30 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     return s;
   }, [hoveredId, edges]);
 
-  // Blast radius: all nodes reachable from blastRadiusId via any edge path
-  const blastRadiusSet = useMemo(() => {
-    if (!blastRadiusId) return new Set<string>();
+  // Blast radius: BFS depth map for all reachable nodes + visible set limited to 1 hop
+  const { blastRadiusSet, blastDepthMap } = useMemo(() => {
+    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>() };
     const visited = new Set<string>([blastRadiusId]);
-    const queue = [blastRadiusId];
+    const depthMap = new Map<string, number>([[blastRadiusId, 0]]);
+    const queue: string[] = [blastRadiusId];
     while (queue.length) {
       const cur = queue.shift()!;
+      const curDepth = depthMap.get(cur)!;
       for (const e of activeEdges) {
         const neighbor = e.source === cur ? e.target : e.target === cur ? e.source : null;
-        if (neighbor && !visited.has(neighbor)) { visited.add(neighbor); queue.push(neighbor); }
+        if (neighbor && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          depthMap.set(neighbor, curDepth + 1);
+          queue.push(neighbor);
+        }
       }
     }
-    return visited;
+    // Only show one hop in each direction — depth 0 (origin) + depth 1 (immediate neighbours)
+    const visibleSet = new Set<string>();
+    for (const [id, depth] of depthMap) {
+      if (depth <= 1) visibleSet.add(id);
+    }
+    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap };
   }, [blastRadiusId, activeEdges]);
 
   const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
@@ -1675,6 +1686,14 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               100% { opacity: 1; transform: scale(1); }
             }
           `}</style>
+          {/* Orange arrowhead — downstream edges, tip at end (markerEnd) */}
+          <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f97316" />
+          </marker>
+          {/* Purple arrowhead — upstream edges, tip at start (markerStart), so reversed: tip points left */}
+          <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+          </marker>
         </defs>
 
         {/* Drag + deselect backdrop — outside zoom group so it covers full canvas */}
@@ -1688,13 +1707,22 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
         {/* Zoomable content */}
         <g transform={groupTransform}>
-          {/* Edges — hidden entirely in blast radius mode */}
-          {!blastRadiusId && visibleEdges.map((edge, i) => {
+          {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
+          {visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
             const pt = positions.get(edge.target);
             if (!ps || !pt) return null;
+            // Only edges directly touching the origin (depth 0) count as blast edges.
+            // Peer edges between two depth-1 nodes stay grey and visible.
+            const isBlastEdge = blastRadiusId
+              ? (blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0) &&
+                blastRadiusSet.has(edge.source) && blastRadiusSet.has(edge.target)
+              : false;
             const activeId = hoveredId ?? selectedId;
             const isLit = !activeId || edge.source === activeId || edge.target === activeId;
+            const opacity = blastRadiusId
+              ? (isBlastEdge ? 0 : 0.06)
+              : (activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1);
             return (
               <path
                 key={i}
@@ -1704,8 +1732,47 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 strokeWidth={1 / scale}
                 strokeDasharray={`${5 / scale} ${4 / scale}`}
                 strokeLinecap="round"
-                opacity={activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1}
+                opacity={opacity}
                 style={{ transition: "opacity 0.2s ease" }}
+              />
+            );
+          })}
+
+          {/* Blast radius edges — only origin↔neighbour edges get orange/purple arrows */}
+          {blastRadiusId && visibleEdges.map((edge, i) => {
+            const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
+            if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
+            const ps = positions.get(edge.source);
+            const pt = positions.get(edge.target);
+            if (!ps || !pt) return null;
+            const depthSource = blastDepthMap.get(edge.source) ?? 0;
+            const depthTarget = blastDepthMap.get(edge.target) ?? 0;
+            // downstream: origin → outward (depth increases). upstream: back toward origin.
+            const isDownstream = depthSource <= depthTarget;
+            const color = isDownstream ? "#f97316" : "#a855f7";
+            // For downstream: draw from upstream node toward downstream node, arrowhead at end.
+            // For upstream: draw from the far node toward origin, arrowhead at start (the far node end).
+            const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
+            // Pull back the arrowhead end so the tip lands at the node boundary
+            const dx = toPos.x - fromPos.x;
+            const dy = toPos.y - fromPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const pullBack = (NODE_R + 2) / scale;
+            const ex = toPos.x - (dx / dist) * pullBack;
+            const ey = toPos.y - (dy / dist) * pullBack;
+            // Also pull back the start for upstream so the arrowhead tip lands at the far node boundary
+            const sx = isDownstream ? fromPos.x : fromPos.x + (dx / dist) * pullBack;
+            const sy = isDownstream ? fromPos.y : fromPos.y + (dy / dist) * pullBack;
+            return (
+              <path
+                key={`blast-${i}`}
+                d={curvePath(sx, sy, ex, ey)}
+                fill="none"
+                stroke={color}
+                strokeWidth={1 / scale}
+                strokeLinecap="round"
+                markerEnd={isDownstream ? "url(#blast-arrow-downstream)" : undefined}
+                markerStart={!isDownstream ? "url(#blast-arrow-upstream)" : undefined}
               />
             );
           })}
@@ -1748,7 +1815,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 >
                   {hasNodeGlow && <circle r={NODE_R + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
                   <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
-                  {hasNodeGlow && <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
+                  {(isHovered || isSelected) && <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
                   <foreignObject x={-NODE_R} y={-NODE_R} width={NODE_R * 2} height={NODE_R * 2}>
                     {(() => {
                       const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
@@ -1807,7 +1874,26 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
         // Workspace blast radius popover
         if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
-          const downstreamCount = blastRadiusSet.size - 1; // exclude origin
+          // Split immediate neighbours into downstream (edge: origin→node) and upstream (edge: node→origin)
+          const downstreamIds = new Set<string>();
+          const upstreamIds = new Set<string>();
+          for (const e of activeEdges) {
+            if (e.source === blastRadiusId && blastRadiusSet.has(e.target)) downstreamIds.add(e.target);
+            if (e.target === blastRadiusId && blastRadiusSet.has(e.source)) upstreamIds.add(e.source);
+          }
+          const nodeById = new Map(activeNodes.map(n => [n.id, n]));
+          const downstreamNodes = [...downstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
+          const upstreamNodes = [...upstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
+
+          const nodeRow = (n: typeof activeNodes[number], accent: string) => (
+            <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</div>
+              </div>
+            </div>
+          );
+
           return (
             <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
               {/* Exit button */}
@@ -1818,10 +1904,30 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 ← exit blast view
               </button>
               {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 6 }}>{selectedNode.label}</div>
-              {/* Subtitle */}
-              <div style={{ fontSize: 13, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)" }}>
-                {downstreamCount > 0 ? `${downstreamCount} downstream workspace${downstreamCount > 1 ? "s" : ""}` : "no downstream workspaces"}
+              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{selectedNode.label}</div>
+
+              {/* Downstream section */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#f97316" /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#b45309" : "#fb923c", textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
+                </div>
+                {downstreamNodes.length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, "#f97316"))}</div>
+                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+                }
+              </div>
+
+              {/* Upstream section */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#a855f7" /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#7c3aed" : "#c084fc", textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
+                </div>
+                {upstreamNodes.length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, "#a855f7"))}</div>
+                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+                }
               </div>
             </div>
           );
