@@ -3717,7 +3717,7 @@ export function WorkspacesExplorerView() {
 
           {/* 1. Breadcrumb */}
           <div className="mb-3 flex items-center gap-2 text-[11px] text-[#656a76]">
-            <span>My-organization</span><span>/</span><span>Explorer</span><span>/</span><span>{customTitle ? "Use cases" : "Types"}</span><span>/</span><span className="font-medium text-[#3b3d45]">{pageLabel}</span>
+            <span>ILM_Demo_Space</span><span>/</span><span className="font-medium text-[#3b3d45]">Explorer</span>
           </div>
 
           {/* 2. Page title */}
