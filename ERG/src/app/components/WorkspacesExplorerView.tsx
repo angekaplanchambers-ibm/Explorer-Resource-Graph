@@ -106,6 +106,7 @@ const workspaceRows = Array.from({ length: 100 }, (_, index) => {
 // Each function receives a workspaceRow and returns true if it belongs to that view.
 type WsRow = typeof workspaceRows[number];
 const VIEW_TITLE_FILTER: Record<string, (row: WsRow, index?: number) => boolean> = {
+  "View All Workspaces":    () => true,
   "Workspaces without VCS": row => !row.metadata[1] || row.metadata[1] === "",
   "Workspace VCS source":   row => !!(row.metadata[1] && row.metadata[1] !== ""),
   "Workspaces with failed checks": row => row.healthChecksFailed > 0 || row.healthChecksErrored > 0,
@@ -422,21 +423,19 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
     : rows;
   return (
     <>
-      <div className="overflow-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              
-              {columns.map(column => (
-                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
+              {columns.map((column, ci) => (
+                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
               ))}
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
             {filteredRows.map(([name, version, source, workspaceCount, workspaces]) => (
               <tr key={`${name}-${version}`} className="border-t border-[#dedfe3] bg-white">
-                
-                {columns.map(column => {
+                {columns.map((column, ci) => {
                   const content = {
                     name,
                     version,
@@ -444,7 +443,7 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
                     workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>,
                     workspaces,
                   };
-                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-4 break-words last:border-r-0">{content[column.id]}</td>;
+                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-4 break-words last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>;
                 })}
               </tr>
             ))}
@@ -494,10 +493,10 @@ function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { 
     : terraformVersionRows;
   return (
     <>
-      <div className="overflow-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
-          <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map(column => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0">{content[column.id]}</td>; })}</tr>)}</tbody>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}</tbody>
         </table>
       </div>
       <TablePagination
@@ -537,7 +536,182 @@ const resourceRows = Array.from({ length: 26 }, (_, index) => ({
   sourceUpdatedAt: "-",
 }));
 
-function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+type ResourceRow = typeof resourceRows[number];
+
+// Mock attribute data for the Attributes section (keyed by resource id)
+const MOCK_ATTRIBUTES: Record<string, { key: string; value: string }[]> = {};
+resourceRows.forEach(row => {
+  MOCK_ATTRIBUTES[row.id] = [
+    { key: "account_id", value: "#lorem-account-id" },
+    { key: "ami_version", value: "1.0.2.3" },
+    { key: "arn", value: `arn:aws:cloudfront::486183785707:distribution/E3IR73QQZ1DXX9` },
+    { key: "IP_address", value: "10.36.56.888" },
+    { key: "instance_type", value: "t3.medium" },
+    { key: "lambda_function_association", value: "-" },
+    { key: "max_ttl", value: "86400" },
+    { key: "min_ttl", value: "0" },
+    { key: "origin_request_policy_id", value: "-" },
+    { key: "realtime_log_config_arn", value: "-" },
+    { key: "region", value: "US West (Oregon) us-west-02" },
+    { key: "response_headers_policy_id", value: "-" },
+    { key: "smooth_streaming", value: "false" },
+    { key: "tags", value: "value01, value02, value03" },
+    { key: "target_origin_id", value: "S3-Website" },
+    { key: "trusted_key_groups", value: "-" },
+    { key: "trusted_signers", value: "-" },
+    { key: "viewer_protocol_policy", value: "redirect-to-https" },
+  ];
+});
+
+function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "light" | "dark" }) {
+  const [attrSearch, setAttrSearch] = React.useState("");
+  const allAttrs = MOCK_ATTRIBUTES[row.id] ?? [];
+  const filteredAttrs = attrSearch
+    ? allAttrs.filter(a => a.key.toLowerCase().includes(attrSearch.toLowerCase()) || a.value.toLowerCase().includes(attrSearch.toLowerCase()))
+    : allAttrs;
+
+  const border = themeMode === "light" ? "1px solid rgba(101,106,118,0.2)" : "1px solid rgba(255,255,255,0.1)";
+  const surfaceFaint = themeMode === "light" ? "#fafafa" : "#1a1c24";
+  const surfaceStrong = themeMode === "light" ? "#f1f2f3" : "#21232e";
+  const surfacePrimary = themeMode === "light" ? "#ffffff" : "#161820";
+  const fgStrong = themeMode === "light" ? "#0c0c0e" : "#ffffff";
+  const fgPrimary = themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)";
+  const fgFaint = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.45)";
+  const fgAction = "#1060ff";
+  const badgeBg = themeMode === "light" ? "#dedfe3" : "rgba(255,255,255,0.12)";
+  const cellBorder = "rgba(101,106,118,0.2)";
+
+  const MetaItem = ({ label, value, isLink = false }: { label: string; value: string; isLink?: boolean }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>{label}</p>
+      {isLink
+        ? <a href="#" onClick={e => e.preventDefault()} style={{ fontSize: 14, color: fgAction, textDecoration: "underline", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</a>
+        : <p style={{ fontSize: 14, color: fgStrong, lineHeight: "20px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</p>
+      }
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 0 }}>
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* ── Metadata card ── */}
+        <div style={{ background: surfaceFaint, border, borderRadius: 6, padding: 16, display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Row 1: Name · Type · Provider · Workspace */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Name" value={row.address} />
+            <MetaItem label="Type" value={row.type} />
+            <MetaItem label="Provider" value={row.provider} isLink />
+            <MetaItem label="Workspace" value={row.workspace} isLink />
+          </div>
+          <div style={{ height: 1, background: "rgba(101,106,118,0.2)" }} />
+          {/* Row 2: Address · Unique ID · Project · Module */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Address" value={row.address} />
+            <MetaItem label="Unique ID" value={`wsr-1df1sd65f1d6sg54P`} />
+            <MetaItem label="Project" value={row.project} isLink />
+            <MetaItem label="Module" value={row.moduleName} isLink />
+          </div>
+          <div style={{ height: 1, background: "rgba(101,106,118,0.2)" }} />
+          {/* Row 3: Terraform version · Billable RUM · Mode */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Terraform version" value={row.terraformVersion} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>Billable RUM</p>
+              <span style={{ display: "inline-flex", alignItems: "center", background: badgeBg, borderRadius: 5, padding: "4px 8px", fontSize: 13, fontWeight: 500, color: fgPrimary, alignSelf: "flex-start" }}>true</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>Mode</p>
+              <span style={{ display: "inline-flex", alignItems: "center", background: badgeBg, borderRadius: 5, padding: "4px 8px", fontSize: 13, fontWeight: 500, color: fgPrimary, alignSelf: "flex-start" }}>Managed</span>
+            </div>
+            <div style={{ flex: "1 0 0", minWidth: 0 }} />
+          </div>
+        </div>
+
+        {/* ── Source section ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: fgStrong, letterSpacing: "-0.5px" }}>Source</span>
+            <span style={{ background: badgeBg, borderRadius: 12, padding: "4px 12px", fontSize: 13, fontWeight: 500, color: fgPrimary }}>1</span>
+          </div>
+          <p style={{ fontSize: 14, color: fgPrimary, marginTop: -8 }}>Run stack associated with this Resource.</p>
+          {/* Source table */}
+          <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${cellBorder}` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <thead>
+                <tr style={{ background: surfaceStrong }}>
+                  {["source id", "source type", "source updated at"].map(h => (
+                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}`, borderRight: `1px solid ${cellBorder}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background: surfacePrimary }}>
+                  <td style={{ padding: "16px", fontSize: 14, borderRight: `1px solid ${cellBorder}` }}>
+                    <a href="#" onClick={e => e.preventDefault()} style={{ color: fgAction, textDecoration: "underline" }}>{row.sourceId}</a>
+                  </td>
+                  <td style={{ padding: "16px", fontSize: 13, fontFamily: "Menlo, monospace", color: fgPrimary, borderRight: `1px solid ${cellBorder}` }}>{row.sourceType}</td>
+                  <td style={{ padding: "16px", fontSize: 14, color: fgPrimary }}>{row.sourceUpdatedAt}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── Attributes section ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: fgStrong, letterSpacing: "-0.5px" }}>Attributes</span>
+            <span style={{ background: badgeBg, borderRadius: 12, padding: "4px 12px", fontSize: 13, fontWeight: 500, color: fgPrimary }}>{allAttrs.length}</span>
+          </div>
+          <p style={{ fontSize: 14, color: fgPrimary, marginTop: -8 }}>All attributes associated with this Resource.</p>
+          {/* Search */}
+          <div style={{ position: "relative", width: 330 }}>
+            <input
+              type="text"
+              placeholder="Search by attribute key or value"
+              value={attrSearch}
+              onChange={e => setAttrSearch(e.target.value)}
+              style={{ width: "100%", height: 36, padding: "0 8px 0 32px", borderRadius: 5, border: `1px solid ${themeMode === "light" ? "#8c909c" : "rgba(255,255,255,0.2)"}`, background: surfacePrimary, color: fgPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+            <svg style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke={fgFaint} strokeWidth="1.5" />
+              <line x1="10" y1="10" x2="14" y2="14" stroke={fgFaint} strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+          {/* Key/Value table */}
+          <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${cellBorder}` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <thead>
+                <tr style={{ background: surfaceStrong }}>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}`, borderRight: `1px solid ${cellBorder}` }}>Key</th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}` }}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAttrs.map((attr, idx) => (
+                  <tr key={attr.key} style={{ background: surfacePrimary, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: fgPrimary, borderRight: `1px solid ${cellBorder}`, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>{attr.key}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: fgPrimary, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>{attr.value}</td>
+                  </tr>
+                ))}
+                {filteredAttrs.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding: "16px", fontSize: 13, color: fgFaint, textAlign: "center" }}>No attributes match "{attrSearch}"</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void }) {
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const filteredRows = conditions.length
     ? resourceRows.filter(row =>
@@ -550,14 +724,18 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleC
     : resourceRows;
   return (
     <>
-      <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2300px] table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
           <tbody className="text-[11px] text-[#52525b]">
             {filteredRows.map(row => (
-              <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white">
-                
-                {columns.map(column => {
+              <tr
+                key={row.id}
+                className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
+                style={{ cursor: "pointer" }}
+                onClick={() => onSelectResource?.(row.id)}
+              >
+                {columns.map((column, ci) => {
                   const content = {
                     type: row.type,
                     name: row.name,
@@ -572,7 +750,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleC
                     sourceId: row.sourceId,
                     sourceUpdatedAt: row.sourceUpdatedAt,
                   };
-                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>{content[column.id]}</td>;
+                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
                 })}
               </tr>
             ))}
@@ -741,14 +919,13 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
 
   return (
     <>
-      <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2100px] table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              
-              <th className="h-11 w-10 border-r border-[#dedfe3] px-3" />
-              {policySetColumns.map(col => (
-                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`}>
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3" style={{ position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" }} />
+              {policySetColumns.map((col, ci) => (
+                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 2, background: "#f1f2f3" } : undefined}>
                   <span className="flex items-center justify-between gap-2 whitespace-nowrap text-[12px] font-semibold text-[#17171a]">{col.label}<SortControl /></span>
                 </th>
               ))}
@@ -760,8 +937,7 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
               return (
                 <React.Fragment key={row.id}>
                   <tr className="h-12 border-t border-[#dedfe3] bg-white">
-                    
-                    <td className="border-r border-[#dedfe3] px-3 text-center">
+                    <td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}>
                       <button
                         type="button"
                         onClick={() => toggle(row.id)}
@@ -771,7 +947,7 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[200px]">
+                    <td className="border-r border-[#dedfe3] px-3 w-[200px]" style={{ position: "sticky", left: 40, background: "#ffffff" }}>
                       <a href="#policy-set" className="text-[#1060ff] underline underline-offset-2 whitespace-nowrap">{row.name}</a>
                     </td>
                     <td className="border-r border-[#dedfe3] px-3 w-[160px] whitespace-nowrap">{row.framework}</td>
@@ -2061,8 +2237,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Zoom controls — bottom right, above layout switcher */}
       <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        {/* Table view toggle */}
-        {onTableViewToggle && (
+        {/* Table view toggle — only in View All views and not while blast radius is active */}
+        {onTableViewToggle && !blastRadiusId && (
           <button
             onClick={onTableViewToggle}
             title={tableViewOpen ? "Close table view" : "Open table view"}
@@ -2417,9 +2593,9 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
         <table className="min-w-[5000px] table-fixed border-collapse text-left">
           <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
-              {columns.map(column => (
-                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, zIndex: 3, background: "#f1f2f3" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
+              {columns.map((column, ci) => (
+                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 3, background: "#f1f2f3" } : undefined}>
                   <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
                     <span>{column.label}</span>
                     <SortControl />
@@ -2428,7 +2604,7 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
               ))}
             </tr>
           </thead>
-          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map(column => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
+          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <TablePagination
@@ -2444,11 +2620,11 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
   );
 }
 
-function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void }) {
+function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void }) {
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
   if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
   if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} />;
   if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} />;
@@ -2684,6 +2860,11 @@ const USE_CASE_CATEGORIES = [
   { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: [] },
  ] as const;
 
+// All pre-defined view titles (items + "View All {type}") — table view is allowed only for these
+const PREDEFINED_VIEW_TITLES = new Set<string>([
+  ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
+]);
+
 type SuggestedQuery = {
   type: string;
   label: string;
@@ -2808,6 +2989,7 @@ function ExplorerSplashView({
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
@@ -2934,10 +3116,10 @@ useEffect(() => {
             conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
             themeMode={themeMode} setThemeMode={setThemeMode}
             tableViewOpen={tableViewOpen}
-            onTableViewToggle={() => {
+            onTableViewToggle={selectedGraphTitle && PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) ? () => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
-            }}
+            } : undefined}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
@@ -2964,7 +3146,7 @@ useEffect(() => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={() => setTableViewOpen(false)}
+              onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }}
               style={{
                 position: "fixed",
                 inset: 0,
@@ -3014,24 +3196,51 @@ useEffect(() => {
                 {/* Modal header */}
                 <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
                   <div>
-                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>{selectedGraphTitle ?? selectedGraphType}</p>
-                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>
+                      {selectedResourceId ? (resourceRows.find(r => r.id === selectedResourceId)?.address ?? selectedResourceId) : (selectedGraphTitle ?? selectedGraphType)}
+                    </p>
+                    {!selectedResourceId && (
+                      <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                    )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <ActionsDropdown
-                      columns={modalQueryColumns}
-                      visibleColumnIds={visibleColumnIds}
-                      onApply={setVisibleColumnIds}
-                    />
-                    <button type="button" onClick={() => setTableViewOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
+                    {selectedResourceId ? (
+                      <button
+                        onClick={() => setSelectedResourceId(null)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: `1px solid ${glassBorder}`, background: "rgba(0,0,0,0.04)", color: glassMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+                      >
+                        ← back to table
+                      </button>
+                    ) : (
+                      <ActionsDropdown
+                        columns={modalQueryColumns}
+                        visibleColumnIds={visibleColumnIds}
+                        onApply={setVisibleColumnIds}
+                      />
+                    )}
+                    <button type="button" onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
                       <X size={18} />
                     </button>
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto p-5">
-                  <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                  <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} />
+                  {selectedGraphType === "Resources" && selectedResourceId ? (
+                    (() => {
+                      const row = resourceRows.find(r => r.id === selectedResourceId);
+                      return row ? (
+                        <ResourceDetailView
+                          row={row}
+                          themeMode={themeMode}
+                        />
+                      ) : null;
+                    })()
+                  ) : (
+                    <>
+                      <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={selectedGraphType === "Resources" ? setSelectedResourceId : undefined} />
+                    </>
+                  )}
                 </div>
               </motion.div>
             </div>
