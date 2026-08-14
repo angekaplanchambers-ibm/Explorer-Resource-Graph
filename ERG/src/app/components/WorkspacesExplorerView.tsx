@@ -1027,7 +1027,7 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
 
 const NODE_COLORS: Record<string, string> = {
   workspace: "#9b8ff5",
-  module: "#818cf8",
+  module: "#2dd4bf",
   provider: "#34d399",
   "terraform-version": "#38bdf8",
   "resource": "#f472b6",
@@ -2875,7 +2875,7 @@ type SuggestedQuery = {
 const SUGGESTED_QUERIES: SuggestedQuery[] = [
   { type: "Workspaces",        label: "Workspaces with failed checks", Icon: WorkspaceIcon,  color: "#9b8ff5" },
   { type: "Policy Sets",       label: "Policy sets with failures",     Icon: Shield,          color: "#fbbf24" },
-  { type: "Modules",           label: "Top module versions",           Icon: ModuleIcon,      color: "#818cf8" },
+  { type: "Modules",           label: "Top module versions",           Icon: ModuleIcon,      color: "#2dd4bf" },
   { type: "Providers",         label: "Providers by workspace count",  Icon: Globe,           color: "#34d399" },
   { type: "Resources",         label: "Resources by type",             Icon: ResourcesIcon,   color: "#f472b6" },
   { type: "Terraform Versions", label: "Top Terraform versions",       Icon: TerraformIcon,   color: "#38bdf8" },

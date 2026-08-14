@@ -811,7 +811,7 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
 
 const NODE_COLORS: Record<string, string> = {
   workspace: "#9b8ff5",
-  module: "#818cf8",
+  module: "#2dd4bf",
   provider: "#34d399",
   "terraform-version": "#38bdf8",
   "resource-compute": "#f472b6",
@@ -2280,7 +2280,7 @@ const SUGGESTED_QUERIES: SuggestedQuery[] = [
   { type: "Workspaces", label: "Drifted Workspaces", Icon: WorkspaceIcon, color: "#9b8ff5" },
   { type: "Workspaces", label: "Workspace VCS source", Icon: WorkspaceIcon, color: "#9b8ff5" },
   { type: "Terraform Versions", label: "Top Terraform versions", Icon: TerraformIcon, color: "#38bdf8" },
-  { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#818cf8" },
+  { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#2dd4bf" },
 ];
 
 function ExplorerSplashView({
