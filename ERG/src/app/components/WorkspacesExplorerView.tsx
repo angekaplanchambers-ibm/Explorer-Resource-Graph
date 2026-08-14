@@ -3023,7 +3023,7 @@ function ExplorerSplashView({
   queryColumns: readonly any[];
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
 }) {
-  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
@@ -3061,7 +3061,7 @@ function ExplorerSplashView({
   function openGraph(type: string, title = type) {
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
-    setSavedViewsOpen(false);
+    setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
   }
 
@@ -3292,73 +3292,98 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* Saved Views table panel */}
-      <aside
-        className={`absolute bottom-0 right-0 top-0 z-40 flex flex-col border-l shadow-[-18px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-300 ease-out ${savedViewsOpen ? "translate-x-0" : "pointer-events-none translate-x-full"}`}
-        style={{ width: "50%", background: glassSurface, borderColor: glassBorder }}
-        aria-hidden={!savedViewsOpen}
-      >
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
-          <div>
-            <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
-            <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
-          </div>
-          <button type="button" onClick={() => setSavedViewsOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto p-5">
-          <div className="min-w-0">
-            <div className="mb-4 flex items-center">
-              <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                <Search size={16} strokeWidth={2} />
-                <input
-                  value={savedSearch}
-                  onChange={event => setSavedSearch(event.target.value)}
-                  placeholder="Search"
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
-                  aria-label="Search saved views"
-                />
-              </label>
-              <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
-                  <option>All types</option>
-                  <option>Workspaces</option>
-                  <option>Modules</option>
-                  <option>Terraform Versions</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
-              </label>
+      {/* Saved Views modal */}
+      <AnimatePresence>
+        {savedViewsModalOpen && (
+          <>
+            <motion.div
+              key="saved-views-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSavedViewsModalOpen(false)}
+              style={{ position: "fixed", inset: 0, top: 60, zIndex: 40, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
+            />
+            <div style={{ position: "fixed", inset: 0, top: 60, zIndex: 41, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+              <motion.div
+                key="saved-views-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Saved Views"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.22, ease: [0.25, 0.8, 0.25, 1] }}
+                style={{ width: "85vw", maxWidth: 1400, height: "80vh", display: "flex", flexDirection: "column", borderRadius: 12, border: `1px solid ${glassBorder}`, boxShadow: "0 24px 64px rgba(0,0,0,0.28)", background: glassSurface, overflow: "hidden", pointerEvents: "auto" }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
+                  <div>
+                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
+                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
+                  </div>
+                  <button type="button" onClick={() => setSavedViewsModalOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
+                </div>
+                {/* Body */}
+                <div className="min-h-0 flex-1 overflow-auto p-5">
+                  <div className="min-w-0">
+                    <div className="mb-4 flex items-center">
+                      <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <Search size={16} strokeWidth={2} />
+                        <input
+                          value={savedSearch}
+                          onChange={event => setSavedSearch(event.target.value)}
+                          placeholder="Search"
+                          className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
+                          aria-label="Search saved views"
+                        />
+                      </label>
+                      <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
+                          <option>All types</option>
+                          <option>Workspaces</option>
+                          <option>Modules</option>
+                          <option>Terraform Versions</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
+                      </label>
+                    </div>
+                    <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
+                    <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
+                      <table className="w-full table-fixed border-collapse text-left text-[12px]">
+                        <thead className="bg-[#f1f2f3] text-[#17171a]">
+                          <tr>
+                            <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
+                            <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
+                            <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
+                            <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
+                            <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-[#555964]">
+                          {filteredSavedViews.map(view => (
+                            <tr key={view.name} className="border-t border-[#d7d9de]">
+                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
+                              <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
+                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
+                              <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
+                              <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
+                            </tr>
+                          ))}
+                          {filteredSavedViews.length === 0 && (
+                            <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
-            <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
-              <table className="w-full table-fixed border-collapse text-left text-[12px]">
-                <thead className="bg-[#f1f2f3] text-[#17171a]">
-                  <tr>
-                    <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
-                    <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
-                    <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
-                    <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
-                    <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
-                  </tr>
-                </thead>
-                <tbody className="text-[#555964]">
-                  {filteredSavedViews.map(view => (
-                    <tr key={view.name} className="border-t border-[#d7d9de]">
-                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
-                      <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
-                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
-                      <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
-                      <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
-                    </tr>
-                  ))}
-                  {filteredSavedViews.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Compact Explorer context HUD */}
       <div
@@ -3371,7 +3396,7 @@ useEffect(() => {
         <span>/</span>
         <span>Explorer</span>
         <span>/</span>
-        <span className="font-medium" style={{ color: glassText }}>{savedViewsOpen ? "Saved views" : "Types"}</span>
+        <span className="font-medium" style={{ color: glassText }}>Types</span>
       </div>
 
       {/* Title row */}
@@ -3438,7 +3463,7 @@ useEffect(() => {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => { setSavedViewsOpen(true); setUseCaseMenuOpen(false); }}
+                    onClick={() => { setSavedViewsModalOpen(true); setUseCaseMenuOpen(false); }}
                     className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
                     style={{ color: glassText }}
                   >
