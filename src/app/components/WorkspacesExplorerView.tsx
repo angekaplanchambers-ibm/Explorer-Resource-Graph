@@ -938,35 +938,24 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
           })
         )
       : providerRows;
-    // Add provider nodes and track which workspace connects to each
+    // Add provider nodes and connect each to its individual workspace nodes.
+    // Only add a provider node if it has at least one valid workspace to connect to.
     const wsNodeIds = new Map<string, string>(); // workspace name → node id
-    for (const [name, version, , wsCount, workspace] of filteredProvs) {
+    for (const [name, version, , wsCount, workspaceList] of filteredProvs) {
+      const wsNames = workspaceList.split(",").map((w: string) => w.trim()).filter(Boolean);
+      if (wsNames.length === 0) continue; // skip isolated provider nodes
       const nodeId = `prov-${name.replace("/", "_")}-${version}`;
       const baseName = name.split("/").pop()!;
-      nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace } });
-      // Add workspace node if not already added
-      if (!wsNodeIds.has(workspace)) {
-        const wsId = `ws-prov-${workspace}`;
-        wsNodeIds.set(workspace, wsId);
-        nodes.push({ id: wsId, label: workspace, type: "workspace", secondary: "workspace", data: { name: workspace } });
+      nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace: workspaceList } });
+      for (const wsName of wsNames) {
+        if (!wsNodeIds.has(wsName)) {
+          const wsId = `ws-prov-${wsName}`;
+          wsNodeIds.set(wsName, wsId);
+          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
+        }
+        addEdge(nodeId, wsNodeIds.get(wsName)!);
       }
-      // Connect provider → its workspace
-      addEdge(nodeId, wsNodeIds.get(workspace)!);
     }
-    // Connect providers of the same family (azurerm group, tfe group, etc.)
-    const families = new Map<string, string[]>();
-    for (const [name, version] of filteredProvs) {
-      const base = name.split("/").pop()!;
-      const nodeId = `prov-${name.replace("/", "_")}-${version}`;
-      if (!families.has(base)) families.set(base, []);
-      families.get(base)!.push(nodeId);
-    }
-    for (const [, ids] of families) {
-      for (let i = 0; i < ids.length - 1; i++) addEdge(ids[i], ids[i + 1]);
-    }
-    // Cross-family: connect first of each family group to the next
-    const familyLeaders = [...families.values()].map(ids => ids[0]);
-    for (let i = 0; i < familyLeaders.length - 1; i++) addEdge(familyLeaders[i], familyLeaders[i + 1]);
   }
 
   else if (activeType === "Terraform Versions") {

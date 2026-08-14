@@ -1178,26 +1178,24 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
           })
         )
       : providerRows;
-    // Add provider nodes only
-    for (const [name, version, , wsCount, workspace] of filteredProvs) {
+    // Add provider nodes and connect each to its individual workspace nodes.
+    // Only add a provider node if it has at least one valid workspace to connect to.
+    const wsNodeIds = new Map<string, string>(); // workspace name → node id
+    for (const [name, version, , wsCount, workspaceList] of filteredProvs) {
+      const wsNames = workspaceList.split(",").map((w: string) => w.trim()).filter(Boolean);
+      if (wsNames.length === 0) continue; // skip isolated provider nodes
       const nodeId = `prov-${name.replace("/", "_")}-${version}`;
       const baseName = name.split("/").pop()!;
-      nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace } });
+      nodes.push({ id: nodeId, label: `${baseName} ${version}`, type: "provider", secondary: `${wsCount} ws`, data: { name, version, workspace: workspaceList } });
+      for (const wsName of wsNames) {
+        if (!wsNodeIds.has(wsName)) {
+          const wsId = `ws-prov-${wsName}`;
+          wsNodeIds.set(wsName, wsId);
+          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
+        }
+        addEdge(nodeId, wsNodeIds.get(wsName)!);
+      }
     }
-    // Connect providers of the same family (azurerm group, tfe group, etc.)
-    const families = new Map<string, string[]>();
-    for (const [name, version] of filteredProvs) {
-      const base = name.split("/").pop()!;
-      const nodeId = `prov-${name.replace("/", "_")}-${version}`;
-      if (!families.has(base)) families.set(base, []);
-      families.get(base)!.push(nodeId);
-    }
-    for (const [, ids] of families) {
-      for (let i = 0; i < ids.length - 1; i++) addEdge(ids[i], ids[i + 1]);
-    }
-    // Cross-family: connect first of each family group to the next
-    const familyLeaders = [...families.values()].map(ids => ids[0]);
-    for (let i = 0; i < familyLeaders.length - 1; i++) addEdge(familyLeaders[i], familyLeaders[i + 1]);
   }
 
   else if (activeType === "Terraform Versions") {
@@ -1293,9 +1291,11 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
     else for (let i = 0; i < advisory.length - 1; i++) addEdge(advisory[i], advisory[i + 1]);
   }
 
-  // Make ~30% of nodes isolated: remove all edges that touch them.
-  // Use a deterministic stride (every 3rd node starting at index 2) so the
-  // result is stable across renders and consistent across all Types.
+  // Make ~30% of nodes isolated for certain types: remove all edges that touch them.
+  // Skip this for Providers — every provider node must stay connected to its workspaces.
+  if (activeType === "Providers") {
+    return { nodes, edges };
+  }
   const isolatedIds = new Set(
     nodes.filter((_, i) => i % 3 === 2).map(n => n.id)
   );
@@ -1540,7 +1540,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
   const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>("radial");
+  const [topoLayout, setTopoLayout] = useState<TopoLayout>(activeType === "Providers" ? "force" : "radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
