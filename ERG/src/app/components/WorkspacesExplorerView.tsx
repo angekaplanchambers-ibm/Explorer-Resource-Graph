@@ -1568,30 +1568,146 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
 
-  // Workspace grouping: inject hub nodes and rewire edges when wsGroupMode is active
+  // Workspace grouping: in ring mode we pass nodes/edges through unchanged — ring positions are
+  // computed separately below and rendered as SVG ellipses behind the nodes.
   const { nodes, edges } = useMemo(() => {
-    if (activeType !== "Workspaces" || wsGroupMode === "none") return { nodes: rawNodes, edges: rawEdges };
+    // In grouped mode we keep all workspace nodes but drop all edges (rings replace topology)
+    if (activeType === "Workspaces" && wsGroupMode !== "none") return { nodes: rawNodes, edges: [] as TopoEdge[] };
+    return { nodes: rawNodes, edges: rawEdges };
+  }, [rawNodes, rawEdges, activeType, wsGroupMode]);
+
+  // Ring cluster data — computed only in Workspaces grouped mode
+  type RingDatum = { id: string; label: string; cx: number; cy: number; rx: number; ry: number; color: string; count: number; nodeIds: string[] };
+  const ringData = useMemo((): RingDatum[] => {
+    if (activeType !== "Workspaces" || wsGroupMode === "none") return [];
+
     const groupKey = (n: TopoNode): string =>
       wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
-    const hubType = wsGroupMode === "project" ? "ws-group-project" : "ws-group-status";
-    // Count members per group
-    const groupCounts = new Map<string, number>();
-    for (const n of rawNodes) { const k = groupKey(n); groupCounts.set(k, (groupCounts.get(k) ?? 0) + 1); }
-    // Build hub nodes
-    const hubNodes: TopoNode[] = [];
-    const hubIds = new Map<string, string>();
-    for (const [key, count] of groupCounts) {
-      const hubId = `hub-${wsGroupMode}-${key}`;
-      hubIds.set(key, hubId);
-      hubNodes.push({ id: hubId, label: key, type: hubType, secondary: `${count} workspace${count !== 1 ? "s" : ""}`, data: { group: key, count } });
+
+    // Bucket workspace nodes into groups
+    const groups = new Map<string, string[]>();
+    for (const n of rawNodes) {
+      const k = groupKey(n);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(n.id);
     }
-    // Spoke edges: each workspace → its hub only
-    const spokeEdges: TopoEdge[] = rawNodes
-      .filter(n => n.type === "workspace")
-      .map(n => ({ source: hubIds.get(groupKey(n))!, target: n.id }))
-      .filter(e => e.source);
-    return { nodes: [...hubNodes, ...rawNodes], edges: spokeEdges };
-  }, [rawNodes, rawEdges, activeType, wsGroupMode]);
+
+    const ringColor = wsGroupMode === "project" ? "#6366f1" : "#f59e0b";
+    const ringList = [...groups.entries()].map(([label, nodeIds]) => ({ label, nodeIds }));
+
+    // Ring radii: scale with sqrt(count) so bigger groups get more space
+    const rings = ringList.map(r => {
+      const count = r.nodeIds.length;
+      const rx = Math.max(90, Math.sqrt(count) * 55);
+      const ry = Math.max(60, Math.sqrt(count) * 38);
+      return { ...r, rx, ry, count };
+    });
+
+    // Place ring centers via a mini force simulation — rings repel each other, center-attracted
+    const cx0 = VW / 2;
+    const cy0 = VH / 2;
+    const ringPos = rings.map((_, i) => {
+      const angle = (2 * Math.PI * i) / rings.length - Math.PI / 2;
+      const spread = Math.min(VW, VH) * 0.28;
+      return { x: cx0 + spread * Math.cos(angle), y: cy0 + spread * Math.sin(angle) };
+    });
+    const ringVel = rings.map(() => ({ x: 0, y: 0 }));
+    for (let iter = 0; iter < 240; iter++) {
+      for (let a = 0; a < rings.length; a++) {
+        for (let b = a + 1; b < rings.length; b++) {
+          const dx = ringPos[a].x - ringPos[b].x || 0.1;
+          const dy = ringPos[a].y - ringPos[b].y || 0.1;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minDist = rings[a].rx + rings[b].rx + 60;
+          if (dist < minDist) {
+            const push = (minDist - dist) / dist * 1.2;
+            ringVel[a].x += dx * push; ringVel[a].y += dy * push;
+            ringVel[b].x -= dx * push; ringVel[b].y -= dy * push;
+          }
+        }
+      }
+      for (let a = 0; a < rings.length; a++) {
+        // Pull toward canvas center
+        ringVel[a].x += (cx0 - ringPos[a].x) * 0.015;
+        ringVel[a].y += (cy0 - ringPos[a].y) * 0.015;
+        ringVel[a].x *= 0.75; ringVel[a].y *= 0.75;
+        const pad = rings[a].rx + 50;
+        ringPos[a].x = Math.max(pad, Math.min(VW - pad, ringPos[a].x + ringVel[a].x));
+        ringPos[a].y = Math.max(rings[a].ry + 50, Math.min(VH - rings[a].ry - 50, ringPos[a].y + ringVel[a].y));
+      }
+    }
+
+    return rings.map((r, i) => ({
+      id: `ring-${wsGroupMode}-${r.label}`,
+      label: r.label,
+      cx: ringPos[i].x,
+      cy: ringPos[i].y,
+      rx: r.rx,
+      ry: r.ry,
+      color: ringColor,
+      count: r.count,
+      nodeIds: r.nodeIds,
+    }));
+  }, [rawNodes, activeType, wsGroupMode]);
+
+  // When grouping is active, override node positions: scatter nodes inside their ring using
+  // a bounded force layout (nodes repel within ring, ring center-attraction keeps them inside)
+  const groupedPositions = useMemo((): Map<string, { x: number; y: number }> | null => {
+    if (activeType !== "Workspaces" || wsGroupMode === "none" || ringData.length === 0) return null;
+    const pos = new Map<string, { x: number; y: number }>();
+    // Seed: distribute nodes around a small circle inside their ring
+    for (const ring of ringData) {
+      ring.nodeIds.forEach((id, i) => {
+        const angle = (2 * Math.PI * i) / ring.nodeIds.length - Math.PI / 2;
+        const seedR = Math.min(ring.rx, ring.ry) * 0.45;
+        pos.set(id, { x: ring.cx + seedR * Math.cos(angle), y: ring.cy + seedR * Math.sin(angle) });
+      });
+    }
+    const vel = new Map<string, { x: number; y: number }>();
+    for (const ring of ringData) ring.nodeIds.forEach(id => vel.set(id, { x: 0, y: 0 }));
+
+    const nodeToRing = new Map<string, RingDatum>();
+    for (const ring of ringData) for (const id of ring.nodeIds) nodeToRing.set(id, ring);
+
+    const allIds = [...pos.keys()];
+    for (let iter = 0; iter < 280; iter++) {
+      // Repulsion between all nodes
+      for (let a = 0; a < allIds.length; a++) {
+        for (let b = a + 1; b < allIds.length; b++) {
+          const pa = pos.get(allIds[a])!;
+          const pb = pos.get(allIds[b])!;
+          const dx = pa.x - pb.x || 0.1;
+          const dy = pa.y - pb.y || 0.1;
+          const dist2 = Math.max(dx * dx + dy * dy, 100);
+          const dist = Math.sqrt(dist2);
+          const force = 1800 / dist2;
+          const fx = (force * dx) / dist;
+          const fy = (force * dy) / dist;
+          vel.get(allIds[a])!.x += fx; vel.get(allIds[a])!.y += fy;
+          vel.get(allIds[b])!.x -= fx; vel.get(allIds[b])!.y -= fy;
+        }
+      }
+      // Per-node: attract to ring center, clamp inside ring ellipse
+      for (const id of allIds) {
+        const ring = nodeToRing.get(id)!;
+        const p = pos.get(id)!;
+        const v = vel.get(id)!;
+        // Attract toward ring center
+        v.x += (ring.cx - p.x) * 0.06;
+        v.y += (ring.cy - p.y) * 0.06;
+        v.x *= 0.72; v.y *= 0.72;
+        let nx = p.x + v.x;
+        let ny = p.y + v.y;
+        // Keep inside ring ellipse (soft clamp)
+        const edx = (nx - ring.cx) / (ring.rx - NODE_R - 8);
+        const edy = (ny - ring.cy) / (ring.ry - NODE_R - 8);
+        const enorm = Math.sqrt(edx * edx + edy * edy);
+        if (enorm > 1) { nx = ring.cx + (edx / enorm) * (ring.rx - NODE_R - 8); ny = ring.cy + (edy / enorm) * (ring.ry - NODE_R - 8); }
+        p.x = nx; p.y = ny;
+      }
+    }
+    return pos;
+  }, [ringData, activeType, wsGroupMode]);
 
   // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
   // of all resourceRows belonging to that workspace, plus the workspace node itself.
@@ -1641,7 +1757,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
 
-  const positions = topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
+  // In grouped Workspaces mode, use bounded ring positions instead of the global force layout
+  const positions = groupedPositions ?? (topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions);
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
@@ -1917,6 +2034,43 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
         {/* Zoomable content */}
         <g transform={groupTransform}>
+          {/* Ring cluster ellipses — rendered behind everything else in Workspaces grouped mode */}
+          {ringData.map(ring => (
+            <g key={ring.id}>
+              {/* Filled area */}
+              <ellipse
+                cx={ring.cx} cy={ring.cy}
+                rx={ring.rx} ry={ring.ry}
+                fill={ring.color}
+                fillOpacity={themeMode === "light" ? 0.06 : 0.09}
+                stroke="none"
+              />
+              {/* Border */}
+              <ellipse
+                cx={ring.cx} cy={ring.cy}
+                rx={ring.rx} ry={ring.ry}
+                fill="none"
+                stroke={ring.color}
+                strokeWidth={1.5 / scale}
+                strokeOpacity={0.55}
+                strokeDasharray={`${6 / scale} ${3 / scale}`}
+              />
+              {/* Label at top edge of ellipse */}
+              <text
+                x={ring.cx}
+                y={ring.cy - ring.ry - 9 / scale}
+                textAnchor="middle"
+                fill={ring.color}
+                fontSize={11 / scale}
+                fontWeight="700"
+                fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif"
+                opacity={0.9}
+              >
+                {ring.label} · {ring.count}
+              </text>
+            </g>
+          ))}
+
           {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
           {visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
@@ -2005,8 +2159,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 : (!!selectedId && !isSelected && !isNeighbor);
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
-            const isHub = node.type === "ws-group-project" || node.type === "ws-group-status";
-            const nR = isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+            const nR = NODE_R;
             const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
@@ -2027,8 +2180,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
                   {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
-                  {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
+                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
                   <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
                     {(() => {
                       const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
@@ -2039,7 +2192,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       );
                     })()}
                   </foreignObject>
-                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isHub ? 12 : 10} fontWeight={isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
                   <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
               </g>

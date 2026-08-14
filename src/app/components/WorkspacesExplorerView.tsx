@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import DotBackgroundGraph from "../../imports/DotBackgroundGraph";
 import {
-  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Compass,
+  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Clipboard, Compass,
   Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, ListOrdered, Lock, MoreHorizontal, Plus, RefreshCw, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User, X
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
@@ -101,6 +101,29 @@ const workspaceRows = Array.from({ length: 100 }, (_, index) => {
     metadata: workspaceMetadata[index % workspaceMetadata.length],
   };
 });
+
+// Per-view title filter for workspace pre-defined views.
+// Each function receives a workspaceRow and returns true if it belongs to that view.
+type WsRow = typeof workspaceRows[number];
+const VIEW_TITLE_FILTER: Record<string, (row: WsRow, index?: number) => boolean> = {
+  "View All Workspaces":    () => true,
+  "Workspaces without VCS": row => !row.metadata[1] || row.metadata[1] === "",
+  "Workspace VCS source":   row => !!(row.metadata[1] && row.metadata[1] !== ""),
+  "Workspaces with failed checks": row => row.healthChecksFailed > 0 || row.healthChecksErrored > 0,
+  "Drifted Workspaces":     row => row.drifted === true,
+  "All workspace versions": () => true,
+  "Workspaces by run status": () => true,
+  "Latest updated workspaces": (_row, index) => (index ?? 0) < 20,
+  "Oldest applied workspaces": row => row.status === "applied",
+  "Latest Terraform versions": () => true,
+};
+
+// Returns the filtered workspace rows for a given view title (or all rows if no filter defined).
+function getWorkspaceRowsForTitle(title: string | null): WsRow[] {
+  if (!title || !VIEW_TITLE_FILTER[title]) return workspaceRows;
+  const fn = VIEW_TITLE_FILTER[title];
+  return workspaceRows.filter((row, i) => fn(row, i));
+}
 
 const tableColumns = [
   { id: "name", label: "Name", width: "w-[201px]", valueType: "text" },
@@ -400,21 +423,19 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
     : rows;
   return (
     <>
-      <div className="overflow-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              
-              {columns.map(column => (
-                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
+              {columns.map((column, ci) => (
+                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
               ))}
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
             {filteredRows.map(([name, version, source, workspaceCount, workspaces]) => (
               <tr key={`${name}-${version}`} className="border-t border-[#dedfe3] bg-white">
-                
-                {columns.map(column => {
+                {columns.map((column, ci) => {
                   const content = {
                     name,
                     version,
@@ -422,7 +443,7 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
                     workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>,
                     workspaces,
                   };
-                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-4 break-words last:border-r-0">{content[column.id]}</td>;
+                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-4 break-words last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>;
                 })}
               </tr>
             ))}
@@ -472,10 +493,10 @@ function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { 
     : terraformVersionRows;
   return (
     <>
-      <div className="overflow-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0"><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
-          <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map(column => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0">{content[column.id]}</td>; })}</tr>)}</tbody>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}</tbody>
         </table>
       </div>
       <TablePagination
@@ -515,27 +536,208 @@ const resourceRows = Array.from({ length: 26 }, (_, index) => ({
   sourceUpdatedAt: "-",
 }));
 
-function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+type ResourceRow = typeof resourceRows[number];
+
+// Mock attribute data for the Attributes section (keyed by resource id)
+const MOCK_ATTRIBUTES: Record<string, { key: string; value: string }[]> = {};
+resourceRows.forEach(row => {
+  MOCK_ATTRIBUTES[row.id] = [
+    { key: "account_id", value: "#lorem-account-id" },
+    { key: "ami_version", value: "1.0.2.3" },
+    { key: "arn", value: `arn:aws:cloudfront::486183785707:distribution/E3IR73QQZ1DXX9` },
+    { key: "IP_address", value: "10.36.56.888" },
+    { key: "instance_type", value: "t3.medium" },
+    { key: "lambda_function_association", value: "-" },
+    { key: "max_ttl", value: "86400" },
+    { key: "min_ttl", value: "0" },
+    { key: "origin_request_policy_id", value: "-" },
+    { key: "realtime_log_config_arn", value: "-" },
+    { key: "region", value: "US West (Oregon) us-west-02" },
+    { key: "response_headers_policy_id", value: "-" },
+    { key: "smooth_streaming", value: "false" },
+    { key: "tags", value: "value01, value02, value03" },
+    { key: "target_origin_id", value: "S3-Website" },
+    { key: "trusted_key_groups", value: "-" },
+    { key: "trusted_signers", value: "-" },
+    { key: "viewer_protocol_policy", value: "redirect-to-https" },
+  ];
+});
+
+function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "light" | "dark" }) {
+  const [attrSearch, setAttrSearch] = React.useState("");
+  const allAttrs = MOCK_ATTRIBUTES[row.id] ?? [];
+  const filteredAttrs = attrSearch
+    ? allAttrs.filter(a => a.key.toLowerCase().includes(attrSearch.toLowerCase()) || a.value.toLowerCase().includes(attrSearch.toLowerCase()))
+    : allAttrs;
+
+  const border = themeMode === "light" ? "1px solid rgba(101,106,118,0.2)" : "1px solid rgba(255,255,255,0.1)";
+  const surfaceFaint = themeMode === "light" ? "#fafafa" : "#1a1c24";
+  const surfaceStrong = themeMode === "light" ? "#f1f2f3" : "#21232e";
+  const surfacePrimary = themeMode === "light" ? "#ffffff" : "#161820";
+  const fgStrong = themeMode === "light" ? "#0c0c0e" : "#ffffff";
+  const fgPrimary = themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)";
+  const fgFaint = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.45)";
+  const fgAction = "#1060ff";
+  const badgeBg = themeMode === "light" ? "#dedfe3" : "rgba(255,255,255,0.12)";
+  const cellBorder = "rgba(101,106,118,0.2)";
+
+  const MetaItem = ({ label, value, isLink = false }: { label: string; value: string; isLink?: boolean }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>{label}</p>
+      {isLink
+        ? <a href="#" onClick={e => e.preventDefault()} style={{ fontSize: 14, color: fgAction, textDecoration: "underline", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</a>
+        : <p style={{ fontSize: 14, color: fgStrong, lineHeight: "20px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</p>
+      }
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: 0 }}>
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 24 }}>
+
+        {/* ── Metadata card ── */}
+        <div style={{ background: surfaceFaint, border, borderRadius: 6, padding: 16, display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Row 1: Name · Type · Provider · Workspace */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Name" value={row.address} />
+            <MetaItem label="Type" value={row.type} />
+            <MetaItem label="Provider" value={row.provider} isLink />
+            <MetaItem label="Workspace" value={row.workspace} isLink />
+          </div>
+          <div style={{ height: 1, background: "rgba(101,106,118,0.2)" }} />
+          {/* Row 2: Address · Unique ID · Project · Module */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Address" value={row.address} />
+            <MetaItem label="Unique ID" value={`wsr-1df1sd65f1d6sg54P`} />
+            <MetaItem label="Project" value={row.project} isLink />
+            <MetaItem label="Module" value={row.moduleName} isLink />
+          </div>
+          <div style={{ height: 1, background: "rgba(101,106,118,0.2)" }} />
+          {/* Row 3: Terraform version · Billable RUM · Mode */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+            <MetaItem label="Terraform version" value={row.terraformVersion} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>Billable RUM</p>
+              <span style={{ display: "inline-flex", alignItems: "center", background: badgeBg, borderRadius: 5, padding: "4px 8px", fontSize: 13, fontWeight: 500, color: fgPrimary, alignSelf: "flex-start" }}>true</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 0 0", minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: fgPrimary, lineHeight: "20px" }}>Mode</p>
+              <span style={{ display: "inline-flex", alignItems: "center", background: badgeBg, borderRadius: 5, padding: "4px 8px", fontSize: 13, fontWeight: 500, color: fgPrimary, alignSelf: "flex-start" }}>Managed</span>
+            </div>
+            <div style={{ flex: "1 0 0", minWidth: 0 }} />
+          </div>
+        </div>
+
+        {/* ── Source section ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: fgStrong, letterSpacing: "-0.5px" }}>Source</span>
+            <span style={{ background: badgeBg, borderRadius: 12, padding: "4px 12px", fontSize: 13, fontWeight: 500, color: fgPrimary }}>1</span>
+          </div>
+          <p style={{ fontSize: 14, color: fgPrimary, marginTop: -8 }}>Run stack associated with this Resource.</p>
+          {/* Source table */}
+          <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${cellBorder}` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <thead>
+                <tr style={{ background: surfaceStrong }}>
+                  {["source id", "source type", "source updated at"].map(h => (
+                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}`, borderRight: `1px solid ${cellBorder}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background: surfacePrimary }}>
+                  <td style={{ padding: "16px", fontSize: 14, borderRight: `1px solid ${cellBorder}` }}>
+                    <a href="#" onClick={e => e.preventDefault()} style={{ color: fgAction, textDecoration: "underline" }}>{row.sourceId}</a>
+                  </td>
+                  <td style={{ padding: "16px", fontSize: 13, fontFamily: "Menlo, monospace", color: fgPrimary, borderRight: `1px solid ${cellBorder}` }}>{row.sourceType}</td>
+                  <td style={{ padding: "16px", fontSize: 14, color: fgPrimary }}>{row.sourceUpdatedAt}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── Attributes section ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: fgStrong, letterSpacing: "-0.5px" }}>Attributes</span>
+            <span style={{ background: badgeBg, borderRadius: 12, padding: "4px 12px", fontSize: 13, fontWeight: 500, color: fgPrimary }}>{allAttrs.length}</span>
+          </div>
+          <p style={{ fontSize: 14, color: fgPrimary, marginTop: -8 }}>All attributes associated with this Resource.</p>
+          {/* Search */}
+          <div style={{ position: "relative", width: 330 }}>
+            <input
+              type="text"
+              placeholder="Search by attribute key or value"
+              value={attrSearch}
+              onChange={e => setAttrSearch(e.target.value)}
+              style={{ width: "100%", height: 36, padding: "0 8px 0 32px", borderRadius: 5, border: `1px solid ${themeMode === "light" ? "#8c909c" : "rgba(255,255,255,0.2)"}`, background: surfacePrimary, color: fgPrimary, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+            <svg style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke={fgFaint} strokeWidth="1.5" />
+              <line x1="10" y1="10" x2="14" y2="14" stroke={fgFaint} strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+          {/* Key/Value table */}
+          <div style={{ borderRadius: 6, overflow: "hidden", border: `1px solid ${cellBorder}` }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <thead>
+                <tr style={{ background: surfaceStrong }}>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}`, borderRight: `1px solid ${cellBorder}` }}>Key</th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 14, fontWeight: 600, color: fgStrong, borderBottom: `1px solid ${cellBorder}` }}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAttrs.map((attr, idx) => (
+                  <tr key={attr.key} style={{ background: surfacePrimary, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: fgPrimary, borderRight: `1px solid ${cellBorder}`, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>{attr.key}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 14, color: fgPrimary, borderTop: idx === 0 ? undefined : `1px solid ${cellBorder}` }}>{attr.value}</td>
+                  </tr>
+                ))}
+                {filteredAttrs.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding: "16px", fontSize: 13, color: fgFaint, textAlign: "center" }}>No attributes match "{attrSearch}"</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
+  const allRows = sourceRowsProp ?? resourceRows;
+  const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
   const filteredRows = conditions.length
-    ? resourceRows.filter(row =>
+    ? baseRows.filter(row =>
         conditions.every(c => {
           const col = resourceTableColumns.find(col => col.id === c.fieldId);
           const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
           return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
         })
       )
-    : resourceRows;
+    : baseRows;
   return (
     <>
-      <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2300px] table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map(column => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
           <tbody className="text-[11px] text-[#52525b]">
             {filteredRows.map(row => (
-              <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white">
-                
-                {columns.map(column => {
+              <tr
+                key={row.id}
+                className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
+                style={{ cursor: "pointer" }}
+                onClick={() => onSelectResource?.(row.id)}
+              >
+                {columns.map((column, ci) => {
                   const content = {
                     type: row.type,
                     name: row.name,
@@ -550,7 +752,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate }: { visibleC
                     sourceId: row.sourceId,
                     sourceUpdatedAt: row.sourceUpdatedAt,
                   };
-                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>{content[column.id]}</td>;
+                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
                 })}
               </tr>
             ))}
@@ -672,6 +874,23 @@ const policySetRows: PolicySetRow[] = [
   },
 ];
 
+// Per-view title filter for Policy Sets pre-defined views.
+const PS_TITLE_FILTER: Record<string, (row: PolicySetRow) => boolean> = {
+  "Policy sets with failures":       row => row.failCount > 0,
+  "Policy sets with overrides":      row => row.enforcementLevel === "Soft Mandatory" && row.failCount > 0,
+  "Policy sets with runtime errors": row => row.errorCount > 0,
+  "Global policy sets":              row => row.sourceType === "Global",
+  "Recently updated policy sets":    () => true,
+  "tf-policy sets":                  row => row.framework === "tf-policy",
+  "Sentinel policy sets":            row => row.framework === "Sentinel",
+  "OPA sets":                        row => row.framework === "OPA",
+};
+
+function getPolicySetRowsForTitle(title: string | null): PolicySetRow[] {
+  if (!title || !PS_TITLE_FILTER[title]) return policySetRows;
+  return policySetRows.filter(row => PS_TITLE_FILTER[title](row));
+}
+
 const policySetColumns = [
   { id: "name", label: "Name", width: "w-[200px]" },
   { id: "framework", label: "Policy framework", width: "w-[160px]" },
@@ -686,29 +905,29 @@ const policySetColumns = [
   { id: "errorCount", label: "Error count", width: "w-[130px]" },
 ] as const;
 
-function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void; rows?: PolicySetRow[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const baseRows = rowsOverride ?? policySetRows;
   const filteredRows = conditions.length
-    ? policySetRows.filter(row =>
+    ? baseRows.filter(row =>
         conditions.every(c => {
           const col = policySetColumns.find(col => col.id === c.fieldId);
           const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
           return matchValue(val, col ? "text" : "text", c.operator, c.value);
         })
       )
-    : policySetRows;
+    : baseRows;
 
   return (
     <>
-      <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2100px] table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              
-              <th className="h-11 w-10 border-r border-[#dedfe3] px-3" />
-              {policySetColumns.map(col => (
-                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`}>
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3" style={{ position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" }} />
+              {policySetColumns.map((col, ci) => (
+                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 2, background: "#f1f2f3" } : undefined}>
                   <span className="flex items-center justify-between gap-2 whitespace-nowrap text-[12px] font-semibold text-[#17171a]">{col.label}<SortControl /></span>
                 </th>
               ))}
@@ -720,8 +939,7 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
               return (
                 <React.Fragment key={row.id}>
                   <tr className="h-12 border-t border-[#dedfe3] bg-white">
-                    
-                    <td className="border-r border-[#dedfe3] px-3 text-center">
+                    <td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}>
                       <button
                         type="button"
                         onClick={() => toggle(row.id)}
@@ -731,7 +949,7 @@ function PolicySetsTable({ conditions, onNavigate }: { conditions: ConditionFilt
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[200px]">
+                    <td className="border-r border-[#dedfe3] px-3 w-[200px]" style={{ position: "sticky", left: 40, background: "#ffffff" }}>
                       <a href="#policy-set" className="text-[#1060ff] underline underline-offset-2 whitespace-nowrap">{row.name}</a>
                     </td>
                     <td className="border-r border-[#dedfe3] px-3 w-[160px] whitespace-nowrap">{row.framework}</td>
@@ -814,19 +1032,17 @@ const NODE_COLORS: Record<string, string> = {
   module: "#2dd4bf",
   provider: "#34d399",
   "terraform-version": "#38bdf8",
-  "resource-compute": "#f472b6",
-  "resource-identity": "#fb923c",
-  "resource-networking": "#60a5fa",
-  "resource-security": "#c084fc",
-  "resource-storage": "#2dd4bf",
+  "resource": "#f472b6",
   "policy-set": "#fbbf24",
+  "ws-group-project": "#6366f1",
+  "ws-group-status": "#f59e0b",
 };
 
 const SELECTED_COLOR = "#f97316";
 const NEIGHBOR_COLOR = "#22c55e";
 const VW = 1200;
 const VH = 660;
-const NODE_SIZE = 16;
+const NODE_SIZE = 40;
 const NODE_RADIUS = 20;
 const NODE_R = NODE_SIZE / 2;
 
@@ -839,7 +1055,7 @@ type TopoNode = {
 };
 type TopoEdge = { source: string; target: string };
 
-function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []): { nodes: TopoNode[]; edges: TopoEdge[] } {
+function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], graphTitle: string | null = null): { nodes: TopoNode[]; edges: TopoEdge[] } {
   const nodes: TopoNode[] = [];
   const edgeSet = new Set<string>();
   const edges: TopoEdge[] = [];
@@ -851,8 +1067,9 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
   }
 
   if (activeType === "Workspaces") {
+    const titleRows = getWorkspaceRowsForTitle(graphTitle);
     const filteredWs = conditions.length
-      ? workspaceRows.filter(row => {
+      ? titleRows.filter(row => {
           const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
           return conditions.every(c => {
             const col = tableColumns.find(col => col.id === c.fieldId);
@@ -870,11 +1087,38 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
             return matchValue(fieldMap[c.fieldId] ?? "", col?.valueType ?? "text", c.operator, c.value);
           });
         })
-      : workspaceRows;
-    const subset = filteredWs.slice(0, 16);
+      : titleRows;
+    const subset = graphTitle && VIEW_TITLE_FILTER[graphTitle] ? filteredWs : filteredWs.slice(0, 16);
     for (const ws of subset) {
+      const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = ws.metadata;
       const wsProviders = ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/google", "registry.terraform.io/hashicorp/azurerm", "registry.terraform.io/hashicorp/kubernetes"][ws.count % 4];
-      nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: { org: "hashicorp-demo", project: ws.project, resources: ws.count, providers: wsProviders, runStatus: ws.runStatus, tags: ws.tags, created: ws.created } });
+      nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: {
+        org: "hashicorp-demo",
+        project: ws.project,
+        run: ws.run,
+        runStatus: ws.runStatus,
+        currentRunApplied,
+        repository,
+        noCodeModule: ws.noCodeModule,
+        moduleCount,
+        modules,
+        providerCount,
+        providers: wsProviders,
+        terraformVersion,
+        drifted: ws.drifted,
+        healthChecksSucceeded: ws.healthChecksSucceeded,
+        healthChecksPassed: ws.healthChecksPassed,
+        healthChecksFailed: ws.healthChecksFailed,
+        healthChecksErrored: ws.healthChecksErrored,
+        resourcesDrifted: ws.resourcesDrifted,
+        resourcesUndrifted: ws.resourcesUndrifted,
+        stateTerraformVersion: ws.stateTerraformVersion,
+        currentRumCount: ws.currentRumCount,
+        resources: ws.count,
+        tags: ws.tags,
+        created: ws.created,
+        updated: ws.updated,
+      } });
     }
     // Connect workspaces sharing a project (peer-to-peer within each project cluster)
     const byProject = new Map<string, string[]>();
@@ -968,20 +1212,9 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
           })
         )
       : terraformVersionRows;
-    const wsNodeIds = new Map<string, string>(); // workspace name → node id
     for (const [version, wsCount, wsList] of filteredTFV) {
       const versionNodeId = `tfver-${version}`;
       nodes.push({ id: versionNodeId, label: version, type: "terraform-version", secondary: `${wsCount} ws`, data: { version, workspaces: wsList } });
-      // Parse workspace names (strip trailing ellipsis annotations)
-      const wsNames = wsList.split(",").map(s => s.trim().replace(/…$/, "").trim()).filter(Boolean);
-      for (const wsName of wsNames) {
-        if (!wsNodeIds.has(wsName)) {
-          const wsId = `ws-tfver-${wsName}`;
-          wsNodeIds.set(wsName, wsId);
-          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
-        }
-        addEdge(versionNodeId, wsNodeIds.get(wsName)!);
-      }
     }
     // Connect versions in the same major.minor series (e.g., 1.9.x peers)
     const byMinor = new Map<string, string[]>();
@@ -1010,65 +1243,71 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
       : resourceRows;
     const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
     const bySubtype = new Map<string, string[]>();
-    const wsNodeIds = new Map<string, string>();
     for (let i = 0; i < filteredRes.length; i++) {
       const row = filteredRes[i];
-      const subType = SUBTYPES[i % 5];
+      const subType = SUBTYPES[i % 5]; // used only for edge-grouping
       const typeKey = `resource-${subType}`;
       const nodeId = `res-${row.id}`;
-      nodes.push({ id: nodeId, label: row.address, type: typeKey, secondary: subType, data: { name: row.name, workspace: row.workspace, provider: row.provider, version: row.terraformVersion } });
+      nodes.push({ id: nodeId, label: row.address, type: "resource", secondary: row.type, data: {
+        type: row.type,
+        name: row.name,
+        address: row.address,
+        workspace: row.workspace,
+        project: row.project,
+        moduleName: row.moduleName,
+        provider: row.provider,
+        terraformVersion: row.terraformVersion,
+        billableRum: row.billableRum,
+        sourceType: row.sourceType,
+        sourceId: row.sourceId,
+        sourceUpdatedAt: row.sourceUpdatedAt,
+      } });
       if (!bySubtype.has(typeKey)) bySubtype.set(typeKey, []);
       bySubtype.get(typeKey)!.push(nodeId);
-      // Add workspace node and connect
-      if (!wsNodeIds.has(row.workspace)) {
-        const wsId = `ws-res-${row.workspace}`;
-        wsNodeIds.set(row.workspace, wsId);
-        nodes.push({ id: wsId, label: row.workspace, type: "workspace", secondary: "workspace", data: { name: row.workspace } });
-      }
-      addEdge(nodeId, wsNodeIds.get(row.workspace)!);
     }
     // Chain resources within each sub-type
     for (const [, ids] of bySubtype) {
       for (let i = 0; i < ids.length - 1; i++) addEdge(ids[i], ids[i + 1]);
     }
-    // Connect subtype leaders to each other (star from networking, which is the "core")
+    // Connect subtype leaders to each other in a chain
     const leaders = [...bySubtype.entries()].map(([, ids]) => ids[0]);
-    const netLeader = bySubtype.get("resource-networking")?.[0];
-    if (netLeader) {
-      for (const ldr of leaders) { if (ldr !== netLeader) addEdge(netLeader, ldr); }
-    }
+    for (let i = 0; i < leaders.length - 1; i++) addEdge(leaders[i], leaders[i + 1]);
   }
 
   else if (activeType === "Policy Sets") {
-    const mockPS = [
-      { id: "ps-1", label: "production-policies",  secondary: "8 policies",  wsList: ["payments-prod", "api-gateway-prod", "auth-service-prod"],                         data: { mode: "enforced", workspaces: "12", policies: "8",  scope: "global"      } },
-      { id: "ps-2", label: "staging-policies",      secondary: "5 policies",  wsList: ["payments-staging", "api-gateway-staging"],                                        data: { mode: "advisory", workspaces: "6",  policies: "5",  scope: "staging"     } },
-      { id: "ps-3", label: "networking-policies",   secondary: "3 policies",  wsList: ["networking-prod-core", "cdn-global-prod"],                                        data: { mode: "enforced", workspaces: "4",  policies: "3",  scope: "network"     } },
-      { id: "ps-4", label: "security-baseline",     secondary: "12 policies", wsList: ["payments-prod", "auth-service-prod", "data-pipeline-prod", "inventory-svc-stg"], data: { mode: "enforced", workspaces: "18", policies: "12", scope: "global"      } },
-      { id: "ps-5", label: "cost-controls",         secondary: "4 policies",  wsList: ["api-gateway-prod", "cdn-global-prod"],                                           data: { mode: "advisory", workspaces: "8",  policies: "4",  scope: "billing"     } },
-      { id: "ps-6", label: "compliance-hipaa",      secondary: "10 policies", wsList: ["auth-service-prod", "data-pipeline-prod"],                                       data: { mode: "enforced", workspaces: "5",  policies: "10", scope: "compliance"  } },
-      { id: "ps-7", label: "data-governance",       secondary: "6 policies",  wsList: ["data-pipeline-prod", "inventory-svc-stg", "payments-prod"],                      data: { mode: "enforced", workspaces: "7",  policies: "6",  scope: "data"        } },
-    ];
-    const wsNodeIds = new Map<string, string>();
-    for (const ps of mockPS) {
-      nodes.push({ id: ps.id, label: ps.label, type: "policy-set", secondary: ps.secondary, data: ps.data });
-      for (const wsName of ps.wsList) {
-        if (!wsNodeIds.has(wsName)) {
-          const wsId = `ws-ps-${wsName}`;
-          wsNodeIds.set(wsName, wsId);
-          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
-        }
-        addEdge(ps.id, wsNodeIds.get(wsName)!);
-      }
+    const filteredPS = getPolicySetRowsForTitle(graphTitle);
+    for (const row of filteredPS) {
+      nodes.push({ id: `ps-${row.id}`, label: row.name, type: "policy-set", secondary: `${row.policyCount} policies`, data: {
+        mode: row.enforcementLevel.toLowerCase().includes("hard") ? "enforced" : "advisory",
+        framework: row.framework,
+        scope: row.scope,
+        sourceType: row.sourceType,
+        passCount: row.passCount,
+        failCount: row.failCount,
+        errorCount: row.errorCount,
+      } });
     }
-    // Connect enforced policies in a ring, advisory to enforced neighbors
-    const enforced = mockPS.filter(p => p.data.mode === "enforced").map(p => p.id);
-    const advisory = mockPS.filter(p => p.data.mode === "advisory").map(p => p.id);
+    // Connect Hard Mandatory in a ring, others to first Hard Mandatory
+    const enforced = filteredPS.filter(r => r.enforcementLevel.toLowerCase().includes("hard")).map(r => `ps-${r.id}`);
+    const advisory = filteredPS.filter(r => !r.enforcementLevel.toLowerCase().includes("hard")).map(r => `ps-${r.id}`);
     for (let i = 0; i < enforced.length; i++) addEdge(enforced[i], enforced[(i + 1) % enforced.length]);
-    for (const aId of advisory) addEdge(aId, enforced[0]);
+    if (enforced.length) for (const aId of advisory) addEdge(aId, enforced[0]);
+    else for (let i = 0; i < advisory.length - 1; i++) addEdge(advisory[i], advisory[i + 1]);
   }
 
-  return { nodes, edges };
+  // Make ~30% of nodes isolated for certain types: remove all edges that touch them.
+  // Skip this for Providers and Modules — every node must stay connected to its workspaces.
+  if (activeType === "Providers" || activeType === "Modules") {
+    return { nodes, edges };
+  }
+  const isolatedIds = new Set(
+    nodes.filter((_, i) => i % 3 === 2).map(n => n.id)
+  );
+  const connectedEdges = edges.filter(
+    e => !isolatedIds.has(e.source) && !isolatedIds.has(e.target)
+  );
+
+  return { nodes, edges: connectedEdges };
 }
 
 function runForceLayout(nodes: TopoNode[], edges: TopoEdge[]): Map<string, { x: number; y: number }> {
@@ -1207,21 +1446,105 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
   module: ModuleIcon,
   provider: Globe,
   "terraform-version": TerraformIcon,
-  "resource-compute": Cpu,
-  "resource-identity": User,
-  "resource-networking": Globe,
-  "resource-security": Lock,
-  "resource-storage": HardDrive,
+  "resource": ResourcesIcon,
 };
 
 // Fallback for unknown types
 const DEFAULT_NODE_ICON: LucideIcon = Server;
 
 type TopoLayout = "force" | "stacked" | "radial";
+type WsGroupMode = "none" | "project" | "status";
 
-function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewResources, themeMode = "dark", setThemeMode }: { activeType: string; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">> }) {
+// Returns key-value pairs for a node's popover, using the column labels for the active type.
+function getNodeFields(node: TopoNode, activeType: string): { label: string; value: string }[] {
+  const d = (node.data ?? {}) as Record<string, unknown>;
+  const str = (v: unknown) => (v === undefined || v === null || v === "") ? "—" : String(v);
+
+  if (activeType === "Workspaces") {
+    return [
+      { label: "Name",                    value: str(node.label) },
+      { label: "Project name",            value: str(d.project) },
+      { label: "Current run ID",          value: str(d.run) },
+      { label: "Run status",              value: str(d.runStatus) },
+      { label: "Current run applied",     value: str(d.currentRunApplied) },
+      { label: "VCS repo",                value: str(d.repository) },
+      { label: "No-code module",          value: str(d.noCodeModule) },
+      { label: "Module count",            value: str(d.moduleCount) },
+      { label: "Modules",                 value: str(d.modules) },
+      { label: "Provider count",          value: str(d.providerCount) },
+      { label: "Providers",               value: str(d.providers) },
+      { label: "Terraform version",       value: str(d.terraformVersion) },
+      { label: "Drifted",                 value: str(d.drifted) },
+      { label: "Health checks succeeded", value: str(d.healthChecksSucceeded) },
+      { label: "Health checks passed",    value: str(d.healthChecksPassed) },
+      { label: "Health checks failed",    value: str(d.healthChecksFailed) },
+      { label: "Health checks errored",   value: str(d.healthChecksErrored) },
+      { label: "Resources drifted",       value: str(d.resourcesDrifted) },
+      { label: "Resources undrifted",     value: str(d.resourcesUndrifted) },
+      { label: "State TF version",        value: str(d.stateTerraformVersion) },
+      { label: "Current RUM count",       value: str(d.currentRumCount) },
+      { label: "Resource count",          value: str(d.resources) },
+      { label: "Tags",                    value: str(d.tags) },
+      { label: "Created",                 value: str(d.created) },
+      { label: "Updated",                 value: str(d.updated) },
+    ];
+  }
+  if (activeType === "Modules") {
+    return [
+      { label: "Name",            value: str(node.label) },
+      { label: "Version",         value: str(node.secondary) },
+      { label: "Workspaces",      value: str(d.workspaces) },
+    ];
+  }
+  if (activeType === "Providers") {
+    return [
+      { label: "Name",            value: str(d.name ?? node.label) },
+      { label: "Version",         value: str(d.version) },
+      { label: "Workspace",       value: str(d.workspace) },
+    ];
+  }
+  if (activeType === "Terraform Versions") {
+    return [
+      { label: "Version",         value: str(d.version ?? node.label) },
+      { label: "Workspace count", value: str(node.secondary?.replace(" ws", "")) },
+      { label: "Workspaces",      value: str(d.workspaces) },
+    ];
+  }
+  if (activeType === "Resources") {
+    return [
+      { label: "Type",              value: str(d.type) },
+      { label: "Name",              value: str(d.name) },
+      { label: "Address",           value: str(node.label) },
+      { label: "Workspace",         value: str(d.workspace) },
+      { label: "Project",           value: str(d.project) },
+      { label: "Module name",       value: str(d.moduleName) },
+      { label: "Provider",          value: str(d.provider) },
+      { label: "Terraform version", value: str(d.terraformVersion) },
+      { label: "Billable RUM",      value: str(d.billableRum) },
+      { label: "Source type",       value: str(d.sourceType) },
+      { label: "Source ID",         value: str(d.sourceId) },
+      { label: "Source updated at", value: str(d.sourceUpdatedAt) },
+    ];
+  }
+  if (activeType === "Policy Sets") {
+    return [
+      { label: "Name",       value: str(node.label) },
+      { label: "Policies",   value: str(node.secondary) },
+      { label: "Mode",       value: str(d.mode) },
+      { label: "Scope",      value: str(d.scope) },
+      { label: "Workspaces", value: str(d.workspaces) },
+    ];
+  }
+  // Generic fallback
+  return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
+}
+
+type OverlayInfo = { workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] };
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
+  const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
+  const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
@@ -1233,7 +1556,6 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
     setZoom({ tx: 0, ty: 0, scale: 1 });
     setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   }, [activeType, refreshKey]);
-
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
@@ -1244,40 +1566,236 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [providerSourceFilter, setProviderSourceFilter] = useState("");
   const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
-  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions), [activeType, conditions]);
-  const forcePositions = useMemo(() => runForceLayout(nodes, edges), [nodes, edges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const stackedPositions = useMemo(() => runStackedLayout(nodes), [nodes]);
-  const radialPositions = useMemo(() => runRadialLayout(nodes), [nodes]);
-  const positions = topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
+
+  // Workspace grouping: in ring mode we pass nodes/edges through unchanged — ring positions are
+  // computed separately below and rendered as SVG ellipses behind the nodes.
+  const { nodes, edges } = useMemo(() => {
+    // In grouped mode we keep all workspace nodes but drop all edges (rings replace topology)
+    if (activeType === "Workspaces" && wsGroupMode !== "none") return { nodes: rawNodes, edges: [] as TopoEdge[] };
+    return { nodes: rawNodes, edges: rawEdges };
+  }, [rawNodes, rawEdges, activeType, wsGroupMode]);
+
+  // Ring cluster data — computed only in Workspaces grouped mode
+  type RingDatum = { id: string; label: string; cx: number; cy: number; rx: number; ry: number; color: string; count: number; nodeIds: string[] };
+  const ringData = useMemo((): RingDatum[] => {
+    if (activeType !== "Workspaces" || wsGroupMode === "none") return [];
+
+    const groupKey = (n: TopoNode): string =>
+      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
+
+    // Bucket workspace nodes into groups
+    const groups = new Map<string, string[]>();
+    for (const n of rawNodes) {
+      const k = groupKey(n);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(n.id);
+    }
+
+    const ringColor = wsGroupMode === "project" ? "#6366f1" : "#f59e0b";
+    const ringList = [...groups.entries()].map(([label, nodeIds]) => ({ label, nodeIds }));
+
+    // Ring radii: scale with sqrt(count) so bigger groups get more space
+    const rings = ringList.map(r => {
+      const count = r.nodeIds.length;
+      const rx = Math.max(90, Math.sqrt(count) * 55);
+      const ry = Math.max(60, Math.sqrt(count) * 38);
+      return { ...r, rx, ry, count };
+    });
+
+    // Place ring centers via a mini force simulation — rings repel each other, center-attracted
+    const cx0 = VW / 2;
+    const cy0 = VH / 2;
+    const ringPos = rings.map((_, i) => {
+      const angle = (2 * Math.PI * i) / rings.length - Math.PI / 2;
+      const spread = Math.min(VW, VH) * 0.28;
+      return { x: cx0 + spread * Math.cos(angle), y: cy0 + spread * Math.sin(angle) };
+    });
+    const ringVel = rings.map(() => ({ x: 0, y: 0 }));
+    for (let iter = 0; iter < 240; iter++) {
+      for (let a = 0; a < rings.length; a++) {
+        for (let b = a + 1; b < rings.length; b++) {
+          const dx = ringPos[a].x - ringPos[b].x || 0.1;
+          const dy = ringPos[a].y - ringPos[b].y || 0.1;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minDist = rings[a].rx + rings[b].rx + 60;
+          if (dist < minDist) {
+            const push = (minDist - dist) / dist * 1.2;
+            ringVel[a].x += dx * push; ringVel[a].y += dy * push;
+            ringVel[b].x -= dx * push; ringVel[b].y -= dy * push;
+          }
+        }
+      }
+      for (let a = 0; a < rings.length; a++) {
+        // Pull toward canvas center
+        ringVel[a].x += (cx0 - ringPos[a].x) * 0.015;
+        ringVel[a].y += (cy0 - ringPos[a].y) * 0.015;
+        ringVel[a].x *= 0.75; ringVel[a].y *= 0.75;
+        const pad = rings[a].rx + 50;
+        ringPos[a].x = Math.max(pad, Math.min(VW - pad, ringPos[a].x + ringVel[a].x));
+        ringPos[a].y = Math.max(rings[a].ry + 50, Math.min(VH - rings[a].ry - 50, ringPos[a].y + ringVel[a].y));
+      }
+    }
+
+    return rings.map((r, i) => ({
+      id: `ring-${wsGroupMode}-${r.label}`,
+      label: r.label,
+      cx: ringPos[i].x,
+      cy: ringPos[i].y,
+      rx: r.rx,
+      ry: r.ry,
+      color: ringColor,
+      count: r.count,
+      nodeIds: r.nodeIds,
+    }));
+  }, [rawNodes, activeType, wsGroupMode]);
+
+  // When grouping is active, override node positions: scatter nodes inside their ring using
+  // a bounded force layout (nodes repel within ring, ring center-attraction keeps them inside)
+  const groupedPositions = useMemo((): Map<string, { x: number; y: number }> | null => {
+    if (activeType !== "Workspaces" || wsGroupMode === "none" || ringData.length === 0) return null;
+    const pos = new Map<string, { x: number; y: number }>();
+    // Seed: distribute nodes around a small circle inside their ring
+    for (const ring of ringData) {
+      ring.nodeIds.forEach((id, i) => {
+        const angle = (2 * Math.PI * i) / ring.nodeIds.length - Math.PI / 2;
+        const seedR = Math.min(ring.rx, ring.ry) * 0.45;
+        pos.set(id, { x: ring.cx + seedR * Math.cos(angle), y: ring.cy + seedR * Math.sin(angle) });
+      });
+    }
+    const vel = new Map<string, { x: number; y: number }>();
+    for (const ring of ringData) ring.nodeIds.forEach(id => vel.set(id, { x: 0, y: 0 }));
+
+    const nodeToRing = new Map<string, RingDatum>();
+    for (const ring of ringData) for (const id of ring.nodeIds) nodeToRing.set(id, ring);
+
+    const allIds = [...pos.keys()];
+    for (let iter = 0; iter < 280; iter++) {
+      // Repulsion between all nodes
+      for (let a = 0; a < allIds.length; a++) {
+        for (let b = a + 1; b < allIds.length; b++) {
+          const pa = pos.get(allIds[a])!;
+          const pb = pos.get(allIds[b])!;
+          const dx = pa.x - pb.x || 0.1;
+          const dy = pa.y - pb.y || 0.1;
+          const dist2 = Math.max(dx * dx + dy * dy, 100);
+          const dist = Math.sqrt(dist2);
+          const force = 1800 / dist2;
+          const fx = (force * dx) / dist;
+          const fy = (force * dy) / dist;
+          vel.get(allIds[a])!.x += fx; vel.get(allIds[a])!.y += fy;
+          vel.get(allIds[b])!.x -= fx; vel.get(allIds[b])!.y -= fy;
+        }
+      }
+      // Per-node: attract to ring center, clamp inside ring ellipse
+      for (const id of allIds) {
+        const ring = nodeToRing.get(id)!;
+        const p = pos.get(id)!;
+        const v = vel.get(id)!;
+        // Attract toward ring center
+        v.x += (ring.cx - p.x) * 0.06;
+        v.y += (ring.cy - p.y) * 0.06;
+        v.x *= 0.72; v.y *= 0.72;
+        let nx = p.x + v.x;
+        let ny = p.y + v.y;
+        // Keep inside ring ellipse (soft clamp)
+        const edx = (nx - ring.cx) / (ring.rx - NODE_R - 8);
+        const edy = (ny - ring.cy) / (ring.ry - NODE_R - 8);
+        const enorm = Math.sqrt(edx * edx + edy * edy);
+        if (enorm > 1) { nx = ring.cx + (edx / enorm) * (ring.rx - NODE_R - 8); ny = ring.cy + (edy / enorm) * (ring.ry - NODE_R - 8); }
+        p.x = nx; p.y = ny;
+      }
+    }
+    return pos;
+  }, [ringData, activeType, wsGroupMode]);
+
+  // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
+  // of all resourceRows belonging to that workspace, plus the workspace node itself.
+  const resourceOverlay = useMemo(() => {
+    if (!viewResourcesWsName) return null;
+    // Use the count stored on the node (matches "Resource count" in the popover).
+    // Generate that many synthetic resource rows so the list matches exactly.
+    const count = viewResourcesCount;
+    const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
+    const baseRows = resourceRows.filter(r => r.workspace === viewResourcesWsName);
+    // Build a list of `count` rows: real rows first, then synthetic repeats with unique ids.
+    const syntheticRows = Array.from({ length: count }, (_, i) => {
+      const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
+      return { ...base, id: `syn-${i}`, workspace: viewResourcesWsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
+    });
+    const overlayNodes: TopoNode[] = [];
+    const overlayEdgeSet = new Set<string>();
+    const overlayEdges: TopoEdge[] = [];
+    function addOEdge(a: string, b: string) {
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!overlayEdgeSet.has(key)) { overlayEdgeSet.add(key); overlayEdges.push({ source: a, target: b }); }
+    }
+    const bySubtype = new Map<string, string[]>();
+    const wsNodeId = `ws-res-ov-${viewResourcesWsName}`;
+    overlayNodes.push({ id: wsNodeId, label: viewResourcesWsName, type: "workspace", secondary: `${count} res`, data: { name: viewResourcesWsName } });
+    syntheticRows.forEach((row, i) => {
+      const subType = SUBTYPES[i % 5];
+      const nodeId = `res-ov-${row.id}`;
+      overlayNodes.push({ id: nodeId, label: row.address, type: "resource", secondary: row.type, data: {
+        type: row.type, name: row.name, address: row.address, workspace: row.workspace,
+        project: row.project, moduleName: row.moduleName, provider: row.provider,
+        terraformVersion: row.terraformVersion, billableRum: row.billableRum,
+        sourceType: row.sourceType, sourceId: row.sourceId, sourceUpdatedAt: row.sourceUpdatedAt,
+      } });
+      if (!bySubtype.has(`resource-${subType}`)) bySubtype.set(`resource-${subType}`, []);
+      bySubtype.get(`resource-${subType}`)!.push(nodeId);
+      addOEdge(nodeId, wsNodeId);
+    });
+    for (const [, ids] of bySubtype) {
+      for (let i = 0; i < ids.length - 1; i++) addOEdge(ids[i], ids[i + 1]);
+    }
+    return { nodes: overlayNodes, edges: overlayEdges };
+  }, [viewResourcesWsName, viewResourcesCount]);
+  const activeNodes = resourceOverlay ? resourceOverlay.nodes : nodes;
+  const activeEdges = resourceOverlay ? resourceOverlay.edges : edges;
+  const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
+  const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
+
+  // In grouped Workspaces mode, use bounded ring positions instead of the global force layout
+  const positions = groupedPositions ?? (topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions);
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
+    if (resourceOverlay) return activeNodes;
     if (activeType === "Providers" && (providerSourceFilter || providerVersionFilter)) {
-      return nodes.filter(n =>
+      return activeNodes.filter(n =>
         (!providerSourceFilter || String(n.data?.name ?? "").toLowerCase().includes(providerSourceFilter.toLowerCase())) &&
         (!providerVersionFilter || String(n.data?.version ?? "").toLowerCase().includes(providerVersionFilter.toLowerCase()))
       );
     }
     if (activeType === "Resources" && selectedWorkspace !== null) {
-      return nodes.filter(n =>
+      return activeNodes.filter(n =>
         n.data?.workspace === selectedWorkspace ||
         (n.type === "workspace" && n.data?.name === selectedWorkspace)
       );
     }
-    return nodes;
-  }, [nodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace]);
+    return activeNodes;
+  }, [activeNodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace, resourceOverlay]);
+
+  // Mirror the same 30% isolation stride used in buildTopoGraph.
+  // We compute against the full nodes array (pre-filter) so the isolated set is stable.
+  const isolatedNodeIds = useMemo(() => {
+    const connectedIds = new Set(activeEdges.flatMap(e => [e.source, e.target]));
+    return new Set(activeNodes.filter(n => !connectedIds.has(n.id)).map(n => n.id));
+  }, [activeNodes, activeEdges]);
 
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes]);
 
   const visibleEdges = useMemo(() =>
-    edges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
-    [edges, visibleNodeIds]
+    activeEdges.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)),
+    [activeEdges, visibleNodeIds]
   );
 
   const neighborSet = useMemo(() => {
     if (!selectedId) return new Set<string>();
     const s = new Set<string>();
-    for (const e of edges) {
+    for (const e of activeEdges) {
       if (e.source === selectedId) s.add(e.target);
       if (e.target === selectedId) s.add(e.source);
     }
@@ -1287,29 +1805,40 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const hoverNeighborSet = useMemo(() => {
     if (!hoveredId) return new Set<string>();
     const s = new Set<string>();
-    for (const e of edges) {
+    for (const e of activeEdges) {
       if (e.source === hoveredId) s.add(e.target);
       if (e.target === hoveredId) s.add(e.source);
     }
     return s;
   }, [hoveredId, edges]);
 
-  // Blast radius: all nodes reachable from blastRadiusId via any edge path
-  const blastRadiusSet = useMemo(() => {
-    if (!blastRadiusId) return new Set<string>();
+  // Blast radius: BFS depth map for all reachable nodes + visible set limited to 1 hop
+  const { blastRadiusSet, blastDepthMap } = useMemo(() => {
+    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>() };
     const visited = new Set<string>([blastRadiusId]);
-    const queue = [blastRadiusId];
+    const depthMap = new Map<string, number>([[blastRadiusId, 0]]);
+    const queue: string[] = [blastRadiusId];
     while (queue.length) {
       const cur = queue.shift()!;
-      for (const e of edges) {
+      const curDepth = depthMap.get(cur)!;
+      for (const e of activeEdges) {
         const neighbor = e.source === cur ? e.target : e.target === cur ? e.source : null;
-        if (neighbor && !visited.has(neighbor)) { visited.add(neighbor); queue.push(neighbor); }
+        if (neighbor && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          depthMap.set(neighbor, curDepth + 1);
+          queue.push(neighbor);
+        }
       }
     }
-    return visited;
-  }, [blastRadiusId, edges]);
+    // Only show one hop in each direction — depth 0 (origin) + depth 1 (immediate neighbours)
+    const visibleSet = new Set<string>();
+    for (const [id, depth] of depthMap) {
+      if (depth <= 1) visibleSet.add(id);
+    }
+    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap };
+  }, [blastRadiusId, activeEdges]);
 
-  const selectedNode = nodes.find(n => n.id === selectedId) ?? null;
+  const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
 
   function getSVGPoint(clientX: number, clientY: number) {
@@ -1484,6 +2013,14 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
               100% { opacity: 1; transform: scale(1); }
             }
           `}</style>
+          {/* Orange arrowhead — downstream edges, tip at end (markerEnd) */}
+          <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#f97316" />
+          </marker>
+          {/* Purple arrowhead — upstream edges, tip at start (markerStart), so reversed: tip points left */}
+          <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+          </marker>
         </defs>
 
         {/* Drag + deselect backdrop — outside zoom group so it covers full canvas */}
@@ -1497,13 +2034,59 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
 
         {/* Zoomable content */}
         <g transform={groupTransform}>
-          {/* Edges — hidden entirely in blast radius mode */}
-          {!blastRadiusId && visibleEdges.map((edge, i) => {
+          {/* Ring cluster ellipses — rendered behind everything else in Workspaces grouped mode */}
+          {ringData.map(ring => (
+            <g key={ring.id}>
+              {/* Filled area */}
+              <ellipse
+                cx={ring.cx} cy={ring.cy}
+                rx={ring.rx} ry={ring.ry}
+                fill={ring.color}
+                fillOpacity={themeMode === "light" ? 0.06 : 0.09}
+                stroke="none"
+              />
+              {/* Border */}
+              <ellipse
+                cx={ring.cx} cy={ring.cy}
+                rx={ring.rx} ry={ring.ry}
+                fill="none"
+                stroke={ring.color}
+                strokeWidth={1.5 / scale}
+                strokeOpacity={0.55}
+                strokeDasharray={`${6 / scale} ${3 / scale}`}
+              />
+              {/* Label at top edge of ellipse */}
+              <text
+                x={ring.cx}
+                y={ring.cy - ring.ry - 9 / scale}
+                textAnchor="middle"
+                fill={ring.color}
+                fontSize={11 / scale}
+                fontWeight="700"
+                fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif"
+                opacity={0.9}
+              >
+                {ring.label} · {ring.count}
+              </text>
+            </g>
+          ))}
+
+          {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
+          {visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
             const pt = positions.get(edge.target);
             if (!ps || !pt) return null;
+            // Only edges directly touching the origin (depth 0) count as blast edges.
+            // Peer edges between two depth-1 nodes stay grey and visible.
+            const isBlastEdge = blastRadiusId
+              ? (blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0) &&
+                blastRadiusSet.has(edge.source) && blastRadiusSet.has(edge.target)
+              : false;
             const activeId = hoveredId ?? selectedId;
             const isLit = !activeId || edge.source === activeId || edge.target === activeId;
+            const opacity = blastRadiusId
+              ? (isBlastEdge ? 0 : 0.06)
+              : (activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1);
             return (
               <path
                 key={i}
@@ -1513,8 +2096,47 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                 strokeWidth={1 / scale}
                 strokeDasharray={`${5 / scale} ${4 / scale}`}
                 strokeLinecap="round"
-                opacity={activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1}
+                opacity={opacity}
                 style={{ transition: "opacity 0.2s ease" }}
+              />
+            );
+          })}
+
+          {/* Blast radius edges — only origin↔neighbour edges get orange/purple arrows */}
+          {blastRadiusId && visibleEdges.map((edge, i) => {
+            const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
+            if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
+            const ps = positions.get(edge.source);
+            const pt = positions.get(edge.target);
+            if (!ps || !pt) return null;
+            const depthSource = blastDepthMap.get(edge.source) ?? 0;
+            const depthTarget = blastDepthMap.get(edge.target) ?? 0;
+            // downstream: origin → outward (depth increases). upstream: back toward origin.
+            const isDownstream = depthSource <= depthTarget;
+            const color = isDownstream ? "#f97316" : "#a855f7";
+            // For downstream: draw from upstream node toward downstream node, arrowhead at end.
+            // For upstream: draw from the far node toward origin, arrowhead at start (the far node end).
+            const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
+            // Pull back the arrowhead end so the tip lands at the node boundary
+            const dx = toPos.x - fromPos.x;
+            const dy = toPos.y - fromPos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const pullBack = (NODE_R + 2) / scale;
+            const ex = toPos.x - (dx / dist) * pullBack;
+            const ey = toPos.y - (dy / dist) * pullBack;
+            // Also pull back the start for upstream so the arrowhead tip lands at the far node boundary
+            const sx = isDownstream ? fromPos.x : fromPos.x + (dx / dist) * pullBack;
+            const sy = isDownstream ? fromPos.y : fromPos.y + (dy / dist) * pullBack;
+            return (
+              <path
+                key={`blast-${i}`}
+                d={curvePath(sx, sy, ex, ey)}
+                fill="none"
+                stroke={color}
+                strokeWidth={1 / scale}
+                strokeLinecap="round"
+                markerEnd={isDownstream ? "url(#blast-arrow-downstream)" : undefined}
+                markerStart={!isDownstream ? "url(#blast-arrow-upstream)" : undefined}
               />
             );
           })}
@@ -1526,6 +2148,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             const isSelected = node.id === selectedId;
             const isNeighbor = neighborSet.has(node.id);
             const isHovered = node.id === hoveredId;
+            const isIsolated = isolatedNodeIds.has(node.id);
             const isHoverNeighbor = hoverNeighborSet.has(node.id);
             const inBlastRadius = blastRadiusId ? blastRadiusSet.has(node.id) : false;
             const isBlastOrigin = node.id === blastRadiusId;
@@ -1536,6 +2159,8 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                 : (!!selectedId && !isSelected && !isNeighbor);
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
+            const nR = NODE_R;
+            const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
             const hasNodeGlow = isHovered || isSelected || Boolean(blastRadiusId && inBlastRadius);
@@ -1554,21 +2179,21 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                   key={`${node.id}-${activeType}-${refreshKey}`}
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
-                  {hasNodeGlow && <circle r={NODE_R + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
-                  {hasNodeGlow && <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
-                  <foreignObject x={-NODE_R} y={-NODE_R} width={NODE_R * 2} height={NODE_R * 2}>
+                  {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
+                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
+                  <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
                     {(() => {
                       const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
                       return (
-                        <div style={{ width: NODE_R * 2, height: NODE_R * 2, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Icon size={NODE_R} color="white" strokeWidth={1.75} />
+                        <div style={{ width: nSize, height: nSize, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icon size={nR} color="white" strokeWidth={1.75} />
                         </div>
                       );
                     })()}
                   </foreignObject>
-                  <text y={NODE_R + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
-                  <text y={NODE_R + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
               </g>
             );
@@ -1578,14 +2203,63 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
         {/* End zoomable content */}
       </svg>
 
-      {/* Popover — top right, fixed position */}
-      {selectedNode && (() => {
+      {/* Resource-view popover — independent of selectedNode, shown whenever overlay is active */}
+      {viewResourcesWsName && (() => {
+        const resNodes = resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
+        return (
+          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <button
+              onClick={() => { setViewResourcesWsName(null); onOverlayWorkspaceChange?.(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); setViewResourcesCount(0); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              ← exit resource view
+            </button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewResourcesWsName}</div>
+            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+              {resNodes.length} resource{resNodes.length !== 1 ? "s" : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+              {resNodes.map(n => (
+                <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                    <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: "capitalize" }}>{n.secondary}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Popover — top right, fixed position, for selected nodes */}
+      {selectedNode && !viewResourcesWsName && (() => {
         const isWorkspace = selectedNode.type === "workspace";
         const d = selectedNode.data as Record<string, unknown>;
 
         // Workspace blast radius popover
         if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
-          const downstreamCount = blastRadiusSet.size - 1; // exclude origin
+          // Split immediate neighbours into downstream (edge: origin→node) and upstream (edge: node→origin)
+          const downstreamIds = new Set<string>();
+          const upstreamIds = new Set<string>();
+          for (const e of activeEdges) {
+            if (e.source === blastRadiusId && blastRadiusSet.has(e.target)) downstreamIds.add(e.target);
+            if (e.target === blastRadiusId && blastRadiusSet.has(e.source)) upstreamIds.add(e.source);
+          }
+          const nodeById = new Map(activeNodes.map(n => [n.id, n]));
+          const downstreamNodes = [...downstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
+          const upstreamNodes = [...upstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
+
+          const nodeRow = (n: typeof activeNodes[number], accent: string) => (
+            <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</div>
+              </div>
+            </div>
+          );
+
           return (
             <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
               {/* Exit button */}
@@ -1596,10 +2270,30 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
                 ← exit blast view
               </button>
               {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 6 }}>{selectedNode.label}</div>
-              {/* Subtitle */}
-              <div style={{ fontSize: 13, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)" }}>
-                {downstreamCount > 0 ? `${downstreamCount} downstream workspace${downstreamCount > 1 ? "s" : ""}` : "no downstream workspaces"}
+              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{selectedNode.label}</div>
+
+              {/* Downstream section */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#f97316" /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#b45309" : "#fb923c", textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
+                </div>
+                {downstreamNodes.length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, "#f97316"))}</div>
+                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+                }
+              </div>
+
+              {/* Upstream section */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#a855f7" /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#7c3aed" : "#c084fc", textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
+                </div>
+                {upstreamNodes.length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, "#a855f7"))}</div>
+                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+                }
               </div>
             </div>
           );
@@ -1616,36 +2310,33 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
               {/* Title */}
               <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{selectedNode.label}</div>
 
-              {/* Key-value rows */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 14 }}>
-                {[["org", d.org], ["project", d.project], ["resources", d.resources]].map(([k, v]) => (
-                  <div key={String(k)} style={{ display: "flex", gap: 0 }}>
-                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", width: 80, flexShrink: 0 }}>{String(k)}</span>
-                    <span style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", fontFamily: "ui-monospace, 'SF Mono', monospace" }}>{String(v ?? "—")}</span>
+              {/* Key-value rows — all table columns */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, maxHeight: 340, overflowY: "auto" }}>
+                {getNodeFields(selectedNode, activeType).map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
+                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
                   </div>
                 ))}
-              </div>
-
-              {/* Output Consumers box */}
-              <div style={{ background: themeMode === "light" ? "rgba(79,110,247,0.06)" : "rgba(255,255,255,0.04)", borderLeft: "3px solid #4f6ef7", borderRadius: "0 6px 6px 0", padding: "10px 12px", marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: themeMode === "light" ? "#4f6ef7" : "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>Output Consumers</div>
-                <div style={{ fontSize: 12, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>no workspaces access this workspace's outputs</div>
-              </div>
-
-              {/* Providers */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", marginBottom: 6 }}>providers</div>
-                <ul style={{ margin: 0, padding: "0 0 0 16px" }}>
-                  {providers.length ? providers.map(p => (
-                    <li key={p} style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>{p}</li>
-                  )) : <li style={{ fontSize: 12, color: themeMode === "light" ? "#9b9cb8" : "rgba(255,255,255,0.35)", lineHeight: 1.6 }}>none</li>}
-                </ul>
               </div>
 
               {/* Action buttons */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
-                  onClick={() => onViewResources?.(selectedNode.label)}
+                  onClick={() => {
+                    const count = Number((selectedNode.data as Record<string, unknown>).resources ?? 0);
+                    const wsName = selectedNode.label;
+                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
+                    const synRows = Array.from({ length: count }, (_, i) => {
+                      const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
+                      return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
+                    });
+                    setViewResourcesWsName(wsName);
+                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: synRows });
+                    setViewResourcesCount(count);
+                    setSelectedId(null);
+                    setZoom({ tx: 0, ty: 0, scale: 1 });
+                  }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View resources <span>→</span>
@@ -1661,8 +2352,8 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
           );
         }
 
-        // Generic popover for all other node types
-        const fields = Object.entries(d);
+        // Generic popover for all other node types — uses column-label key-value pairs
+        const fields = getNodeFields(selectedNode, activeType);
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 272, background: themeMode === "light" ? "#ffffff" : "#1c1e2b", borderRadius: 10, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "14px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 12px 40px rgba(0,0,0,0.65)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1679,13 +2370,31 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             </div>
             <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
-              {fields.map(([key, value]) => (
-                <div key={key} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, textTransform: "capitalize", lineHeight: 1.5, flexShrink: 0 }}>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</span>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{String(value)}</span>
+              {fields.map(({ label, value }) => (
+                <div key={label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, lineHeight: 1.5, flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
                 </div>
               ))}
             </div>
+            {isWorkspace && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+                <button
+                  onClick={() => {
+                    const wsName = selectedNode.label;
+                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
+                    setViewResourcesWsName(wsName);
+                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: baseRows });
+                    setViewResourcesCount(0);
+                    setSelectedId(null);
+                    setZoom({ tx: 0, ty: 0, scale: 1 });
+                  }}
+                  style={{ width: "100%", height: 34, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                >
+                  View resources <span>→</span>
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1698,7 +2407,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
           return (
             <button
               key={layout}
-              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }} // zoom already resets
               style={{
                 height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
                 borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
@@ -1743,6 +2452,16 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
 
       {/* Zoom controls — bottom right, above layout switcher */}
       <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* Table view toggle — only in View All views and not while blast radius is active */}
+        {onTableViewToggle && !blastRadiusId && (
+          <button
+            onClick={onTableViewToggle}
+            title={tableViewOpen ? "Close table view" : "Open table view"}
+            style={{ width: 30, height: 30, borderRadius: 6, border: tableViewOpen ? "1px solid rgba(16,96,255,0.4)" : (themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)"), background: tableViewOpen ? "rgba(16,96,255,0.12)" : (themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)"), color: tableViewOpen ? "#1060ff" : (themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <ListOrdered size={13} />
+          </button>
+        )}
         <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
         <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
         <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
@@ -1751,14 +2470,14 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
             const isInitial =
               !selectedId && !blastRadiusId &&
               zoom.tx === 0 && zoom.ty === 0 && zoom.scale === 1 &&
-              topoLayout === "force" &&
+              topoLayout === "radial" &&
               selectedWorkspace === (initialWorkspace ?? null) &&
               !providerSourceFilter && !providerVersionFilter;
             if (!isInitial) {
               setSelectedId(null);
               setBlastRadiusId(null);
               setZoom({ tx: 0, ty: 0, scale: 1 });
-              setTopoLayout("force");
+              setTopoLayout("radial");
               setSelectedWorkspace(initialWorkspace ?? null);
               setProviderSourceInput("");
               setProviderVersionInput("");
@@ -1785,12 +2504,10 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   module: "Module",
   provider: "Provider",
   "terraform-version": "TF Version",
-  "resource-compute": "Compute",
-  "resource-identity": "Identity",
-  "resource-networking": "Networking",
-  "resource-security": "Security",
-  "resource-storage": "Storage & Data",
+  "resource": "Resource",
   "policy-set": "Policy Set",
+  "ws-group-project": "Project",
+  "ws-group-status": "Status",
 };
 
 function TopoLegend({ activeType: _activeType, nodes, themeMode = "dark" }: { activeType: string; nodes: TopoNode[]; themeMode?: "light" | "dark" }) {
@@ -2026,11 +2743,11 @@ function InlineQueryBuilder({
   );
 }
 
-function SlideInWorkspacesTable({ conditions }: { conditions: ConditionFilter[] }) {
+function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[] }) {
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const columns = tableColumns;
+  const columns = tableColumns.filter(column => visibleColumnIds.includes(column.id));
 
   function valueForColumn(row: typeof workspaceRows[number], columnId: string): string | number | boolean {
     const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
@@ -2045,9 +2762,10 @@ function SlideInWorkspacesTable({ conditions }: { conditions: ConditionFilter[] 
     }[columnId] ?? "";
   }
 
+  const baseRows = rowsOverride ?? workspaceRows;
   const filteredRows = useMemo(() => {
-    if (!conditions.length) return workspaceRows;
-    return workspaceRows.filter(row =>
+    if (!conditions.length) return baseRows;
+    return baseRows.filter(row =>
       conditions.every(c => {
         const col = tableColumns.find(column => column.id === c.fieldId);
         const val = valueForColumn(row, c.fieldId);
@@ -2092,9 +2810,9 @@ function SlideInWorkspacesTable({ conditions }: { conditions: ConditionFilter[] 
         <table className="min-w-[5000px] table-fixed border-collapse text-left">
           <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
-              <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
-              {columns.map(column => (
-                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`}>
+              <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, zIndex: 3, background: "#f1f2f3" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
+              {columns.map((column, ci) => (
+                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 3, background: "#f1f2f3" } : undefined}>
                   <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
                     <span>{column.label}</span>
                     <SortControl />
@@ -2103,7 +2821,7 @@ function SlideInWorkspacesTable({ conditions }: { conditions: ConditionFilter[] 
               ))}
             </tr>
           </thead>
-          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center"><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map(column => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
+          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
         </table>
       </div>
       <TablePagination
@@ -2119,83 +2837,186 @@ function SlideInWorkspacesTable({ conditions }: { conditions: ConditionFilter[] 
   );
 }
 
-function SlideInTypeDataTable({ columns: sourceColumns, rows, tableMinWidth = "min-w-[1600px]" }: { columns: ReadonlyArray<{ id: string; label: string; width?: string }>; rows: ReadonlyArray<Record<string, unknown>>; tableMinWidth?: string }) {
-  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const columns = sourceColumns;
-
-  const filteredRows = useMemo(() => rows, [rows]);
-
-  const sorted = useMemo(() => {
-    if (!sort) return filteredRows;
-    return [...filteredRows].sort((left, right) => {
-      const a = String(left[sort.id] ?? ""); const b = String(right[sort.id] ?? "");
-      const comparison = a.localeCompare(b, undefined, { numeric: true });
-      return sort.direction === "asc" ? comparison : -comparison;
-    });
-  }, [filteredRows, sort]);
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const pageRows = sorted.slice((page - 1) * pageSize, page * pageSize);
-
-  function toggleSort(id: string) { setSort(current => current?.id === id ? { id, direction: current.direction === "asc" ? "desc" : "asc" } : { id, direction: "asc" }); setPage(1); }
-  function displayValue(row: Record<string, unknown>, id: string) {
-    const value = row[id];
-    if (["name", "workspace", "workspaces", "provider", "version", "workspaceCount", "policyCount", "projects"].includes(id)) return <a href="#table-cell" onClick={event => event.preventDefault()} className="text-[#1060ff] underline underline-offset-2">{String(value ?? "—")}</a>;
-    if (typeof value === "boolean") return value ? "true" : "false";
-    return String(value ?? "—");
+function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null }) {
+  // When a workspace resource overlay is active, show the full ResourcesTable with the exact rows the graph shows.
+  if (overlayInfo) {
+    return <ResourcesTable
+      visibleColumnIds={resourceTableColumns.map(c => c.id)}
+      conditions={[]}
+      onNavigate={onNavigate}
+      onSelectResource={onSelectResource}
+      sourceRows={overlayInfo.rows as typeof resourceRows}
+    />;
   }
-
-  return <div className="flex min-h-0 flex-1 flex-col">
-    <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
-      <table className={`${tableMinWidth} table-fixed border-collapse text-left`}>
-        <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
-          <tr>
-            
-            {columns.map(column => (
-              <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width ?? "w-[180px]"}`}>
-                <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
-                  <span>{column.label}</span>
-                  <SortControl />
-                </button>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="text-[12px] text-[#52525b]">
-          {pageRows.map((row, index) => (
-            <tr key={String(row.id ?? `${index}-${page}`)} className="h-12 border-t border-[#dedfe3] bg-white">
-              
-              {columns.map(column => (
-                <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width ?? "w-[180px]"}`}>
-                  {displayValue(row, column.id)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <TablePagination
-      currentPage={page}
-      totalPages={totalPages}
-      totalItems={sorted.length}
-      pageSize={pageSize}
-      onPageChange={setPage}
-      onPageSizeChange={_size => { setPage(1); }}
-      pageSizeOptions={[10, 20, 50, 100]}
-    />
-  </div>;
+  // Reuse the Type details tables directly so the split Table View cannot drift from them.
+  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
+  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} />;
+  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} />;
 }
 
-function TopologyTableView({ type, conditions, onNavigate }: { type: string; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
-  // Reuse the Type details tables directly so the split Table View cannot drift from them.
-  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={terraformVersionTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Resources") return <ResourcesTable visibleColumnIds={resourceTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={moduleTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={providerTableColumns.map(column => column.id)} conditions={conditions} onNavigate={onNavigate} />;
-  return <SlideInWorkspacesTable conditions={conditions} />;
+// ── ActionsDropdown ──────────────────────────────────────────────────────────
+
+function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
+  columns: readonly { id: string; label: string }[];
+  visibleColumnIds: string[];
+  onApply: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [pending, setPending] = useState<string[]>(visibleColumnIds);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync pending when visible columns change from outside (type switch)
+  useEffect(() => { setPending(visibleColumnIds); }, [visibleColumnIds]);
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filteredColumns = search.trim()
+    ? columns.filter(c => c.label.toLowerCase().includes(search.trim().toLowerCase()))
+    : columns;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          height: 32, padding: "0 12px", borderRadius: 6,
+          border: "1px solid rgba(0,0,0,0.15)",
+          background: open ? "rgba(0,0,0,0.05)" : "#fff",
+          color: "#3b3d45", fontSize: 13, fontWeight: 500,
+          cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        Actions
+        <ChevronDown size={13} style={{ opacity: 0.6, transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", right: 0,
+          width: 240, zIndex: 60,
+          background: "#fff", borderRadius: 8,
+          border: "1px solid rgba(0,0,0,0.12)",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+          overflow: "hidden",
+        }}>
+          {/* Save */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Save size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Save
+          </button>
+
+          {/* Download */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Download size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Download
+          </button>
+
+          {/* Copy to clipboard */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Clipboard size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Copy to clipboard
+          </button>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* Narrow results search */}
+          <div style={{ padding: "8px 12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, border: "1px solid #d1d5db", borderRadius: 5, padding: "5px 9px", background: "#fafafa" }}>
+              <Search size={12} style={{ color: "#9ca3af", flexShrink: 0 }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Narrow results"
+                style={{ flex: 1, border: "none", background: "none", outline: "none", fontSize: 12, color: "#374151" }}
+              />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#9ca3af", lineHeight: 1, display: "flex" }}>
+                  <X size={11} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* Deselect / Select all toggle */}
+          <div style={{ padding: "4px 12px" }}>
+            <button type="button"
+              onClick={() => setPending(pending.length === 0 ? columns.map(c => c.id) : [])}
+              style={{ background: "none", border: "none", padding: "4px 0", fontSize: 12, color: "#656a76", cursor: "pointer", fontWeight: 500 }}
+            >
+              {pending.length === 0 ? "Select all" : "Deselect all"}
+            </button>
+          </div>
+
+          <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+          {/* View columns header */}
+          <div style={{ padding: "6px 14px 3px", fontSize: 11, fontWeight: 600, color: "#9ca3af", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            View columns
+          </div>
+
+          {/* Checkbox list */}
+          <div style={{ maxHeight: 200, overflowY: "auto", padding: "2px 0 4px" }}>
+            {filteredColumns.length === 0 && (
+              <div style={{ padding: "8px 14px", fontSize: 12, color: "#9ca3af" }}>No columns match.</div>
+            )}
+            {filteredColumns.map(col => {
+              const checked = pending.includes(col.id);
+              return (
+                <label key={col.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#3b3d45" }}
+                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = "#f5f5f7")}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "none")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => setPending(prev => checked ? prev.filter(id => id !== col.id) : [...prev, col.id])}
+                    style={{ accentColor: "#0f62fe", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                  />
+                  {col.label}
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Apply */}
+          <div style={{ padding: "8px 12px", borderTop: "1px solid #e5e7eb" }}>
+            <button
+              type="button"
+              onClick={() => { onApply(pending.length > 0 ? pending : columns.map(c => c.id)); setOpen(false); }}
+              style={{ width: "100%", height: 32, borderRadius: 6, background: "#0f62fe", border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Explorer Splash ──────────────────────────────────────────────────────────
@@ -2269,11 +3090,16 @@ const USE_CASE_CATEGORIES = [
       "Sentinel policy sets", "OPA sets",
     ],
   },
-  { heading: "Modules", Icon: ModuleIcon, type: "Modules", items: ["Top module versions"] },
-  { heading: "Providers", Icon: Globe, type: "Providers", items: ["Loremipsum"] },
-  { heading: "Resources", Icon: ResourcesIcon, type: "Resources", items: ["Loremipsum"] },
-  { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: ["Top Terraform versions"] },
+  { heading: "Modules", Icon: ModuleIcon, type: "Modules", items: [] },
+  { heading: "Providers", Icon: Globe, type: "Providers", items: [] },
+  { heading: "Resources", Icon: ResourcesIcon, type: "Resources", items: [] },
+  { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: [] },
  ] as const;
+
+// All pre-defined view titles (items + "View All {type}") — table view is allowed only for these
+const PREDEFINED_VIEW_TITLES = new Set<string>([
+  ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
+]);
 
 type SuggestedQuery = {
   type: string;
@@ -2283,12 +3109,89 @@ type SuggestedQuery = {
 };
 
 const SUGGESTED_QUERIES: SuggestedQuery[] = [
-  { type: "Workspaces", label: "Workspaces with failed checks", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Workspaces", label: "Drifted Workspaces", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Workspaces", label: "Workspace VCS source", Icon: WorkspaceIcon, color: "#9b8ff5" },
-  { type: "Terraform Versions", label: "Top Terraform versions", Icon: TerraformIcon, color: "#38bdf8" },
-  { type: "Modules", label: "Top module versions", Icon: ModuleIcon, color: "#2dd4bf" },
+  { type: "Workspaces",        label: "Workspaces with failed checks", Icon: WorkspaceIcon,  color: "#9b8ff5" },
+  { type: "Policy Sets",       label: "Policy sets with failures",     Icon: Shield,          color: "#fbbf24" },
+  { type: "Modules",           label: "Top module versions",           Icon: ModuleIcon,      color: "#2dd4bf" },
+  { type: "Providers",         label: "Providers by workspace count",  Icon: Globe,           color: "#34d399" },
+  { type: "Resources",         label: "Resources by type",             Icon: ResourcesIcon,   color: "#f472b6" },
+  { type: "Terraform Versions", label: "Top Terraform versions",       Icon: TerraformIcon,   color: "#38bdf8" },
 ];
+
+function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
+  themeMode: "light" | "dark";
+  glassText: string;
+  glassMuted: string;
+  onSelect: (type: string, label: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasMore, setHasMore] = useState(true);
+
+  const checkScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasMore(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  };
+
+  useEffect(() => { checkScroll(); }, []);
+
+  return (
+    <div className="mt-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+        Try the following queries based on your usage.
+      </p>
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          onScroll={checkScroll}
+          className="flex flex-col gap-1 overflow-y-auto max-h-[98px]"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {SUGGESTED_QUERIES.map(query => {
+            const Icon = query.Icon;
+            const queryCount = query.type === "Workspaces"
+              ? getWorkspaceRowsForTitle(query.label).length
+              : query.type === "Policy Sets"
+                ? getPolicySetRowsForTitle(query.label).length
+                : query.type === "Modules" ? moduleRows.length
+                : query.type === "Providers" ? providerRows.length
+                : query.type === "Resources" ? resourceRows.length
+                : query.type === "Terraform Versions" ? terraformVersionRows.length
+                : 0;
+            return (
+              <button
+                key={`${query.type}::${query.label}`}
+                type="button"
+                onClick={() => onSelect(query.type, query.label)}
+                className="group flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] active:translate-y-0 active:scale-[0.99]"
+                style={{
+                  background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+                  borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+                }}
+              >
+                <span
+                  className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5"
+                  style={{ background: query.color }}
+                >
+                  <Icon size={10} />
+                </span>
+                <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
+                  {query.label}
+                </span>
+                <span className="shrink-0 rounded-full bg-[#e8eaf0] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#656a76]">{queryCount}</span>
+              </button>
+            );
+          })}
+        </div>
+        {hasMore && (
+          <div
+            className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 transition-opacity duration-200"
+            style={{ background: themeMode === "light" ? "linear-gradient(to bottom, transparent, rgba(255,255,255,0.88))" : "linear-gradient(to bottom, transparent, rgba(19,20,26,0.9))" }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ExplorerSplashView({
   onSelectType,
@@ -2315,22 +3218,36 @@ function ExplorerSplashView({
   queryColumns: readonly any[];
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
 }) {
-  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
+  const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
+  const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
+  const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
+  const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
+  useEffect(() => { setModalConditions([]); setWsGroupMode("none"); }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
-  const [suggestedQueriesVisible, setSuggestedQueriesVisible] = useState(false);
+  const modalQueryColumns =
+    selectedGraphType === "Policy Sets" ? policySetColumns :
+    selectedGraphType === "Modules" ? moduleTableColumns :
+    selectedGraphType === "Providers" ? providerTableColumns :
+    selectedGraphType === "Terraform Versions" ? terraformVersionTableColumns :
+    selectedGraphType === "Resources" ? resourceTableColumns :
+    tableColumns;
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
+  useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
     const matchesType = savedType === "All types" || view.type === savedType;
@@ -2340,7 +3257,7 @@ function ExplorerSplashView({
   function openGraph(type: string, title = type) {
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
-    setSavedViewsOpen(false);
+    setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
   }
 
@@ -2401,12 +3318,12 @@ useEffect(() => {
     };
   }, []);
 
-  const tableResultCount = selectedGraphType === "Policy Sets" ? policySetRows.length
+  const tableResultCount = selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
     : selectedGraphType === "Providers" ? providerRows.length
     : selectedGraphType === "Resources" ? resourceRows.length
     : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
-    : workspaceRows.length;
+    : getWorkspaceRowsForTitle(selectedGraphTitle).length;
 
   const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
@@ -2433,8 +3350,17 @@ useEffect(() => {
         {selectedGraphType ? (
           <TopologyGraph
             activeType={selectedGraphType}
+            graphTitle={selectedGraphTitle}
             conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
             themeMode={themeMode} setThemeMode={setThemeMode}
+            tableViewOpen={tableViewOpen}
+            onTableViewToggle={selectedGraphTitle && PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) ? () => {
+              setTableViewOpen(open => !open);
+              if (!tableViewOpen) setConditionsExpanded(false);
+            } : undefined}
+            onOverlayWorkspaceChange={setOverlayInfo}
+            wsGroupMode={wsGroupMode}
+            setWsGroupMode={setWsGroupMode}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
@@ -2446,112 +3372,9 @@ useEffect(() => {
               <p className="mt-1 text-[13px] leading-5" style={{ color: glassMuted }}>Select a Type or Use case to explore your Infrastructure.</p>
             </div>
 
-            {/* Suggested queries — only in empty state, hidden by default */}
-            <div className="w-full max-w-[480px]">
-              <div className="flex items-center justify-center gap-1 px-1 mb-2">
-                <span className="text-[13px] font-semibold" style={{ color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.9)" }}>
-                  Try the following queries based on your usage.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSuggestedQueriesVisible(v => !v)}
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full border bg-white/40 shadow-sm backdrop-blur-md transition-colors hover:bg-white/60"
-                  style={{ color: glassMuted, borderColor: themeMode === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)" }}
-                  aria-label={suggestedQueriesVisible ? "Hide suggested queries" : "Show suggested queries"}
-                >
-                  <ChevronDown
-                    size={13}
-                    style={{
-                      transition: "transform 0.2s ease",
-                      transform: suggestedQueriesVisible ? "rotate(0deg)" : "rotate(-90deg)",
-                    }}
-                  />
-                </button>
-              </div>
-
-              <AnimatePresence>
-                {suggestedQueriesVisible && (
-                  <motion.div
-                    key="suggested-queries-list"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 4 }}
-                    transition={{ duration: 0.18, ease: "easeOut" }}
-                    className="flex flex-col gap-1.5"
-                  >
-                    {SUGGESTED_QUERIES.map(query => {
-                      const Icon = query.Icon;
-                      return (
-                        <button
-                          key={`${query.type}::${query.label}`}
-                          type="button"
-                          onClick={() => {
-                            openGraph(query.type, query.label);
-                            setSuggestedQueriesVisible(false);
-                          }}
-                          className="group flex w-full items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3 text-left shadow-[0_4px_12px_rgba(0,0,0,0.08)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_6px_16px_rgba(0,0,0,0.12)] active:translate-y-[0px] active:scale-[0.99] active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-                          style={{
-                            background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
-                            borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                          }}
-                        >
-                          <span
-                            className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-white/20 text-white shadow-sm ring-1 ring-black/5"
-                            style={{ background: query.color }}
-                          >
-                            <Icon size={13} />
-                          </span>
-                          <span className="flex-1 text-[13px] font-medium" style={{ color: glassText }}>
-                            {query.label}
-                          </span>
-                          <div className="flex size-6 items-center justify-center rounded-full bg-black/5 opacity-0 transition-all group-hover:bg-black/10 group-hover:opacity-100 dark:bg-white/5 dark:group-hover:bg-white/10">
-                            <ChevronRight size={14} className="shrink-0" style={{ color: glassMuted }} />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
         )}
       </div>
-
-      {/* Table view tab */}
-      <button
-        type="button"
-        disabled={!selectedGraphType}
-        onClick={() => {
-          setTableViewOpen(open => !open);
-          if (!tableViewOpen) setConditionsExpanded(false);
-        }}
-        style={{
-          position: "fixed",
-          top: 76,
-          right: 0,
-          width: 36,
-          height: 40,
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 2,
-          background: "#fafafa",
-          border: "1px solid #DEDFE3",
-          borderRight: "none",
-          borderRadius: "6px 0 0 6px",
-          boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
-          cursor: "pointer",
-          color: "#656a76",
-          zIndex: 50,
-        }}
-        aria-label={tableViewOpen ? "Close table view" : "Open table view"}
-        title={selectedGraphType ? (tableViewOpen ? "Close table view" : "Open table view") : "Select a Type or Use case first"}
-      >
-        {tableViewOpen && selectedGraphType ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        <ListOrdered size={13} />
-      </button>
 
       {/* Graph table view — centered modal */}
       <AnimatePresence>
@@ -2564,7 +3387,7 @@ useEffect(() => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={() => setTableViewOpen(false)}
+              onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }}
               style={{
                 position: "fixed",
                 inset: 0,
@@ -2614,16 +3437,52 @@ useEffect(() => {
                 {/* Modal header */}
                 <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
                   <div>
-                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>{selectedGraphTitle ?? selectedGraphType}</p>
-                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>
+                      {selectedResourceId ? (resourceRows.find(r => r.id === selectedResourceId)?.address ?? selectedResourceId) : (selectedGraphTitle ?? selectedGraphType)}
+                    </p>
+                    {!selectedResourceId && (
+                      <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                    )}
                   </div>
-                  <button type="button" onClick={() => setTableViewOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
-                    <X size={18} />
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {selectedResourceId ? (
+                      <button
+                        onClick={() => setSelectedResourceId(null)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: `1px solid ${glassBorder}`, background: "rgba(0,0,0,0.04)", color: glassMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+                      >
+                        ← back to table
+                      </button>
+                    ) : (
+                      <ActionsDropdown
+                        columns={modalQueryColumns}
+                        visibleColumnIds={visibleColumnIds}
+                        onApply={setVisibleColumnIds}
+                      />
+                    )}
+                    <button type="button" onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
+                      <X size={18} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto p-5">
-                  <TopologyTableView type={selectedGraphType} conditions={[]} onNavigate={(type) => openGraph(type, type)} />
+                  {selectedResourceId ? (
+                    (() => {
+                      const row = (overlayInfo?.rows ?? resourceRows).find(r => r.id === selectedResourceId)
+                        ?? resourceRows.find(r => r.id === selectedResourceId);
+                      return row ? (
+                        <ResourceDetailView
+                          row={row}
+                          themeMode={themeMode}
+                        />
+                      ) : null;
+                    })()
+                  ) : (
+                    <>
+                      <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} />
+                    </>
+                  )}
                 </div>
               </motion.div>
             </div>
@@ -2631,73 +3490,98 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* Saved Views table panel */}
-      <aside
-        className={`absolute bottom-0 right-0 top-0 z-40 flex flex-col border-l shadow-[-18px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all duration-300 ease-out ${savedViewsOpen ? "translate-x-0" : "pointer-events-none translate-x-full"}`}
-        style={{ width: "50%", background: glassSurface, borderColor: glassBorder }}
-        aria-hidden={!savedViewsOpen}
-      >
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
-          <div>
-            <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
-            <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
-          </div>
-          <button type="button" onClick={() => setSavedViewsOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto p-5">
-          <div className="min-w-0">
-            <div className="mb-4 flex items-center">
-              <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                <Search size={16} strokeWidth={2} />
-                <input
-                  value={savedSearch}
-                  onChange={event => setSavedSearch(event.target.value)}
-                  placeholder="Search"
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
-                  aria-label="Search saved views"
-                />
-              </label>
-              <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
-                  <option>All types</option>
-                  <option>Workspaces</option>
-                  <option>Modules</option>
-                  <option>Terraform Versions</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
-              </label>
+      {/* Saved Views modal */}
+      <AnimatePresence>
+        {savedViewsModalOpen && (
+          <>
+            <motion.div
+              key="saved-views-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSavedViewsModalOpen(false)}
+              style={{ position: "fixed", inset: 0, top: 60, zIndex: 40, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
+            />
+            <div style={{ position: "fixed", inset: 0, top: 60, zIndex: 41, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+              <motion.div
+                key="saved-views-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Saved Views"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.22, ease: [0.25, 0.8, 0.25, 1] }}
+                style={{ width: "85vw", maxWidth: 1400, height: "80vh", display: "flex", flexDirection: "column", borderRadius: 12, border: `1px solid ${glassBorder}`, boxShadow: "0 24px 64px rgba(0,0,0,0.28)", background: glassSurface, overflow: "hidden", pointerEvents: "auto" }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
+                  <div>
+                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
+                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
+                  </div>
+                  <button type="button" onClick={() => setSavedViewsModalOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
+                </div>
+                {/* Body */}
+                <div className="min-h-0 flex-1 overflow-auto p-5">
+                  <div className="min-w-0">
+                    <div className="mb-4 flex items-center">
+                      <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <Search size={16} strokeWidth={2} />
+                        <input
+                          value={savedSearch}
+                          onChange={event => setSavedSearch(event.target.value)}
+                          placeholder="Search"
+                          className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
+                          aria-label="Search saved views"
+                        />
+                      </label>
+                      <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
+                          <option>All types</option>
+                          <option>Workspaces</option>
+                          <option>Modules</option>
+                          <option>Terraform Versions</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
+                      </label>
+                    </div>
+                    <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
+                    <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
+                      <table className="w-full table-fixed border-collapse text-left text-[12px]">
+                        <thead className="bg-[#f1f2f3] text-[#17171a]">
+                          <tr>
+                            <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
+                            <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
+                            <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
+                            <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
+                            <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-[#555964]">
+                          {filteredSavedViews.map(view => (
+                            <tr key={view.name} className="border-t border-[#d7d9de]">
+                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
+                              <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
+                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
+                              <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
+                              <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
+                            </tr>
+                          ))}
+                          {filteredSavedViews.length === 0 && (
+                            <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             </div>
-            <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
-            <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
-              <table className="w-full table-fixed border-collapse text-left text-[12px]">
-                <thead className="bg-[#f1f2f3] text-[#17171a]">
-                  <tr>
-                    <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
-                    <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
-                    <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
-                    <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
-                    <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
-                  </tr>
-                </thead>
-                <tbody className="text-[#555964]">
-                  {filteredSavedViews.map(view => (
-                    <tr key={view.name} className="border-t border-[#d7d9de]">
-                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
-                      <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
-                      <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
-                      <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
-                      <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
-                    </tr>
-                  ))}
-                  {filteredSavedViews.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Compact Explorer context HUD */}
       <div
@@ -2710,7 +3594,7 @@ useEffect(() => {
         <span>/</span>
         <span>Explorer</span>
         <span>/</span>
-        <span className="font-medium" style={{ color: glassText }}>{savedViewsOpen ? "Saved views" : "Types"}</span>
+        <span className="font-medium" style={{ color: glassText }}>Types</span>
       </div>
 
       {/* Title row */}
@@ -2721,241 +3605,162 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Entity type group — temporarily hidden; keep its direct graph navigation available for later. */}
-      <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
-        <div className="hidden w-full overflow-hidden rounded-[6px] border border-[#aeb1b8] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
-          {splashItems.map(({ Icon, label }) => {
-            const type = splashToNavLabel[label] ?? label;
-            const displayLabel = label === "Policy sets" ? "Policy Sets" : label === "Terraform versions" ? "Terraform Versions" : label;
-            const isSelected = selectedGraphType === type;
+      {/* Browse Types dropdown + selected tag */}
+      <div className="mt-3" ref={useCaseMenuRef} onMouseDown={event => event.stopPropagation()}>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Browse</p>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setUseCaseMenuOpen(open => !open)}
+            aria-expanded={useCaseMenuOpen}
+            aria-haspopup="menu"
+            className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
+            style={{ borderColor: "rgba(59,61,69,0.4)" }}
+          >
+            <span className="flex items-center gap-2"><Compass size={14} />Types, Use cases and Saved views</span>
+            <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {useCaseMenuOpen && (() => {
+            const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
+            const typeRowCounts: Record<string, number> = {
+              "Workspaces": workspaceRows.length,
+              "Policy Sets": policySetRows.length,
+              "Modules": moduleRows.length,
+              "Providers": providerRows.length,
+              "Resources": resourceRows.length,
+              "Terraform Versions": terraformVersionRows.length,
+            };
             return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => openGraph(type, displayLabel)}
-                aria-pressed={isSelected}
-                className={`-ml-px flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 border-l px-2 text-[10px] font-semibold leading-none transition-colors first:ml-0 first:border-l-0 ${isSelected ? "relative z-10 border-[#0f62fe] bg-[#f0f6ff] text-[#0f62fe]" : "border-[#aeb1b8] bg-white text-[#656a76] hover:bg-[#f5f6f7] hover:text-[#3b3d45]"}`}
+              <div
+                role="menu"
+                aria-label="Pre-defined Explorer views"
+                className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
+                style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
               >
-                <Icon size={15} strokeWidth={1.65} className="shrink-0" />
-                <span className="whitespace-nowrap">{displayLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-
-
-      </div>
-      {/* Collapsible query builder */}
-      <div className="mt-3">
-        <section className="rounded-[8px] border" style={{ background: glassSurface, borderColor: glassBorder, color: glassText }}>
-          <div className="flex items-center gap-3 px-3 py-3">
-            <button
-              type="button"
-              onClick={() => setConditionsExpanded(expanded => !expanded)}
-              aria-expanded={conditionsExpanded}
-              aria-label={conditionsExpanded ? "Collapse conditions" : "Expand conditions"}
-              className={`flex size-[18px] items-center justify-center rounded-[3px] border ${conditionsExpanded ? "border-[#0f62fe] text-[#3b3d45] ring-2 ring-[#a6c8ff]" : "border-[rgba(59,61,69,0.4)] text-[#3b3d45]"}`}
-            >
-              {conditionsExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-            </button>
-            <span><strong className="block text-[12px] font-semibold leading-4">{conditionsExpanded ? "Modify conditions" : "Show conditions"}</strong><span className="text-[11px]" style={{ color: glassMuted }}>No conditions applied&nbsp; ⓘ</span></span>
-          </div>
-          {conditionsExpanded && (
-            <div className="border-t border-[rgba(101,106,118,0.12)] px-5 pb-4 pt-3">
-              <div ref={useCaseMenuRef} className="relative mb-4">
-                <button
-                  type="button"
-                  onClick={() => setUseCaseMenuOpen(open => !open)}
-                  aria-expanded={useCaseMenuOpen}
-                  aria-haspopup="menu"
-                  className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
-                  style={{ borderColor: "rgba(59,61,69,0.4)" }}
-                >
-                  <span className="flex items-center gap-2"><Compass size={14} />Browse Types, Use Cases and Saved Views</span>
-                  <ChevronDown size={14} className={`transition-transform duration-150 ${useCaseMenuOpen ? "rotate-180" : ""}`} />
-                </button>
-
-                {useCaseMenuOpen && (() => {
-                  const activeCategory = USE_CASE_CATEGORIES.find(category => category.type === hoveredUseCaseType) ?? USE_CASE_CATEGORIES[0];
-                  const typeRowCounts: Record<string, number> = {
-                    "Workspaces": workspaceRows.length,
-                    "Policy Sets": policySetRows.length,
-                    "Modules": moduleRows.length,
-                    "Providers": providerRows.length,
-                    "Resources": resourceRows.length,
-                    "Terraform Versions": terraformVersionRows.length,
-                  };
-                  return (
-                    <div
-                      role="menu"
-                      aria-label="Pre-defined Explorer views"
-                      className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
-                      style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
-                    >
-                      <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
-                        <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
-                        {USE_CASE_CATEGORIES.map(category => {
-                          const CategoryIcon = category.Icon;
-                          const isHovered = category.type === activeCategory.type;
-                          return (
-                            <button
-                              key={category.type}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => setHoveredUseCaseType(category.type)}
-                              className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
-                              style={!isHovered ? { color: glassText } : undefined}
-                            >
-                              <span className="flex items-center gap-2"><CategoryIcon size={14} className="shrink-0" />{category.heading}</span>
-                              <ChevronRight size={14} className={isHovered ? "opacity-90" : "opacity-45"} />
-                            </button>
-                          );
-                        })}
-                        <div className="my-1.5 border-t" style={{ borderColor: glassBorder }} />
+                <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
+                  <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
+                  {USE_CASE_CATEGORIES.map(category => {
+                    const CategoryIcon = category.Icon;
+                    const isHovered = category.type === activeCategory.type;
+                    return (
+                      <button
+                        key={category.type}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => setHoveredUseCaseType(category.type)}
+                        className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
+                        style={!isHovered ? { color: glassText } : undefined}
+                      >
+                        <span className="flex items-center gap-2"><CategoryIcon size={14} className="shrink-0" />{category.heading}</span>
+                        <ChevronRight size={14} className={isHovered ? "opacity-90" : "opacity-45"} />
+                      </button>
+                    );
+                  })}
+                  <div className="my-1.5 border-t" style={{ borderColor: glassBorder }} />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setSavedViewsModalOpen(true); setUseCaseMenuOpen(false); }}
+                    className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
+                    style={{ color: glassText }}
+                  >
+                    <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
+                    <ChevronRight size={14} className="opacity-45" />
+                  </button>
+                </div>
+                <div className="p-3">
+                  <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
+                  <div className="space-y-0.5">
+                    {(() => {
+                      const viewAllLabel = `View All ${activeCategory.type}`;
+                      const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                      const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
+                      return (
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={() => {
-                                              setSavedViewsOpen(true);
-                            setUseCaseMenuOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
-                          style={{ color: glassText }}
+                          onClick={() => openGraph(activeCategory.type, viewAllLabel)}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
-                          <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
-                          <ChevronRight size={14} className="opacity-45" />
+                          <span>{viewAllLabel}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
                         </button>
-                      </div>
-                      <div className="p-3">
-                        <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
-                        <div className="space-y-0.5">
-                          {(() => {
-                            const viewAllLabel = `View All ${activeCategory.type}`;
-                            const isViewAllSelected = selectedGraphTitle === viewAllLabel;
-                            const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
-                            return (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => openGraph(activeCategory.type, viewAllLabel)}
-                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                                style={!isViewAllSelected ? { color: glassText } : undefined}
-                              >
-                                <span>{viewAllLabel}</span>
-                                <span style={{ background: "red", color: "white", borderRadius: "999px", padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{viewAllCount}</span>
-                              </button>
-                            );
-                          })()}
-                          {activeCategory.items.map(view => {
-                            const isSelected = selectedGraphTitle === view;
-                            return (
-                              <button
-                                key={view}
-                                type="button"
-                                role="menuitem"
-                                onClick={() => openGraph(activeCategory.type, view)}
-                                className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                                style={!isSelected ? { color: glassText } : undefined}
-                              >
-                                <span>{view}</span><ChevronRight size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {selectedGraphTitle && (() => {
-                const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
-                return (
-                  <div className="mb-3 flex items-center">
-                    <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
-                      <span className="flex size-4 items-center justify-center text-[#656a76]">
-                        <ActiveIcon size={14} />
-                      </span>
-                      {selectedGraphTitle}
-                      <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
-                        <X size={13} />
-                      </button>
-                    </span>
+                      );
+                    })()}
+                    {activeCategory.items.map(view => {
+                      const isSelected = selectedGraphTitle === view;
+                      const viewCount = activeCategory.type === "Workspaces"
+                        ? getWorkspaceRowsForTitle(view).length
+                        : activeCategory.type === "Policy Sets"
+                          ? getPolicySetRowsForTitle(view).length
+                          : typeRowCounts[activeCategory.type] ?? 0;
+                      return (
+                        <button
+                          key={view}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => openGraph(activeCategory.type, view)}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isSelected ? { color: glassText } : undefined}
+                        >
+                          <span>{view}</span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewCount}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                );
-              })()}
-              <hr className="mb-4 mt-2 border-t border-[rgba(101,106,118,0.12)] w-full" />
-                    <div className="space-y-3">
-                      {Array.from({ length: conditionCount }, (_, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="w-[78px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            const SelectedFieldIcon = selectedField.valueType === "date" ? CalendarDays : selectedField.valueType === "number" ? Hash : selectedField.valueType === "boolean" ? ToggleRight : Type;
-                            return (
-                              <div className="relative min-w-[190px]">
-                                <button type="button" onClick={() => setOpenFieldIndex(current => current === index ? null : index)} aria-expanded={openFieldIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 rounded-l-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">
-                                  <span className="flex items-center gap-2"><SelectedFieldIcon size={14} />{selectedField.label}</span><ChevronDown size={14} />
-                                </button>
-                                {openFieldIndex === index && (
-                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                                    {queryColumns.map(column => {
-                                      const FieldIcon = column.valueType === "date" ? CalendarDays : column.valueType === "number" ? Hash : column.valueType === "boolean" ? ToggleRight : Type;
-                                      return <button key={column.id} type="button" role="option" aria-selected={selectedField.id === column.id} onClick={() => { setConditionFields(fields => fields.map((field, fieldIndex) => fieldIndex === index ? column.id : field)); setConditionOperators(operators => operators.map((operator, operatorIndex) => operatorIndex === index ? operatorsByValueType[column.valueType as keyof typeof operatorsByValueType][0] : operator)); setOpenFieldIndex(null); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedField.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}><FieldIcon size={14} />{column.label}</button>;
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            const selectedOperator = conditionOperators[index] ?? operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType][0];
-                            const availableOperators = operatorsByValueType[selectedField.valueType as keyof typeof operatorsByValueType];
-                            return (
-                              <div className="relative -ml-2 min-w-[150px]">
-                                <button type="button" onClick={() => setOpenOperatorIndex(current => current === index ? null : index)} aria-expanded={openOperatorIndex === index} aria-haspopup="listbox" className="flex h-8 w-full items-center justify-between gap-2 border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]">{selectedOperator}<ChevronDown size={14} /></button>
-                                {openOperatorIndex === index && (
-                                  <div role="listbox" className="absolute left-0 top-[34px] z-40 max-h-64 w-64 overflow-y-auto rounded-[4px] border border-[rgba(101,106,118,0.2)] bg-white py-1 shadow-[0_2px_6px_rgba(101,106,118,0.2)]">
-                                    {availableOperators.map(operator => <button key={operator} type="button" role="option" aria-selected={selectedOperator === operator} onClick={() => { setConditionOperators(operators => operators.map((current, operatorIndex) => operatorIndex === index ? operator : current)); setOpenOperatorIndex(null); }} className={`flex w-full px-3 py-2 text-left text-[12px] hover:bg-[#f1f2f3] ${selectedOperator === operator ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}>{operator}</button>)}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const selectedField = queryColumns.find(column => column.id === conditionFields[index]) ?? queryColumns[0];
-                            return selectedField.valueType === "date" ? (
-                              <input type="datetime-local" step="1" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition date and time" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none focus:border-[#0f62fe]" />
-                            ) : (
-                              <input type="text" value={conditionValues[index] ?? ""} onChange={event => setConditionValues(values => values.map((value, valueIndex) => valueIndex === index ? event.target.value : value))} aria-label="Condition value" placeholder="Enter a value" className="-ml-2 h-8 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#656a76] focus:border-[#0f62fe]" />
-                            );
-                          })()}
-                          <button type="button" onClick={() => {
-                            if (conditionCount === 1) {
-                              setConditionFields(["name"]);
-                              setConditionOperators(["is"]);
-                              setConditionValues([""]);
-                            } else {
-                              setConditionCount(count => count - 1);
-                              setConditionFields(fields => fields.filter((_, fieldIndex) => fieldIndex !== index));
-                              setConditionOperators(operators => operators.filter((_, operatorIndex) => operatorIndex !== index));
-                              setConditionValues(values => values.filter((_, valueIndex) => valueIndex !== index));
-                            }
-                            setOpenFieldIndex(null);
-                            setOpenOperatorIndex(null);
-                          }} aria-label={conditionCount === 1 ? "Clear condition" : "Remove condition"} className="flex size-8 items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.25)] bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3]"><Trash2 size={15} /></button>
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => { setConditionCount(count => count + 1); setConditionFields(fields => [...fields, "name"]); setConditionOperators(operators => [...operators, "is"]); setConditionValues(values => [...values, ""]); }} className="mt-4 flex items-center gap-1.5 text-[12px] font-medium text-[#0f62fe] hover:underline"><Plus size={15} />Add condition</button>
-                      <div className="mt-6 flex items-center gap-3">
-                        <button type="button" onClick={() => { setConditionsExpanded(false); openGraph("Workspaces", "Workspaces"); }} className="h-8 rounded-[4px] bg-[#0f62fe] px-4 text-[12px] font-medium text-white hover:bg-[#0043ce]">Run Query</button>
-                        <button type="button" onClick={() => { setConditionCount(1); setConditionFields(["name"]); setConditionOperators(["is"]); setConditionValues([""]); setOpenFieldIndex(null); setOpenOperatorIndex(null); setConditionsExpanded(false); }} className="h-8 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f1f2f3]">Cancel</button>
-                      </div>
-                    </div>
-            )}
-          </section>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
+        {selectedGraphTitle && (() => {
+          const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
+          return (
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex items-center">
+                <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
+                  <span className="flex size-4 items-center justify-center text-[#656a76]">
+                    <ActiveIcon size={14} />
+                  </span>
+                  {selectedGraphTitle}
+                  <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
+                    <X size={13} />
+                  </button>
+                </span>
+              </div>
+              {selectedGraphType === "Workspaces" && (
+                <div className="flex items-center gap-1.5" onMouseDown={e => e.stopPropagation()}>
+                  <span className="text-[11px] font-medium text-[#656a76] shrink-0">Group by</span>
+                  {(["none", "project", "status"] as WsGroupMode[]).map(mode => {
+                    const labels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
+                    const isActive = wsGroupMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setWsGroupMode(mode)}
+                        className={`h-6 px-3 rounded-full text-[11px] font-medium transition-colors border ${isActive ? "bg-[#0f62fe] text-white border-[#0f62fe]" : "bg-white text-[#3b3d45] border-[rgba(59,61,69,0.25)] hover:bg-[#f1f2f3]"}`}
+                      >
+                        {labels[mode]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        <SuggestedQueriesList
+          themeMode={themeMode}
+          glassText={glassText}
+          glassMuted={glassMuted}
+          onSelect={openGraph}
+        />
       </div>
       </div>
 
@@ -3200,7 +4005,7 @@ export function WorkspacesExplorerView() {
 
           {/* 1. Breadcrumb */}
           <div className="mb-3 flex items-center gap-2 text-[11px] text-[#656a76]">
-            <span>My-organization</span><span>/</span><span>Explorer</span><span>/</span><span>{customTitle ? "Use cases" : "Types"}</span><span>/</span><span className="font-medium text-[#3b3d45]">{pageLabel}</span>
+            <span>ILM_Demo_Space</span><span>/</span><span className="font-medium text-[#3b3d45]">Explorer</span>
           </div>
 
           {/* 2. Page title */}
