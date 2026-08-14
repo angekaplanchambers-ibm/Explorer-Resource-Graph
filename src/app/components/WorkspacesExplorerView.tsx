@@ -1223,7 +1223,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -1231,7 +1231,7 @@ function TopologyGraph({ activeType, initialWorkspace, conditions = [], onViewRe
   // Reset zoom and layout whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
-    setTopoLayout((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+    setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   }, [activeType, refreshKey]);
 
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });

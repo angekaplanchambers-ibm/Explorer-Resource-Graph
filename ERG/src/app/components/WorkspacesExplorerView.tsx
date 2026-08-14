@@ -1546,7 +1546,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
   const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
@@ -1555,7 +1555,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   // Reset zoom, layout, and grouping whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
-    setTopoLayout((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+    setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
     setWsGroupMode("none");
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
