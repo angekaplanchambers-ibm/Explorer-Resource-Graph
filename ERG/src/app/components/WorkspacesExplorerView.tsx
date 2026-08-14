@@ -711,9 +711,10 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
   );
 }
 
-function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null }) {
+function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
-  const baseRows = workspaceFilter ? resourceRows.filter(r => r.workspace === workspaceFilter) : resourceRows;
+  const allRows = sourceRowsProp ?? resourceRows;
+  const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
   const filteredRows = conditions.length
     ? baseRows.filter(row =>
         conditions.every(c => {
@@ -2651,28 +2652,15 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
 }
 
 function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null }) {
-  // When a workspace resource overlay is active, render a simple table matching exactly what the graph shows.
+  // When a workspace resource overlay is active, show the full ResourcesTable with the exact rows the graph shows.
   if (overlayInfo) {
-    return (
-      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="w-full table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
-            <tr>
-              <th className="h-11 border-r border-[#dedfe3] px-3">Resource</th>
-              <th className="h-11 px-3">Workspace</th>
-            </tr>
-          </thead>
-          <tbody className="text-[12px] text-[#52525b]">
-            {overlayInfo.rows.map(row => (
-              <tr key={row.id} className="border-t border-[#dedfe3] bg-white">
-                <td className="border-r border-[#dedfe3] px-3 py-3 break-all">{row.address}</td>
-                <td className="px-3 py-3">{row.workspace}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    return <ResourcesTable
+      visibleColumnIds={resourceTableColumns.map(c => c.id)}
+      conditions={[]}
+      onNavigate={onNavigate}
+      onSelectResource={onSelectResource}
+      sourceRows={overlayInfo.rows as typeof resourceRows}
+    />;
   }
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
   if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
