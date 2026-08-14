@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import DotBackgroundGraph from "../../imports/DotBackgroundGraph";
 import {
-  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Compass,
+  CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Clipboard, Compass,
   Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, ListOrdered, Lock, MoreHorizontal, Plus, RefreshCw, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User, X
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
@@ -2743,6 +2743,15 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
           >
             <Download size={14} style={{ color: "#656a76", flexShrink: 0 }} />
             Download
+          </button>
+
+          {/* Copy to clipboard */}
+          <button type="button" style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 14px", background: "none", border: "none", color: "#3b3d45", fontSize: 13, cursor: "pointer", textAlign: "left" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f5f5f7")}
+            onMouseLeave={e => (e.currentTarget.style.background = "none")}
+          >
+            <Clipboard size={14} style={{ color: "#656a76", flexShrink: 0 }} />
+            Copy to clipboard
           </button>
 
           <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
