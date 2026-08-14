@@ -1535,7 +1535,8 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
   return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
 }
 
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (name: string | null) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+type OverlayInfo = { workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] };
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -2023,7 +2024,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewResourcesWsName(null); onOverlayWorkspaceChange?.(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+              onClick={() => { setViewResourcesWsName(null); onOverlayWorkspaceChange?.(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); setViewResourcesCount(0); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit resource view
@@ -2139,8 +2140,14 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 <button
                   onClick={() => {
                     const count = Number((selectedNode.data as Record<string, unknown>).resources ?? 0);
-                    setViewResourcesWsName(selectedNode.label);
-                    onOverlayWorkspaceChange?.(selectedNode.label);
+                    const wsName = selectedNode.label;
+                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
+                    const synRows = Array.from({ length: count }, (_, i) => {
+                      const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
+                      return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
+                    });
+                    setViewResourcesWsName(wsName);
+                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: synRows });
                     setViewResourcesCount(count);
                     setSelectedId(null);
                     setZoom({ tx: 0, ty: 0, scale: 1 });
@@ -2189,8 +2196,10 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
                 <button
                   onClick={() => {
-                    setViewResourcesWsName(selectedNode.label);
-                    onOverlayWorkspaceChange?.(selectedNode.label);
+                    const wsName = selectedNode.label;
+                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
+                    setViewResourcesWsName(wsName);
+                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: baseRows });
                     setViewResourcesCount(0);
                     setSelectedId(null);
                     setZoom({ tx: 0, ty: 0, scale: 1 });
@@ -2641,10 +2650,30 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
   );
 }
 
-function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayWorkspace }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayWorkspace?: string | null }) {
-  // When a workspace's resource overlay is active, always show the Resources table filtered to that workspace.
-  // Use all resource column IDs since visibleColumnIds reflects the current graph type (e.g. module columns), not resource columns.
-  if (overlayWorkspace) return <ResourcesTable visibleColumnIds={resourceTableColumns.map(c => c.id)} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} workspaceFilter={overlayWorkspace} />;
+function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null }) {
+  // When a workspace resource overlay is active, render a simple table matching exactly what the graph shows.
+  if (overlayInfo) {
+    return (
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
+        <table className="w-full table-fixed border-collapse text-left">
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
+            <tr>
+              <th className="h-11 border-r border-[#dedfe3] px-3">Resource</th>
+              <th className="h-11 px-3">Workspace</th>
+            </tr>
+          </thead>
+          <tbody className="text-[12px] text-[#52525b]">
+            {overlayInfo.rows.map(row => (
+              <tr key={row.id} className="border-t border-[#dedfe3] bg-white">
+                <td className="border-r border-[#dedfe3] px-3 py-3 break-all">{row.address}</td>
+                <td className="px-3 py-3">{row.workspace}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
   if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
   if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
@@ -3013,7 +3042,7 @@ function ExplorerSplashView({
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
-  const [overlayWorkspace, setOverlayWorkspace] = useState<string | null>(null);
+  const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
@@ -3145,7 +3174,7 @@ useEffect(() => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
-            onOverlayWorkspaceChange={setOverlayWorkspace}
+            onOverlayWorkspaceChange={setOverlayInfo}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
@@ -3264,7 +3293,7 @@ useEffect(() => {
                   ) : (
                     <>
                       <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayWorkspace={overlayWorkspace} />
+                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} />
                     </>
                   )}
                 </div>
