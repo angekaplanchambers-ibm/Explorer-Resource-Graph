@@ -1042,8 +1042,8 @@ const SELECTED_COLOR = "#f97316";
 const NEIGHBOR_COLOR = "#22c55e";
 const VW = 1200;
 const VH = 660;
-const NODE_SIZE = 40;
-const NODE_RADIUS = 20;
+const NODE_SIZE = 10;
+const NODE_RADIUS = 5;
 const NODE_R = NODE_SIZE / 2;
 
 type TopoNode = {
