@@ -3144,7 +3144,11 @@ useEffect(() => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
-            onOverlayWorkspaceChange={setOverlayWorkspace}
+            onOverlayWorkspaceChange={(name) => {
+              setOverlayWorkspace(name);
+              if (name) { setTableViewOpen(true); setConditionsExpanded(false); }
+              else setTableViewOpen(false);
+            }}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
