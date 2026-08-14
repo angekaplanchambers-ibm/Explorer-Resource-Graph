@@ -2185,6 +2185,22 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 </div>
               ))}
             </div>
+            {isWorkspace && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+                <button
+                  onClick={() => {
+                    setViewResourcesWsName(selectedNode.label);
+                    onOverlayWorkspaceChange?.(selectedNode.label);
+                    setViewResourcesCount(0);
+                    setSelectedId(null);
+                    setZoom({ tx: 0, ty: 0, scale: 1 });
+                  }}
+                  style={{ width: "100%", height: 34, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                >
+                  View resources <span>→</span>
+                </button>
+              </div>
+            )}
           </div>
         );
       })()}
