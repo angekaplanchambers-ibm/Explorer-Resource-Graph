@@ -1540,23 +1540,21 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
 }
 
 type OverlayInfo = { workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
   const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
-  const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Reset zoom, layout, and grouping whenever activeType changes
+  // Reset zoom and layout whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
     setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
-    setWsGroupMode("none");
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -2250,32 +2248,6 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-        {activeType === "Workspaces" && (
-          <>
-            <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.45)", paddingRight: 4, whiteSpace: "nowrap", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>Group</span>
-            {(["none", "project", "status"] as WsGroupMode[]).map(mode => {
-              const labels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
-              const isActive = wsGroupMode === mode;
-              return (
-                <button
-                  key={mode}
-                  onClick={() => { setWsGroupMode(mode); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
-                  style={{
-                    height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
-                    borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
-                    background: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.12)") : "transparent",
-                    color: isActive ? (themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)") : (themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.5)"),
-                    fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
-                    fontWeight: isActive ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease", whiteSpace: "nowrap",
-                  }}
-                >
-                  {labels[mode]}
-                </button>
-              );
-            })}
-            <div style={{ width: 1, height: 16, background: themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", margin: "0 4px" }} />
-          </>
-        )}
         {(["force", "stacked", "radial"] as TopoLayout[]).map(layout => {
           const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial" };
           const isActive = topoLayout === layout;
@@ -3101,12 +3073,13 @@ function ExplorerSplashView({
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
   const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
+  const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
-  useEffect(() => { setModalConditions([]); }, [selectedGraphType]);
+  useEffect(() => { setModalConditions([]); setWsGroupMode("none"); }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
@@ -3233,6 +3206,8 @@ useEffect(() => {
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
             onOverlayWorkspaceChange={setOverlayInfo}
+            wsGroupMode={wsGroupMode}
+            setWsGroupMode={setWsGroupMode}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
@@ -3592,16 +3567,37 @@ useEffect(() => {
         {selectedGraphTitle && (() => {
           const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
           return (
-            <div className="mt-2 flex items-center">
-              <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
-                <span className="flex size-4 items-center justify-center text-[#656a76]">
-                  <ActiveIcon size={14} />
+            <div className="mt-2 flex flex-col gap-2">
+              <div className="flex items-center">
+                <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
+                  <span className="flex size-4 items-center justify-center text-[#656a76]">
+                    <ActiveIcon size={14} />
+                  </span>
+                  {selectedGraphTitle}
+                  <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
+                    <X size={13} />
+                  </button>
                 </span>
-                {selectedGraphTitle}
-                <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
-                  <X size={13} />
-                </button>
-              </span>
+              </div>
+              {selectedGraphType === "Workspaces" && (
+                <div className="flex items-center gap-1.5" onMouseDown={e => e.stopPropagation()}>
+                  <span className="text-[11px] font-medium text-[#656a76] shrink-0">Group by</span>
+                  {(["none", "project", "status"] as WsGroupMode[]).map(mode => {
+                    const labels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
+                    const isActive = wsGroupMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setWsGroupMode(mode)}
+                        className={`h-6 px-3 rounded-full text-[11px] font-medium transition-colors border ${isActive ? "bg-[#0f62fe] text-white border-[#0f62fe]" : "bg-white text-[#3b3d45] border-[rgba(59,61,69,0.25)] hover:bg-[#f1f2f3]"}`}
+                      >
+                        {labels[mode]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })()}
