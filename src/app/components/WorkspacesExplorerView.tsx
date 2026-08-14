@@ -908,22 +908,22 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = []):
           })
         )
       : moduleRows;
-    // Build workspace → modules index for peer connections
-    const wsByModule = new Map<string, string[]>();
+    // Add module nodes and connect each to its individual workspace nodes.
+    // Only add a module node if it has at least one valid workspace to connect to.
+    const wsNodeIds = new Map<string, string>(); // workspace name → node id
     for (const [name, version, , , wsList] of filteredMods) {
+      const wsNames = wsList.split(",").map((w: string) => w.trim().replace(/…$/, "").trim()).filter(Boolean);
+      if (wsNames.length === 0) continue; // skip isolated module nodes
       const nodeId = `mod-${name}-${version}`;
       const shortName = name.split("/").slice(-2).join("/");
       nodes.push({ id: nodeId, label: shortName, type: "module", secondary: `v${version}`, data: { name, version, workspaces: wsList } });
-      const wsNames = wsList.split(",").map((w: string) => w.trim().replace("…", "")).filter(Boolean);
-      for (const ws of wsNames) {
-        if (!wsByModule.has(ws)) wsByModule.set(ws, []);
-        wsByModule.get(ws)!.push(nodeId);
-      }
-    }
-    // Connect modules that share a workspace (they're peers in that workspace)
-    for (const [, mIds] of wsByModule) {
-      for (let i = 0; i < mIds.length; i++) {
-        for (let j = i + 1; j < mIds.length; j++) addEdge(mIds[i], mIds[j]);
+      for (const wsName of wsNames) {
+        if (!wsNodeIds.has(wsName)) {
+          const wsId = `ws-mod-${wsName}`;
+          wsNodeIds.set(wsName, wsId);
+          nodes.push({ id: wsId, label: wsName, type: "workspace", secondary: "workspace", data: { name: wsName } });
+        }
+        addEdge(nodeId, wsNodeIds.get(wsName)!);
       }
     }
   }
