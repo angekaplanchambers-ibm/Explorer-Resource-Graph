@@ -1034,6 +1034,8 @@ const NODE_COLORS: Record<string, string> = {
   "terraform-version": "#38bdf8",
   "resource": "#f472b6",
   "policy-set": "#fbbf24",
+  "ws-group-project": "#6366f1",
+  "ws-group-status": "#f59e0b",
 };
 
 const SELECTED_COLOR = "#f97316";
@@ -1451,6 +1453,7 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
 const DEFAULT_NODE_ICON: LucideIcon = Server;
 
 type TopoLayout = "force" | "stacked" | "radial";
+type WsGroupMode = "none" | "project" | "status";
 
 // Returns key-value pairs for a node's popover, using the column labels for the active type.
 function getNodeFields(node: TopoNode, activeType: string): { label: string; value: string }[] {
@@ -1544,14 +1547,16 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+  const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Reset zoom and layout whenever activeType changes
+  // Reset zoom, layout, and grouping whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
     setTopoLayout((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+    setWsGroupMode("none");
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -1563,7 +1568,32 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [providerSourceFilter, setProviderSourceFilter] = useState("");
   const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
-  const { nodes, edges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
+  const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
+
+  // Workspace grouping: inject hub nodes and rewire edges when wsGroupMode is active
+  const { nodes, edges } = useMemo(() => {
+    if (activeType !== "Workspaces" || wsGroupMode === "none") return { nodes: rawNodes, edges: rawEdges };
+    const groupKey = (n: TopoNode): string =>
+      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
+    const hubType = wsGroupMode === "project" ? "ws-group-project" : "ws-group-status";
+    // Count members per group
+    const groupCounts = new Map<string, number>();
+    for (const n of rawNodes) { const k = groupKey(n); groupCounts.set(k, (groupCounts.get(k) ?? 0) + 1); }
+    // Build hub nodes
+    const hubNodes: TopoNode[] = [];
+    const hubIds = new Map<string, string>();
+    for (const [key, count] of groupCounts) {
+      const hubId = `hub-${wsGroupMode}-${key}`;
+      hubIds.set(key, hubId);
+      hubNodes.push({ id: hubId, label: key, type: hubType, secondary: `${count} workspace${count !== 1 ? "s" : ""}`, data: { group: key, count } });
+    }
+    // Spoke edges: each workspace → its hub only
+    const spokeEdges: TopoEdge[] = rawNodes
+      .filter(n => n.type === "workspace")
+      .map(n => ({ source: hubIds.get(groupKey(n))!, target: n.id }))
+      .filter(e => e.source);
+    return { nodes: [...hubNodes, ...rawNodes], edges: spokeEdges };
+  }, [rawNodes, rawEdges, activeType, wsGroupMode]);
 
   // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
   // of all resourceRows belonging to that workspace, plus the workspace node itself.
@@ -1977,6 +2007,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 : (!!selectedId && !isSelected && !isNeighbor);
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
+            const isHub = node.type === "ws-group-project" || node.type === "ws-group-status";
+            const nR = isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+            const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
             const hasNodeGlow = isHovered || isSelected || Boolean(blastRadiusId && inBlastRadius);
@@ -1995,21 +2028,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   key={`${node.id}-${activeType}-${refreshKey}`}
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
-                  {hasNodeGlow && <circle r={NODE_R + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
-                  {(isHovered || isSelected) && <rect x={-NODE_R} y={-NODE_R} width={NODE_SIZE} height={NODE_SIZE} rx={NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
-                  <foreignObject x={-NODE_R} y={-NODE_R} width={NODE_R * 2} height={NODE_R * 2}>
+                  {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
+                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
+                  <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
                     {(() => {
                       const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
                       return (
-                        <div style={{ width: NODE_R * 2, height: NODE_R * 2, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Icon size={NODE_R} color="white" strokeWidth={1.75} />
+                        <div style={{ width: nSize, height: nSize, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Icon size={nR} color="white" strokeWidth={1.75} />
                         </div>
                       );
                     })()}
                   </foreignObject>
-                  <text y={NODE_R + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={10} fontWeight="600" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
-                  <text y={NODE_R + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isHub ? 12 : 10} fontWeight={isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
                 </g>
               </g>
             );
@@ -2217,6 +2250,32 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
+        {activeType === "Workspaces" && (
+          <>
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.45)", paddingRight: 4, whiteSpace: "nowrap", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>Group</span>
+            {(["none", "project", "status"] as WsGroupMode[]).map(mode => {
+              const labels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
+              const isActive = wsGroupMode === mode;
+              return (
+                <button
+                  key={mode}
+                  onClick={() => { setWsGroupMode(mode); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
+                  style={{
+                    height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
+                    borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
+                    background: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.12)") : "transparent",
+                    color: isActive ? (themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)") : (themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.5)"),
+                    fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+                    fontWeight: isActive ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease", whiteSpace: "nowrap",
+                  }}
+                >
+                  {labels[mode]}
+                </button>
+              );
+            })}
+            <div style={{ width: 1, height: 16, background: themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", margin: "0 4px" }} />
+          </>
+        )}
         {(["force", "stacked", "radial"] as TopoLayout[]).map(layout => {
           const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial" };
           const isActive = topoLayout === layout;
@@ -2322,6 +2381,8 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "terraform-version": "TF Version",
   "resource": "Resource",
   "policy-set": "Policy Set",
+  "ws-group-project": "Project",
+  "ws-group-status": "Status",
 };
 
 function TopoLegend({ activeType: _activeType, nodes, themeMode = "dark" }: { activeType: string; nodes: TopoNode[]; themeMode?: "light" | "dark" }) {
