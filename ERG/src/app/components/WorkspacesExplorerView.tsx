@@ -1545,8 +1545,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Reset zoom to 100% whenever activeType or refreshKey changes
-  useEffect(() => { setZoom({ tx: 0, ty: 0, scale: 1 }); }, [activeType, refreshKey]);
+  // Reset zoom and layout whenever activeType changes
+  useEffect(() => {
+    setZoom({ tx: 0, ty: 0, scale: 1 });
+    setTopoLayout((activeType === "Providers" || activeType === "Modules") ? "force" : "radial");
+  }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
