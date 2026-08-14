@@ -3268,9 +3268,10 @@ useEffect(() => {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto p-5">
-                  {selectedGraphType === "Resources" && selectedResourceId ? (
+                  {selectedResourceId ? (
                     (() => {
-                      const row = resourceRows.find(r => r.id === selectedResourceId);
+                      const row = (overlayInfo?.rows ?? resourceRows).find(r => r.id === selectedResourceId)
+                        ?? resourceRows.find(r => r.id === selectedResourceId);
                       return row ? (
                         <ResourceDetailView
                           row={row}
