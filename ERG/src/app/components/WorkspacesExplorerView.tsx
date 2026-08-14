@@ -2643,7 +2643,8 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
 
 function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayWorkspace }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayWorkspace?: string | null }) {
   // When a workspace's resource overlay is active, always show the Resources table filtered to that workspace.
-  if (overlayWorkspace) return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} workspaceFilter={overlayWorkspace} />;
+  // Use all resource column IDs since visibleColumnIds reflects the current graph type (e.g. module columns), not resource columns.
+  if (overlayWorkspace) return <ResourcesTable visibleColumnIds={resourceTableColumns.map(c => c.id)} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} workspaceFilter={overlayWorkspace} />;
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
   if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
   if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
@@ -3144,11 +3145,7 @@ useEffect(() => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
-            onOverlayWorkspaceChange={(name) => {
-              setOverlayWorkspace(name);
-              if (name) { setTableViewOpen(true); setConditionsExpanded(false); }
-              else setTableViewOpen(false);
-            }}
+            onOverlayWorkspaceChange={setOverlayWorkspace}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
