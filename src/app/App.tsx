@@ -111,6 +111,7 @@ export default function App() {
               onOpenOpTriage={(opId) => setPendingOpTriage(opId)}
               rightInset={sideOpen ? SIDE_PANEL_W : 0}
               hideTopNav
+              navOpen={navOpen}
             />
           </div>
 
