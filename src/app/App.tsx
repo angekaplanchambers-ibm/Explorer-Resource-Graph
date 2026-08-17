@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { TFCWorkspaceView } from "./components/TFCWorkspaceView";
 import { ControlCenter } from "./components/ControlCenter";
 import { Workbench } from "./components/Workbench";
@@ -48,26 +48,32 @@ export default function App() {
 
       {/* Below top bar: nav + content side by side */}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "row", overflow: "hidden" }}>
-        {/* Left navigation */}
-        <div style={{ position: "relative", flexShrink: 0, height: "100%" }}>
+        {/* Left navigation — zero-width container so nothing is pushed right */}
+        <div style={{ position: "relative", flexShrink: 0, width: 0, height: "100%", overflow: "visible", zIndex: 20 }}>
+          {/* Sliding nav panel */}
           <div
             style={{
-              width: navOpen ? 280 : 0,
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: 280,
               height: "100%",
               overflow: "hidden",
               borderRight: "1px solid #DEDFE3",
-              transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)",
+              transform: navOpen ? "translateX(0)" : "translateX(-280px)",
+              transition: "transform 0.3s cubic-bezier(0.25,0.8,0.25,1)",
             }}
           >
             <NavTfcSideNav />
           </div>
+          {/* Toggle button — floats over content at the nav's right edge */}
           <button
             type="button"
             onClick={() => setNavOpen(o => !o)}
             aria-label={navOpen ? "Collapse navigation" : "Expand navigation"}
             style={{
               position: "absolute",
-              right: -36,
+              left: navOpen ? 280 : 0,
               top: 16,
               width: 36,
               height: 40,
@@ -82,15 +88,15 @@ export default function App() {
               boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
               cursor: "pointer",
               color: "#656a76",
-              zIndex: 10,
+              transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
             }}
           >
-            {navOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+            {navOpen ? <ChevronsLeft size={14} /> : <ChevronsRight size={14} />}
           </button>
         </div>
 
         {/* Main content */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", paddingLeft: navOpen ? 280 : 0, transition: "padding-left 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
           <div
             className="flex-1 min-h-0"
             style={{

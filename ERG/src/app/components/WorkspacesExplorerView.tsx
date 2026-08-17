@@ -3081,6 +3081,7 @@ function ExplorerSplashView({
   }, [tableViewOpen, setConditionsExpanded]);
   useEffect(() => { setModalConditions([]); setWsGroupMode("none"); }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
+  const [hudCollapsed, setHudCollapsed] = useState(false);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
   const [savedSearch, setSavedSearch] = useState("");
@@ -3430,7 +3431,40 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
+      {/* HUD collapsed tab — fixed to left edge, below the nav toggle */}
+      {hudCollapsed && (
+        <button
+          type="button"
+          onClick={() => setHudCollapsed(false)}
+          aria-label="Expand Explorer HUD"
+          style={{
+            position: "fixed",
+            left: 0,
+            top: 72,
+            width: 36,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#fafafa",
+            border: "1px solid #DEDFE3",
+            borderLeft: "none",
+            borderRadius: "0 6px 6px 0",
+            boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
+            cursor: "pointer",
+            color: "#656a76",
+            zIndex: 25,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
+            <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
+          </svg>
+        </button>
+      )}
+
       {/* Compact Explorer context HUD */}
+      {!hudCollapsed && (
       <div
         className="absolute z-30 w-[50vw] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
         style={{ left: hudPosition.x, top: hudPosition.y, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
@@ -3444,12 +3478,28 @@ useEffect(() => {
         <span className="font-medium" style={{ color: glassText }}>Types</span>
       </div>
 
-      {/* Title row */}
+      {/* Title row — collapse button on right */}
       <div className="mt-2 flex items-start justify-between gap-4">
         <div>
-          <h1 className="m-0 text-[20px] font-semibold leading-6" style={{ color: glassText }}>Explorer</h1>
+          <h1 className="m-0 flex items-center gap-2 text-[20px] font-semibold leading-6" style={{ color: glassText }}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
+              <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
+            </svg>
+            Explorer
+          </h1>
           <p className="mt-1 text-[12px] leading-4" style={{ color: glassMuted }}>Explore your data to analyze your organization&apos;s Terraform usage.</p>
         </div>
+        {/* Collapse button — top right of HUD */}
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); setHudCollapsed(true); }}
+          onMouseDown={e => e.stopPropagation()}
+          aria-label="Collapse Explorer HUD"
+          style={{ flexShrink: 0, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4, border: `1px solid ${glassBorder}`, background: "transparent", cursor: "pointer", color: glassMuted, marginTop: 2 }}
+        >
+          <ChevronsUpDown size={13} style={{ transform: "rotate(90deg)" }} />
+        </button>
       </div>
 
       {/* Browse Types dropdown + selected tag */}
@@ -3610,7 +3660,7 @@ useEffect(() => {
         />
       </div>
       </div>
-
+      )}
 
     </div>
   );
