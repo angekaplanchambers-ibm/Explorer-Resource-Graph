@@ -3431,48 +3431,44 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* Toggle tab — fixed so it's never clipped by overflow:hidden canvas */}
-      <button
-        type="button"
-        onClick={e => { e.stopPropagation(); setHudCollapsed(c => !c); }}
-        onMouseDown={e => e.stopPropagation()}
-        aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
-        style={{
-          position: "fixed",
-          left: hudCollapsed ? 0 : `calc(${hudPosition.x}px + 50vw)`,
-          top: hudPosition.y + 25,
-          width: 36,
-          height: 40,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#fafafa",
-          border: "1px solid #DEDFE3",
-          borderLeft: "none",
-          borderRadius: "0 6px 6px 0",
-          boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
-          cursor: "pointer",
-          color: "#656a76",
-          zIndex: 35,
-          transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-          <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
-          <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
-        </svg>
-      </button>
-
-      {/* Compact Explorer context HUD card — slides in/out via transform, clipped by canvas overflow:hidden */}
+      {/* HUD wrapper — always mounted so the tab is always visible */}
       <div
         className="absolute z-30"
-        style={{
-          left: hudPosition.x,
-          top: hudPosition.y,
-          transform: hudCollapsed ? "translateX(calc(-100% - 40px))" : "translateX(0)",
-          transition: "transform 0.3s cubic-bezier(0.25,0.8,0.25,1)",
-        }}
+        style={{ left: hudPosition.x, top: hudPosition.y }}
       >
+        {/* Tab — position absolute on outer wrapper, bottom-right outside corner */}
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); setHudCollapsed(c => !c); }}
+          onMouseDown={e => e.stopPropagation()}
+          aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
+          style={{
+            position: "absolute",
+            bottom: 25,
+            left: "100%",
+            width: 36,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#fafafa",
+            border: "1px solid #DEDFE3",
+            borderLeft: "none",
+            borderRadius: "0 6px 6px 0",
+            boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
+            cursor: "pointer",
+            color: "#656a76",
+            zIndex: 1,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
+            <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
+          </svg>
+        </button>
+
+        {/* HUD card — hidden entirely when collapsed */}
+        {!hudCollapsed && (
       <div
         className="w-[50vw] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
         style={{ background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
@@ -3658,6 +3654,7 @@ useEffect(() => {
         />
       </div>
       </div>
+        )}
       </div>
 
     </div>
