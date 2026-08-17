@@ -3442,7 +3442,24 @@ useEffect(() => {
           onClick={e => { e.stopPropagation(); setHudCollapsed(c => !c); }}
           onMouseDown={e => e.stopPropagation()}
           aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
-          style={{
+          style={hudCollapsed ? {
+            position: "fixed",
+            left: 0,
+            top: Math.max(64, hudPosition.y + 25),
+            width: 36,
+            height: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#fafafa",
+            border: "1px solid #DEDFE3",
+            borderLeft: "none",
+            borderRadius: "0 6px 6px 0",
+            boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
+            cursor: "pointer",
+            color: "#656a76",
+            zIndex: 35,
+          } : {
             position: "absolute",
             bottom: 25,
             left: "100%",
