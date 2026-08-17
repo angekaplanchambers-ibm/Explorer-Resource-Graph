@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  ChevronDown, ChevronUp, Terminal, X, ArrowRight, ChevronLeft,
-  RefreshCw, Plus, ExternalLink,
+  ChevronDown, Terminal, X, ChevronLeft,
+  RefreshCw, Plus, ExternalLink, Pen,
 } from "lucide-react";
+import { TFSignalChat } from "./TFSignalChat";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const M = {
@@ -994,7 +995,6 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
   const sevLabel = SEV_LABEL[op.severity];
   const [visible, setVisible] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [inputVal, setInputVal] = useState("");
 
   useEffect(() => {
     const id = requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
@@ -1114,22 +1114,6 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
         </div>
       </div>
 
-      {/* Input — pinned to bottom */}
-      <div style={{ borderTop: `1px solid ${M.darkBorder}`, padding: "8px 12px 10px", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", backgroundColor: M.inputBg, border: `1px solid ${M.darkBorder}`, borderRadius: "6px", padding: "6px 10px" }}>
-          <input
-            value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            placeholder="Or type a response…"
-            style={{ flex: 1, background: "none", border: "none", outline: "none", color: M.text, fontSize: "12px", fontFamily: M.font }}
-          />
-          {inputVal && (
-            <button onClick={() => { onOpenWorkbench?.(inputVal); setInputVal(""); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", lineHeight: 0 }}>
-              <ArrowRight size={13} color={M.blue} />
-            </button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1153,6 +1137,7 @@ type PanelState = "bar" | "expanded";
 export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "bottom", onDockChange, onStepActiveChange }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
+  const [signalTab, setSignalTab] = useState<"ops" | "chat">("ops");
   const [activeOp, setActiveOp] = useState<RecommendedOp | null>(null);
   const [activeStep, setActiveStep] = useState<NextStep | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -1162,6 +1147,12 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
   const [panelHeight, setPanelHeight] = useState(440);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatSendRef = useRef<((text: string) => void) | null>(null);
+
+  function openChat() {
+    setSignalTab("chat");
+    setPanel("expanded");
+  }
 
   function expandPanel() {
     setPanel("expanded");
@@ -1281,15 +1272,21 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
       {/* ── Expanded panel ── */}
       {panel === "expanded" && (
         <div style={{ backgroundColor: M.dark, borderTop: `1px solid ${M.darkBorder}`, position: "relative" }}>
-          {/* Collapse button — only shown when NOT in step detail (step detail has its own in the breadcrumb) */}
-          {!activeStep && (
+          {/* ── Expanded panel header: brand pinned top-left, collapse top-right ── */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 10px 12px", borderBottom: `1px solid ${M.darkBorder}`, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Terminal size={11} color="white" />
+              </div>
+              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+            </div>
             <button
               onClick={() => setPanel("bar")}
-              style={{ position: "absolute", top: 11, right: 14, color: M.textMuted, cursor: "pointer", zIndex: 10, background: "none", border: "none", padding: 0, lineHeight: 0 }}
+              style={{ color: M.textMuted, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 0 }}
             >
               <ChevronDown size={16} />
             </button>
-          )}
+          </div>
           {/* Drag handle — only visible in step/chat view */}
           {activeStep && (
             <div
@@ -1300,137 +1297,77 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             </div>
           )}
           <div className="flex" style={{ height: activeStep ? `${panelHeight}px` : "320px", overflow: "hidden" }}>
-            {/* Session list — animates between expanded (300px) and collapsed (36px) */}
-            <div
-              style={{
-                width: sessionsExpanded ? "300px" : "36px",
-                flexShrink: 0,
-                borderRight: `1px solid ${M.darkBorder}`,
-                overflow: "hidden",
-                transition: "width 0.38s cubic-bezier(0.25,0.8,0.25,1)",
-                position: "relative",
-              }}
-            >
-              {/* Expanded list — fades out as panel collapses */}
-              <div style={{
-                position: "absolute", inset: 0, width: "300px",
-                opacity: sessionsExpanded ? 1 : 0,
-                transition: "opacity 0.18s",
-                pointerEvents: sessionsExpanded ? "auto" : "none",
-                overflow: "hidden",
-              }}>
-                <SessionList onCollapse={() => setSessionsExpanded(false)} />
-              </div>
-              {/* Collapsed strip — fades in after collapse */}
-              <div style={{
-                position: "absolute", inset: 0, width: "36px",
-                opacity: sessionsExpanded ? 0 : 1,
-                transition: "opacity 0.18s 0.2s",
-                pointerEvents: sessionsExpanded ? "none" : "auto",
-              }}>
-                <CollapsedSessionsStrip onExpand={() => setSessionsExpanded(true)} />
+            {/* Chat tab */}
+            <div style={{ display: signalTab === "chat" ? "flex" : "none", width: "100%", height: "100%" }}>
+              <TFSignalChat
+                query={query}
+                onQueryChange={setQuery}
+                sendRef={chatSendRef}
+              />
+            </div>
+            {/* Ops tab — CLI interface */}
+            <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", height: "100%", flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ color: M.textMuted, fontSize: "11px", letterSpacing: "0.04em" }}>terraform-signal v0.1.0 — type a command or ask a question</span>
+                <span style={{ color: M.darkBorder, fontSize: "11px" }}>────────────────────────────────────────────</span>
+                <span style={{ color: M.textMuted, fontSize: "11px", marginTop: 8 }}>$&nbsp;<span style={{ color: M.textDim }}>_</span></span>
               </div>
             </div>
-
-            {/* Center: feed, triage, or step detail */}
-            <div
-              className="flex-1 flex flex-col min-w-0"
-              style={{
-                borderRight: (!activeOp && !processing) ? `1px solid ${M.darkBorder}` : "none",
-                backgroundColor: M.dark,
-                overflow: activeStep ? "hidden" : "auto",
-                opacity: contentFading ? 0 : 1,
-                transition: "opacity 0.18s",
-              }}
-            >
-              {processing && (
-                <div className="flex items-center gap-3 px-5 py-5">
-                  <RefreshCw size={14} color={M.blue} className="animate-spin" />
-                  <p style={{ color: M.textDim, fontSize: "13px" }}>Loading…</p>
-                </div>
-              )}
-              {!processing && activeOp && !activeStep && (
-                <TriagePanel op={activeOp} onBack={() => setActiveOp(null)} onStepClick={openStep} onOpenWorkbench={onOpenWorkbench} />
-              )}
-              {!processing && activeOp && activeStep && (
-                <StepDetailPanel op={activeOp} step={activeStep} onBack={closeStep} onOpenWorkbench={onOpenWorkbench} showBudgetTable={isBudgetStep} onCollapse={() => setPanel("bar")} onNavigate={(dest) => { setPanel("bar"); }} dockMode={dockMode} onDockChange={onDockChange} />
-              )}
-              {!processing && !activeOp && (
-                <OperationsFeed ops={OPS} onSelect={selectOp} />
-              )}
-            </div>
-
-            {/* Right: automated workflows — only shown on feed view */}
-            {!activeOp && !processing && (
-              <AutomatedWorkflows onOpenWorkbench={onOpenWorkbench} />
-            )}
           </div>
         </div>
       )}
 
       {/* ── Bar ── */}
       <div style={{ backgroundColor: M.dark, borderTop: `1px solid ${M.darkBorder}` }}>
-        <div className="flex items-center gap-2 px-3 py-2">
-          {/* Brand — mirrors the input's expand action while keeping a clear hit target. */}
-          <button
-            type="button"
-            onClick={togglePanel}
-            aria-label={panel === "expanded" ? "Collapse Terraform Signal" : "Open Terraform Signal"}
-            aria-expanded={panel === "expanded"}
-            className="flex items-center gap-2 pr-3 border-r flex-shrink-0"
-            style={{
-              borderColor: M.darkBorder,
-              background: "transparent",
-              borderTop: "none",
-              borderLeft: "none",
-              borderBottom: "none",
-              paddingTop: 0,
-              paddingBottom: 0,
-              paddingLeft: 0,
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4 }} className="flex items-center justify-center">
-              <Terminal size={11} color="white" />
+        <div style={{ display: "flex", flexDirection: "column", padding: "8px 12px 10px" }}>
+
+          {/* Row 1: brand — only in collapsed state */}
+          {panel === "bar" && (
+            <button
+              type="button"
+              onClick={togglePanel}
+              aria-label="Open Terraform Signal"
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, marginBottom: 6, cursor: "pointer", alignSelf: "flex-start" }}
+            >
+              <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Terminal size={11} color="white" />
+              </div>
+              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+            </button>
+          )}
+
+          {/* Row 2: input + controls */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 6, backgroundColor: M.inputBg, border: `1px solid ${M.darkBorder}` }}>
+              <Plus size={14} color={M.textMuted} style={{ flexShrink: 0 }} />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onFocus={openChat}
+                onKeyDown={e => {
+                  if (e.key === "Escape") { setPanel("bar"); return; }
+                  if (e.key === "Enter" && !e.shiftKey && query.trim()) {
+                    e.preventDefault();
+                    chatSendRef.current?.(query);
+                    setQuery("");
+                  }
+                }}
+                placeholder="Ask about your Terraform fleet…"
+                style={{ flex: 1, background: "none", border: "none", outline: "none", color: M.text, fontSize: "13px", fontFamily: M.font }}
+              />
+              {query && <X size={13} color={M.textMuted} style={{ cursor: "pointer", flexShrink: 0 }} onClick={() => { setQuery(""); setActiveOp(null); }} />}
             </div>
-            <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
-          </button>
-
-          {/* Input */}
-          <div className="flex-1 flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: M.inputBg, border: `1px solid ${M.darkBorder}` }}>
-            <Plus size={14} color={M.textMuted} className="flex-shrink-0" />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onFocus={expandPanel}
-              onKeyDown={e => {
-                if (e.key === "Escape") setPanel("bar");
-              }}
-              placeholder={activeStep ? "Or type a response…" : "Search, inspect, or prepare infrastructure changes"}
-              className="flex-1 bg-transparent outline-none"
-              style={{ color: M.text, fontSize: "13px" }}
-            />
-            {query && <X size={13} color={M.textMuted} className="cursor-pointer flex-shrink-0" onClick={() => { setQuery(""); setActiveOp(null); }} />}
+            <button
+              onClick={() => { setSignalTab("ops"); setPanel("expanded"); }}
+              title="CLI"
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", height: 28, borderRadius: 6, border: `1px solid ${M.darkBorder}`, backgroundColor: signalTab === "ops" && panel === "expanded" ? M.darkItem : "transparent", color: signalTab === "ops" && panel === "expanded" ? M.text : M.textMuted, cursor: "pointer", flexShrink: 0 }}
+            >
+              <Pen size={13} />
+              <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: M.font, whiteSpace: "nowrap" }}>CLI</span>
+            </button>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {onOpenWorkbench && (
-              <button onClick={() => onOpenWorkbench(query || undefined)} className="flex items-center gap-1.5 px-3 py-1.5 rounded" style={{ backgroundColor: M.blue, color: "white", fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer" }}>
-                <Terminal size={12} />Open Workbench
-              </button>
-            )}
-            {panel === "bar" && (
-              <button
-                onClick={expandPanel}
-                className="flex items-center justify-center rounded"
-                style={{ width: 28, height: 28, backgroundColor: M.darkItem, border: `1px solid ${M.darkBorder}`, color: M.textMuted, cursor: "pointer" }}
-              >
-                <ChevronUp size={15} />
-              </button>
-            )}
-          </div>
         </div>
       </div>
     </div>

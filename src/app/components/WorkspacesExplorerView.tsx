@@ -3178,7 +3178,7 @@ useEffect(() => {
   const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
 
   return (
-    <div className="relative isolate h-full min-h-[640px] min-w-[1200px] overflow-hidden bg-[#fafafa] font-sans" style={{ color: glassText }}>
+    <div className="relative h-full min-h-[640px] min-w-[1200px] overflow-hidden bg-[#fafafa] font-sans" style={{ color: glassText }}>
       {/* One canvas for the full Explorer. It is deliberately behind every graph, HUD, and panel. */}
       <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         {/* The imported canvas is 650px tall; repeat it so the same dot cadence reaches every viewport height. */}
