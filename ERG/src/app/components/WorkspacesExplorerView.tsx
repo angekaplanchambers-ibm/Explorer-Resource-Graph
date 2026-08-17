@@ -3477,7 +3477,7 @@ useEffect(() => {
           aria-label="Collapse Explorer HUD"
           style={{
             position: "absolute",
-            top: 12,
+            bottom: 0,
             left: "100%",
             width: 36,
             height: 40,
