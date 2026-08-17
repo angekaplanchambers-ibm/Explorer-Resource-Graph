@@ -3438,9 +3438,9 @@ useEffect(() => {
           onClick={() => setHudCollapsed(false)}
           aria-label="Expand Explorer HUD"
           style={{
-            position: "fixed",
+            position: "absolute",
             left: 0,
-            top: 72,
+            top: hudPosition.y + 25,
             width: 36,
             height: 40,
             display: "flex",
