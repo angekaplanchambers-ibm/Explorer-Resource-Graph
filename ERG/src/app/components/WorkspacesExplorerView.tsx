@@ -3440,7 +3440,7 @@ useEffect(() => {
           style={{
             position: "absolute",
             left: 0,
-            top: hudPosition.y + 25,
+            top: Math.max(64, hudPosition.y + 25),
             width: 36,
             height: 40,
             display: "flex",
