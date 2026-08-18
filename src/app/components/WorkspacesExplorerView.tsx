@@ -1898,7 +1898,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
           `}</style>
           {/* Orange arrowhead — downstream edges, tip at end (markerEnd) */}
           <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L8,3 z" fill="#f97316" />
+            <path d="M0,0 L0,6 L8,3 z" fill="#D55E00" />
           </marker>
           {/* Purple arrowhead — upstream edges, tip at start (markerStart), so reversed: tip points left */}
           <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
@@ -1959,7 +1959,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const depthTarget = blastDepthMap.get(edge.target) ?? 0;
             // downstream: origin → outward (depth increases). upstream: back toward origin.
             const isDownstream = depthSource <= depthTarget;
-            const color = isDownstream ? "#f97316" : "#a855f7";
+            const color = isDownstream ? "#D55E00" : "#a855f7";
             // For downstream: draw from upstream node toward downstream node, arrowhead at end.
             // For upstream: draw from the far node toward origin, arrowhead at start (the far node end).
             const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
@@ -2122,11 +2122,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               {/* Downstream section */}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#f97316" /></svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#b45309" : "#fb923c", textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#D55E00" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#D55E00" /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#D55E00", textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
                 </div>
                 {downstreamNodes.length > 0
-                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, "#f97316"))}</div>
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, "#D55E00"))}</div>
                   : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
                 }
               </div>
@@ -2190,7 +2190,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 </button>
                 <button
                   onClick={() => setBlastRadiusId(selectedNode.id)}
-                  style={{ height: 38, borderRadius: 8, border: "1px solid rgba(234,179,8,0.6)", background: "transparent", color: "#eab308", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                  style={{ height: 38, borderRadius: 8, border: "1px solid rgba(213,94,0,0.4)", background: "transparent", color: "#D55E00", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View blast radius <span>→</span>
                 </button>
@@ -2738,16 +2738,14 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
         type="button"
         onClick={() => setOpen(o => !o)}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
-          height: 32, padding: "0 12px", borderRadius: 6,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          height: 32, width: 32, borderRadius: 6,
           border: "1px solid rgba(0,0,0,0.15)",
           background: open ? "rgba(0,0,0,0.05)" : "#fff",
-          color: "#3b3d45", fontSize: 13, fontWeight: 500,
-          cursor: "pointer", whiteSpace: "nowrap",
+          color: "#3b3d45", cursor: "pointer",
         }}
       >
-        Actions
-        <ChevronDown size={13} style={{ opacity: 0.6, transition: "transform 0.15s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }} />
+        <MoreHorizontal size={15} />
       </button>
 
       {open && (
@@ -3435,19 +3433,16 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* HUD wrapper — always mounted so the tab is always visible */}
-      <div
-        className="absolute z-30"
-        style={{ left: hudPosition.x, top: hudPosition.y }}
-      >
-        {/* Tab — position absolute on outer wrapper, bottom-right outside corner */}
+      {/* HUD wrapper — tab at bottom-right outside, card above tab in stacking order */}
+      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30 }}>
+
+        {/* Tab — rendered first (lower z), attached to outside-right bottom corner */}
         <button
           ref={hudTabRef}
           type="button"
           onClick={e => {
             e.stopPropagation();
             if (!hudCollapsed && hudTabRef.current) {
-              // Freeze the tab's screen Y before the card unmounts
               setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
             }
             setHudCollapsed(c => !c);
@@ -3492,7 +3487,7 @@ useEffect(() => {
             boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
             cursor: "pointer",
             color: "#656a76",
-            zIndex: 1,
+            zIndex: 0,
           }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -3504,13 +3499,13 @@ useEffect(() => {
           </span>
         </button>
 
-        {/* HUD card — hidden entirely when collapsed */}
+        {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         {!hudCollapsed && (
-      <div
-        className="w-[50vw] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
-        style={{ background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
-        onMouseDown={startHudDrag}
-      >
+        <div
+          className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
+          style={{ position: "relative", zIndex: 1, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
+          onMouseDown={startHudDrag}
+        >
       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: glassMuted }}>
         <span>ILM_Demo_Space</span>
         <span>/</span>
@@ -3689,8 +3684,8 @@ useEffect(() => {
           glassMuted={glassMuted}
           onSelect={openGraph}
         />
-      </div>
-      </div>
+        </div>
+        </div>
         )}
       </div>
 
