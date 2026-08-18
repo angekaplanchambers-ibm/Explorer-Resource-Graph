@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import DotBackgroundGraph from "../../imports/DotBackgroundGraph";
 import {
   CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Clipboard, Compass,
-  Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, ListOrdered, Lock, MoreHorizontal, Plus, RefreshCw, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User, X
+  Cpu, Database, Download, ExternalLink, Globe, HardDrive, Hash, Layers, ListOrdered, Lock, MoreHorizontal, Plus, RefreshCw, Save, Search, Server, Shield, Table2, Tag, ToggleRight, Trash2, Type, User, X
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 
@@ -1088,7 +1088,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
           });
         })
       : titleRows;
-    const subset = graphTitle && VIEW_TITLE_FILTER[graphTitle] ? filteredWs : filteredWs.slice(0, 16);
+    const subset = filteredWs;
     for (const ws of subset) {
       const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = ws.metadata;
       const wsProviders = ["registry.terraform.io/hashicorp/aws", "registry.terraform.io/hashicorp/google", "registry.terraform.io/hashicorp/azurerm", "registry.terraform.io/hashicorp/kubernetes"][ws.count % 4];
@@ -1433,6 +1433,25 @@ function runRadialLayout(nodes: TopoNode[]): Map<string, { x: number; y: number 
   return pos;
 }
 
+function runGridLayout(nodes: TopoNode[]): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  const n = nodes.length;
+  if (n === 0) return pos;
+  const PADDING = NODE_R + 50;
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const colSpacing = (VW - PADDING * 2) / Math.max(cols - 1, 1);
+  const rowSpacing = (VH - PADDING * 2) / Math.max(rows - 1, 1);
+  nodes.forEach((node, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = cols === 1 ? VW / 2 : PADDING + col * colSpacing;
+    const y = rows === 1 ? VH / 2 : PADDING + row * rowSpacing;
+    pos.set(node.id, { x, y });
+  });
+  return pos;
+}
+
 function curvePath(x1: number, y1: number, x2: number, y2: number): string {
   const mx = (x1 + x2) / 2;
   return `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
@@ -1452,7 +1471,7 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
 // Fallback for unknown types
 const DEFAULT_NODE_ICON: LucideIcon = Server;
 
-type TopoLayout = "force" | "stacked" | "radial";
+type TopoLayout = "force" | "stacked" | "radial" | "grid";
 type WsGroupMode = "none" | "project" | "status";
 
 // Returns key-value pairs for a node's popover, using the column labels for the active type.
@@ -1539,14 +1558,23 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
   return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
 }
 
-type OverlayInfo = { workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] };
+type OverlayInfo =
+  | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
+  | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
+  | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
 function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
   const [viewResourcesCount, setViewResourcesCount] = useState<number>(0);
+  const [viewModulesWsName, setViewModulesWsName] = useState<string | null>(null);
+  const [viewModulesCount, setViewModulesCount] = useState<number>(0);
+  const [viewProvidersWsName, setViewProvidersWsName] = useState<string | null>(null);
+  const [viewProvidersCount, setViewProvidersCount] = useState<number>(0);
+  const [wsPopoverView, setWsPopoverView] = useState<"main" | "modules">("main");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+  const [showEdges, setShowEdges] = useState<boolean>(true);
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -1555,6 +1583,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
     setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+    setShowEdges(true);
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -1635,13 +1664,67 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     }
     return { nodes: overlayNodes, edges: overlayEdges };
   }, [viewResourcesWsName, viewResourcesCount]);
-  const activeNodes = resourceOverlay ? resourceOverlay.nodes : nodes;
-  const activeEdges = resourceOverlay ? resourceOverlay.edges : edges;
+
+  // Module overlay: generate exactly viewModulesCount synthetic module nodes connected to the workspace,
+  // using real moduleRows as templates (same pattern as resourceOverlay).
+  const moduleOverlay = useMemo(() => {
+    if (!viewModulesWsName) return null;
+    const count = viewModulesCount;
+    const overlayNodes: TopoNode[] = [];
+    const overlayEdges: TopoEdge[] = [];
+    const edgeSet = new Set<string>();
+    function addMEdge(a: string, b: string) {
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!edgeSet.has(key)) { edgeSet.add(key); overlayEdges.push({ source: a, target: b }); }
+    }
+    const wsNodeId = `ws-mod-ov-${viewModulesWsName}`;
+    overlayNodes.push({ id: wsNodeId, label: viewModulesWsName, type: "workspace", secondary: `${count} mod`, data: { name: viewModulesWsName } });
+    // Build count synthetic module nodes cycling through real moduleRows as templates
+    Array.from({ length: count }, (_, i) => {
+      const base = moduleRows[i % moduleRows.length];
+      const nodeId = `mod-ov-${i}`;
+      const label = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
+      overlayNodes.push({ id: nodeId, label, type: "module", secondary: `v${base[1]}`, data: {
+        name: label, version: base[1], source: base[2], workspaceCount: base[3], workspaces: viewModulesWsName,
+      }});
+      addMEdge(wsNodeId, nodeId);
+    });
+    return { nodes: overlayNodes, edges: overlayEdges };
+  }, [viewModulesWsName, viewModulesCount]);
+
+  // Provider overlay: generate exactly viewProvidersCount synthetic provider nodes connected to workspace.
+  const providerOverlay = useMemo(() => {
+    if (!viewProvidersWsName) return null;
+    const count = viewProvidersCount;
+    const overlayNodes: TopoNode[] = [];
+    const overlayEdges: TopoEdge[] = [];
+    const edgeSet = new Set<string>();
+    function addPEdge(a: string, b: string) {
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!edgeSet.has(key)) { edgeSet.add(key); overlayEdges.push({ source: a, target: b }); }
+    }
+    const wsNodeId = `ws-prov-ov-${viewProvidersWsName}`;
+    overlayNodes.push({ id: wsNodeId, label: viewProvidersWsName, type: "workspace", secondary: `${count} prov`, data: { name: viewProvidersWsName } });
+    Array.from({ length: count }, (_, i) => {
+      const base = providerRows[i % providerRows.length];
+      const nodeId = `prov-ov-${i}`;
+      const label = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
+      overlayNodes.push({ id: nodeId, label, type: "provider", secondary: `v${base[1]}`, data: {
+        name: label, version: base[1], source: base[2], workspaceCount: base[3], workspaces: viewProvidersWsName,
+      }});
+      addPEdge(wsNodeId, nodeId);
+    });
+    return { nodes: overlayNodes, edges: overlayEdges };
+  }, [viewProvidersWsName, viewProvidersCount]);
+
+  const activeNodes = resourceOverlay ? resourceOverlay.nodes : moduleOverlay ? moduleOverlay.nodes : providerOverlay ? providerOverlay.nodes : nodes;
+  const activeEdges = resourceOverlay ? resourceOverlay.edges : moduleOverlay ? moduleOverlay.edges : providerOverlay ? providerOverlay.edges : edges;
   const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
+  const gridPositions = useMemo(() => runGridLayout(activeNodes), [activeNodes]);
 
-  const positions = topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
+  const positions = topoLayout === "grid" ? gridPositions : topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
@@ -1918,7 +2001,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         {/* Zoomable content */}
         <g transform={groupTransform}>
           {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
-          {visibleEdges.map((edge, i) => {
+          {showEdges && visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
             const pt = positions.get(edge.target);
             if (!ps || !pt) return null;
@@ -1928,7 +2011,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               ? (blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0) &&
                 blastRadiusSet.has(edge.source) && blastRadiusSet.has(edge.target)
               : false;
-            const activeId = hoveredId ?? selectedId;
+            const subViewOpen = !!(viewResourcesWsName || viewModulesWsName || viewProvidersWsName);
+            const activeId = hoveredId ?? (subViewOpen ? null : selectedId);
             const isLit = !activeId || edge.source === activeId || edge.target === activeId;
             const opacity = blastRadiusId
               ? (isBlastEdge ? 0 : 0.06)
@@ -1949,7 +2033,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
           })}
 
           {/* Blast radius edges — only origin↔neighbour edges get orange/purple arrows */}
-          {blastRadiusId && visibleEdges.map((edge, i) => {
+          {showEdges && blastRadiusId && visibleEdges.map((edge, i) => {
             const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
             if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
             const ps = positions.get(edge.source);
@@ -2002,7 +2086,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               ? !inBlastRadius
               : hoveredId
                 ? (!isHovered && !isHoverNeighbor)
-                : (!!selectedId && !isSelected && !isNeighbor);
+                : (!!selectedId && !isSelected && !isNeighbor && !viewResourcesWsName && !viewModulesWsName && !viewProvidersWsName);
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
             const isHub = node.type === "ws-group-project" || node.type === "ws-group-status";
@@ -2056,7 +2140,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewResourcesWsName(null); onOverlayWorkspaceChange?.(null); setSelectedId(null); setZoom({ tx: 0, ty: 0, scale: 1 }); setViewResourcesCount(0); }}
+              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit resource view
@@ -2080,8 +2164,74 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         );
       })()}
 
+      {/* Modules overlay panel */}
+      {viewModulesWsName && (() => {
+        const modNodes = moduleOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
+        return (
+          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <button
+              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              ← exit module view
+            </button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewModulesWsName}</div>
+            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+              {modNodes.length} module{modNodes.length !== 1 ? "s" : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+              {modNodes.length === 0
+                ? <div style={{ fontSize: 12, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)" }}>No modules found for this workspace.</div>
+                : modNodes.map(n => (
+                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS["module"] ?? "#9b8ff5", flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1 }}>{n.secondary}</div>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Providers overlay panel */}
+      {viewProvidersWsName && (() => {
+        const provNodes = providerOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
+        return (
+          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+            <button
+              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              ← exit provider view
+            </button>
+            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewProvidersWsName}</div>
+            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+              {provNodes.length} provider{provNodes.length !== 1 ? "s" : ""}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+              {provNodes.length === 0
+                ? <div style={{ fontSize: 12, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)" }}>No providers found for this workspace.</div>
+                : provNodes.map(n => (
+                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS["provider"] ?? "#9b8ff5", flexShrink: 0 }} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1 }}>{n.secondary}</div>
+                    </div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Popover — top right, fixed position, for selected nodes */}
-      {selectedNode && !viewResourcesWsName && (() => {
+      {selectedNode && !viewResourcesWsName && !viewModulesWsName && !viewProvidersWsName && (() => {
         const isWorkspace = selectedNode.type === "workspace";
         const d = selectedNode.data as Record<string, unknown>;
 
@@ -2179,14 +2329,46 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
                     });
                     setViewResourcesWsName(wsName);
-                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: synRows });
+                    onOverlayWorkspaceChange?.({ kind: "resources", workspaceName: wsName, rows: synRows });
                     setViewResourcesCount(count);
-                    setSelectedId(null);
-                    setZoom({ tx: 0, ty: 0, scale: 1 });
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View resources <span>→</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const modCount = Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0);
+                    const wsName = selectedNode.label;
+                    const modRows: readonly (readonly [string, string, string, string, string])[] = Array.from({ length: modCount }, (_, i) => {
+                      const base = moduleRows[i % moduleRows.length];
+                      const name = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
+                      return [name, base[1], base[2], base[3], wsName] as const;
+                    });
+                    setViewModulesWsName(wsName);
+                    setViewModulesCount(modCount);
+                    onOverlayWorkspaceChange?.({ kind: "modules", workspaceName: wsName, rows: modRows });
+                  }}
+                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                >
+                  View modules ({Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0)}) <span>→</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const provCount = Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0);
+                    const wsName = selectedNode.label;
+                    const provRows: readonly (readonly [string, string, string, string, string])[] = Array.from({ length: provCount }, (_, i) => {
+                      const base = providerRows[i % providerRows.length];
+                      const name = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
+                      return [name, base[1], base[2], base[3], wsName] as const;
+                    });
+                    setViewProvidersWsName(wsName);
+                    setViewProvidersCount(provCount);
+                    onOverlayWorkspaceChange?.({ kind: "providers", workspaceName: wsName, rows: provRows });
+                  }}
+                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                >
+                  View providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
                 </button>
                 <button
                   onClick={() => setBlastRadiusId(selectedNode.id)}
@@ -2248,8 +2430,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-        {(["force", "stacked", "radial"] as TopoLayout[]).map(layout => {
-          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial" };
+        {(["force", "stacked", "radial", "grid"] as TopoLayout[]).map(layout => {
+          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial", grid: "Grid" };
           const isActive = topoLayout === layout;
           return (
             <button
@@ -2269,7 +2451,24 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             </button>
           );
         })}
-        
+
+        {/* Connectors divider + toggle */}
+        <div style={{ width: 1, height: 16, background: themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", margin: "0 4px" }} />
+        <button
+          onClick={() => setShowEdges(v => !v)}
+          style={{
+            height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
+            borderColor: showEdges ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
+            background: showEdges ? (themeMode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.12)") : "transparent",
+            color: showEdges ? (themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)") : (themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.5)"),
+            fontSize: 12, fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+            fontWeight: showEdges ? 600 : 400, cursor: "pointer", transition: "all 0.15s ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Connectors
+        </button>
+
         {setThemeMode && (
           <>
             <div style={{ width: 1, height: 16, background: themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)", margin: "0 4px" }} />
@@ -2590,7 +2789,7 @@ function InlineQueryBuilder({
   );
 }
 
-function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[] }) {
+function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride, wsGroupMode = "none" }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[]; wsGroupMode?: WsGroupMode }) {
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -2651,6 +2850,22 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
     return String(value);
   }
 
+  // When group mode is active, build an ordered list of [groupKey, rows[]] pairs
+  const groupedSections: [string, typeof sortedRows][] | null = useMemo(() => {
+    if (wsGroupMode === "none") return null;
+    const map = new Map<string, typeof sortedRows>();
+    for (const row of sortedRows) {
+      const key = wsGroupMode === "project"
+        ? String(row.project ?? "Unknown")
+        : String(row.runStatus ?? "Unknown");
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [sortedRows, wsGroupMode]);
+
+  const colSpan = columns.length + 1; // +1 for checkbox column
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
@@ -2668,25 +2883,59 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
               ))}
             </tr>
           </thead>
-          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(row => <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white"><td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>{columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}</tr>)}</tbody>
+          <tbody className="text-[12px] text-[#52525b]">
+            {groupedSections ? (
+              groupedSections.map(([groupKey, groupRows]) => (
+                <>
+                  <tr key={`group-${groupKey}`}>
+                    <td colSpan={colSpan} className="border-t border-[#dedfe3] bg-[#f7f8fa] px-4 py-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-[#52525b]">{groupKey}</span>
+                      <span className="ml-2 text-[11px] text-[#8c909c]">{groupRows.length} workspace{groupRows.length !== 1 ? "s" : ""}</span>
+                    </td>
+                  </tr>
+                  {groupRows.map(row => (
+                    <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white">
+                      <td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>
+                      {columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}
+                    </tr>
+                  ))}
+                </>
+              ))
+            ) : (
+              pageRows.map(row => (
+                <tr key={row.id} className="h-12 border-t border-[#dedfe3] bg-white">
+                  <td className="border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, background: "#ffffff" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></td>
+                  {columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}
+                </tr>
+              ))
+            )}
+          </tbody>
         </table>
       </div>
-      <TablePagination
-        currentPage={page}
-        totalPages={totalPages}
-        totalItems={sortedRows.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={_size => { setPage(1); }}
-        pageSizeOptions={[10, 20, 50, 100]}
-      />
+      {!groupedSections && (
+        <TablePagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={sortedRows.length}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={_size => { setPage(1); }}
+          pageSizeOptions={[10, 20, 50, 100]}
+        />
+      )}
     </div>
   );
 }
 
-function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null }) {
-  // When a workspace resource overlay is active, show the full ResourcesTable with the exact rows the graph shows.
+function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo, wsGroupMode = "none" }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null; wsGroupMode?: WsGroupMode }) {
+  // When a workspace overlay is active, show the scoped table for that kind.
   if (overlayInfo) {
+    if (overlayInfo.kind === "modules") {
+      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={moduleTableColumns.map(c => c.id)} conditions={[]} onNavigate={onNavigate} />;
+    }
+    if (overlayInfo.kind === "providers") {
+      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={moduleTableColumns.map(c => c.id)} conditions={[]} onNavigate={onNavigate} />;
+    }
     return <ResourcesTable
       visibleColumnIds={resourceTableColumns.map(c => c.id)}
       conditions={[]}
@@ -2701,7 +2950,7 @@ function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds
   if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} />;
   if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
-  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} wsGroupMode={wsGroupMode} />;
 }
 
 // ── ActionsDropdown ──────────────────────────────────────────────────────────
@@ -3068,7 +3317,11 @@ function ExplorerSplashView({
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
+  const [hoveredPanel2Item, setHoveredPanel2Item] = useState<string | null>(null);
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
+  const useCaseDropdownRef = useRef<HTMLDivElement>(null);
+  const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
+  const [useCaseMenuRect, setUseCaseMenuRect] = useState<{ top: number; left: number } | null>(null);
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
@@ -3079,7 +3332,10 @@ function ExplorerSplashView({
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
-  useEffect(() => { setModalConditions([]); setWsGroupMode("none"); }, [selectedGraphType]);
+  useEffect(() => {
+    setModalConditions([]);
+    if (selectedGraphType !== "Workspaces") setWsGroupMode("none");
+  }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudCollapsed, setHudCollapsed] = useState(false);
   const [hudCollapsedTabTop, setHudCollapsedTabTop] = useState<number | null>(null);
@@ -3132,8 +3388,12 @@ function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
 
   useEffect(() => {
     function closeUseCaseMenu(event: MouseEvent) {
-      if (useCaseMenuRef.current && !useCaseMenuRef.current.contains(event.target as Node)) {
+      if (
+        useCaseMenuRef.current && !useCaseMenuRef.current.contains(event.target as Node) &&
+        useCaseDropdownRef.current && !useCaseDropdownRef.current.contains(event.target as Node)
+      ) {
         setUseCaseMenuOpen(false);
+        setHoveredPanel2Item(null);
       }
     }
     window.addEventListener("mousedown", closeUseCaseMenu);
@@ -3168,7 +3428,8 @@ useEffect(() => {
     };
   }, []);
 
-  const tableResultCount = selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
+  const tableResultCount = overlayInfo ? overlayInfo.rows.length
+    : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
     : selectedGraphType === "Providers" ? providerRows.length
     : selectedGraphType === "Resources" ? resourceRows.length
@@ -3291,7 +3552,10 @@ useEffect(() => {
                       {selectedResourceId ? (resourceRows.find(r => r.id === selectedResourceId)?.address ?? selectedResourceId) : (selectedGraphTitle ?? selectedGraphType)}
                     </p>
                     {!selectedResourceId && (
-                      <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing.</p>
+                      <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
+                        {tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing
+                        {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
+                      </p>
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -3330,7 +3594,7 @@ useEffect(() => {
                   ) : (
                     <>
                       <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} />
+                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} wsGroupMode={wsGroupMode} />
                     </>
                   )}
                 </div>
@@ -3533,8 +3797,13 @@ useEffect(() => {
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Browse</p>
         <div className="relative">
           <button
+            ref={useCaseTriggerRef}
             type="button"
-            onClick={() => setUseCaseMenuOpen(open => !open)}
+            onClick={() => {
+              const rect = useCaseTriggerRef.current?.getBoundingClientRect();
+              if (rect) setUseCaseMenuRect({ top: rect.bottom + 4, left: rect.left });
+              setUseCaseMenuOpen(open => !open);
+            }}
             aria-expanded={useCaseMenuOpen}
             aria-haspopup="menu"
             className="flex h-8 w-full items-center justify-between rounded-[4px] border px-3 text-left text-[12px] font-medium transition-colors bg-white text-[#3b3d45] hover:bg-[#f1f2f3]"
@@ -3554,13 +3823,25 @@ useEffect(() => {
               "Resources": resourceRows.length,
               "Terraform Versions": terraformVersionRows.length,
             };
+            const viewAllWorkspacesLabel = "View All Workspaces";
+            const showPanel3 = activeCategory.type === "Workspaces" && hoveredPanel2Item === viewAllWorkspacesLabel;
+            const groupByLabels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
             return (
               <div
+                ref={useCaseDropdownRef}
                 role="menu"
                 aria-label="Pre-defined Explorer views"
-                className="absolute left-0 top-[38px] z-50 grid w-[620px] grid-cols-[240px_1fr] overflow-hidden rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
-                style={{ background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)", borderColor: glassBorder }}
+                className="fixed z-[200] grid rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
+                style={{
+                  background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)",
+                  borderColor: glassBorder,
+                  top: useCaseMenuRect?.top ?? 0,
+                  left: useCaseMenuRect?.left ?? 0,
+                  width: showPanel3 ? 820 : 620,
+                  gridTemplateColumns: showPanel3 ? "240px 1fr 200px" : "240px 1fr",
+                }}
               >
+                {/* Panel 1 — Types */}
                 <div className="border-r p-1.5" style={{ borderColor: glassBorder }}>
                   <p className="px-2.5 pb-1.5 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Types</p>
                   {USE_CASE_CATEGORIES.map(category => {
@@ -3571,7 +3852,7 @@ useEffect(() => {
                         key={category.type}
                         type="button"
                         role="menuitem"
-                        onClick={() => setHoveredUseCaseType(category.type)}
+                        onClick={() => { setHoveredUseCaseType(category.type); setHoveredPanel2Item(null); }}
                         className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
                         style={!isHovered ? { color: glassText } : undefined}
                       >
@@ -3592,6 +3873,8 @@ useEffect(() => {
                     <ChevronRight size={14} className="opacity-45" />
                   </button>
                 </div>
+
+                {/* Panel 2 — Pre-defined Views */}
                 <div className="p-3">
                   <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Pre-defined Views</p>
                   <div className="space-y-0.5">
@@ -3599,16 +3882,27 @@ useEffect(() => {
                       const viewAllLabel = `View All ${activeCategory.type}`;
                       const isViewAllSelected = selectedGraphTitle === viewAllLabel;
                       const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
+                      const hasSubViews = activeCategory.type === "Workspaces";
+                      const isP2Open = hoveredPanel2Item === viewAllLabel;
                       return (
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={() => openGraph(activeCategory.type, viewAllLabel)}
-                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                          style={!isViewAllSelected ? { color: glassText } : undefined}
+                          onClick={() => {
+                            if (hasSubViews) {
+                              setHoveredPanel2Item(isP2Open ? null : viewAllLabel);
+                            } else {
+                              openGraph(activeCategory.type, viewAllLabel);
+                            }
+                          }}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected || isP2Open ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isViewAllSelected && !isP2Open ? { color: glassText } : undefined}
                         >
                           <span>{viewAllLabel}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
+                            {hasSubViews && <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${isP2Open ? "rotate-90" : ""}`} />}
+                          </span>
                         </button>
                       );
                     })()}
@@ -3635,6 +3929,51 @@ useEffect(() => {
                     })}
                   </div>
                 </div>
+
+                {/* Panel 3 — Group By (click View All Workspaces to open) */}
+                {showPanel3 && (
+                  <div className="border-l p-3" style={{ borderColor: glassBorder }}>
+                    <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Group By</p>
+                    <div className="space-y-0.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setWsGroupMode("none"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
+                        className={`flex w-full items-center gap-2 rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${wsGroupMode === "none" && selectedGraphTitle === viewAllWorkspacesLabel ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                        style={wsGroupMode === "none" && selectedGraphTitle === viewAllWorkspacesLabel ? undefined : { color: glassText }}
+                      >
+                        <span className="flex size-[18px] shrink-0 items-center justify-center rounded-[4px] bg-[#e8eaf0]">
+                          <WorkspaceIcon size={10} color="#656a76" />
+                        </span>
+                        View All
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setWsGroupMode("project"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
+                        className={`flex w-full items-center gap-2 rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${wsGroupMode === "project" && selectedGraphTitle === viewAllWorkspacesLabel ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                        style={wsGroupMode === "project" && selectedGraphTitle === viewAllWorkspacesLabel ? undefined : { color: glassText }}
+                      >
+                        <span className="flex size-[18px] shrink-0 items-center justify-center rounded-[4px]" style={{ background: "rgba(99,102,241,0.12)" }}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6366f1", display: "block" }} />
+                        </span>
+                        {groupByLabels["project"]}
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setWsGroupMode("status"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
+                        className={`flex w-full items-center gap-2 rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${wsGroupMode === "status" && selectedGraphTitle === viewAllWorkspacesLabel ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                        style={wsGroupMode === "status" && selectedGraphTitle === viewAllWorkspacesLabel ? undefined : { color: glassText }}
+                      >
+                        <span className="flex size-[18px] shrink-0 items-center justify-center rounded-[4px]" style={{ background: "rgba(245,158,11,0.12)" }}>
+                          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", display: "block" }} />
+                        </span>
+                        {groupByLabels["status"]}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -3642,38 +3981,36 @@ useEffect(() => {
 
         {selectedGraphTitle && (() => {
           const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
+          const typeRowCounts: Record<string, number> = {
+            "Workspaces": workspaceRows.length,
+            "Policy Sets": policySetRows.length,
+            "Modules": moduleRows.length,
+            "Providers": providerRows.length,
+            "Resources": resourceRows.length,
+            "Terraform Versions": terraformVersionRows.length,
+          };
+          const resultCount = selectedGraphType === "Workspaces"
+            ? getWorkspaceRowsForTitle(selectedGraphTitle).length
+            : selectedGraphType === "Policy Sets"
+              ? getPolicySetRowsForTitle(selectedGraphTitle).length
+              : typeRowCounts[selectedGraphType ?? ""] ?? 0;
+          const groupByLabels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
           return (
             <div className="mt-2 flex flex-col gap-2">
-              <div className="flex items-center">
-                <span className="flex items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
-                  <span className="flex size-4 items-center justify-center text-[#656a76]">
-                    <ActiveIcon size={14} />
-                  </span>
-                  {selectedGraphTitle}
-                  <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
-                    <X size={13} />
-                  </button>
+              {/* Chip — title (+ grouped by suffix when active) + count */}
+              <span className="flex w-fit items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
+                <span className="flex size-4 items-center justify-center text-[#656a76]">
+                  <ActiveIcon size={14} />
                 </span>
-              </div>
-              {selectedGraphType === "Workspaces" && (
-                <div className="flex items-center gap-1.5" onMouseDown={e => e.stopPropagation()}>
-                  <span className="text-[11px] font-medium text-[#656a76] shrink-0">Group by</span>
-                  {(["none", "project", "status"] as WsGroupMode[]).map(mode => {
-                    const labels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
-                    const isActive = wsGroupMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setWsGroupMode(mode)}
-                        className={`h-6 px-3 rounded-full text-[11px] font-medium transition-colors border ${isActive ? "bg-[#0f62fe] text-white border-[#0f62fe]" : "bg-white text-[#3b3d45] border-[rgba(59,61,69,0.25)] hover:bg-[#f1f2f3]"}`}
-                      >
-                        {labels[mode]}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+                {selectedGraphTitle}
+                {selectedGraphType === "Workspaces" && wsGroupMode !== "none" && (
+                  <span className="font-normal text-[#656a76]">grouped by {groupByLabels[wsGroupMode]}</span>
+                )}
+                <span className="font-normal text-[#656a76]">({resultCount})</span>
+                <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); setWsGroupMode("none"); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
+                  <X size={13} />
+                </button>
+              </span>
             </div>
           );
         })()}
