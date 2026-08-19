@@ -2507,20 +2507,20 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       </div>
 
       {/* Zoom controls — bottom right, above layout switcher */}
-      <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ position: "absolute", bottom: 62, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
         {/* Table view toggle — only in View All views and not while blast radius is active */}
         {onTableViewToggle && !blastRadiusId && (
           <button
             onClick={onTableViewToggle}
             title={tableViewOpen ? "Close table view" : "Open table view"}
-            style={{ width: 30, height: 30, borderRadius: 6, border: tableViewOpen ? "1px solid rgba(16,96,255,0.4)" : (themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)"), background: tableViewOpen ? "rgba(16,96,255,0.12)" : (themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)"), color: tableViewOpen ? "#1060ff" : (themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            style={{ width: 30, height: 30, borderRadius: 5, border: tableViewOpen ? "1px solid rgba(16,96,255,0.4)" : "1px solid transparent", background: tableViewOpen ? "rgba(16,96,255,0.12)" : "transparent", color: tableViewOpen ? "#1060ff" : (themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
           >
             <ListOrdered size={13} />
           </button>
         )}
-        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
+        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
         <button
           onClick={() => {
             const isInitial =
@@ -2543,7 +2543,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             setRefreshKey(k => k + 1);
           }}
           title="Refresh"
-          style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <RefreshCw size={13} />
         </button>
