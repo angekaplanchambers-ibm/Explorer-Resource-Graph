@@ -3907,7 +3907,7 @@ useEffect(() => {
                             className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                             style={!byProjectSelected ? { color: glassText } : undefined}
                           >
-                            <span>Organized by Project</span>
+                            <span className="pl-4">Organized by Project</span>
                           </button>
                           <button
                             type="button"
@@ -3916,7 +3916,7 @@ useEffect(() => {
                             className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                             style={!byStatusSelected ? { color: glassText } : undefined}
                           >
-                            <span>Organized by Status</span>
+                            <span className="pl-4">Organized by Status</span>
                           </button>
                         </>
                       );
