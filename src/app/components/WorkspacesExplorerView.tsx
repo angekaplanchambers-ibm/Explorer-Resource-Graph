@@ -3907,8 +3907,7 @@ useEffect(() => {
                       const viewAllLabel = `View All ${activeCategory.type}`;
                       const isViewAllSelected = selectedGraphTitle === viewAllLabel && wsGroupMode === "none";
                       const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
-                      // Workspaces uses "All" as the display label; other types keep "View All X"
-                      const viewAllDisplayLabel = activeCategory.type === "Workspaces" ? "All" : viewAllLabel;
+                      const viewAllDisplayLabel = viewAllLabel;
                       return (
                         <button
                           type="button"
@@ -3998,9 +3997,7 @@ useEffect(() => {
             ? "Organized by Project"
             : selectedGraphType === "Workspaces" && wsGroupMode === "status"
               ? "Organized by Status"
-              : selectedGraphType === "Workspaces" && wsGroupMode === "none" && selectedGraphTitle === "View All Workspaces"
-                ? "All"
-                : selectedGraphTitle;
+              : selectedGraphTitle;
           return (
             <div className="mt-2 flex flex-col gap-2">
               {/* Chip — label matches the dropdown item that was clicked, plus count */}
