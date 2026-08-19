@@ -3503,7 +3503,7 @@ useEffect(() => {
             conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
             themeMode={themeMode} setThemeMode={setThemeMode}
             tableViewOpen={tableViewOpen}
-            onTableViewToggle={selectedGraphTitle && PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) ? () => {
+            onTableViewToggle={selectedGraphTitle && (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:")) ? () => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
