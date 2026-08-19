@@ -3345,7 +3345,6 @@ function ExplorerSplashView({
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
-  const [hoveredPanel2Item, setHoveredPanel2Item] = useState<string | null>(null);
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const useCaseDropdownRef = useRef<HTMLDivElement>(null);
   const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
@@ -3852,8 +3851,6 @@ useEffect(() => {
               "Terraform Versions": terraformVersionRows.length,
             };
             const viewAllWorkspacesLabel = "View All Workspaces";
-            const showPanel3 = true;
-            const groupByLabels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
             return (
               <div
                 ref={useCaseDropdownRef}
@@ -3865,8 +3862,8 @@ useEffect(() => {
                   borderColor: glassBorder,
                   top: useCaseMenuRect?.top ?? 0,
                   left: useCaseMenuRect?.left ?? 0,
-                  width: showPanel3 ? 820 : 620,
-                  gridTemplateColumns: showPanel3 ? "240px 1fr 200px" : "240px 1fr",
+                  width: 620,
+                  gridTemplateColumns: "240px 1fr",
                 }}
               >
                 {/* Panel 1 — Types */}
@@ -3908,30 +3905,49 @@ useEffect(() => {
                   <div className="space-y-0.5">
                     {(() => {
                       const viewAllLabel = `View All ${activeCategory.type}`;
-                      const isViewAllSelected = selectedGraphTitle === viewAllLabel;
+                      const isViewAllSelected = selectedGraphTitle === viewAllLabel && wsGroupMode === "none";
                       const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
-                      const hasSubViews = activeCategory.type === "Workspaces";
-                      const isP2Open = hoveredPanel2Item === viewAllLabel;
                       return (
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={() => {
-                            if (hasSubViews) {
-                              setHoveredPanel2Item(isP2Open ? null : viewAllLabel);
-                            } else {
-                              openGraph(activeCategory.type, viewAllLabel);
-                            }
-                          }}
-                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected || isP2Open ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                          style={!isViewAllSelected && !isP2Open ? { color: glassText } : undefined}
+                          onClick={() => { setWsGroupMode("none"); openGraph(activeCategory.type, viewAllLabel); }}
+                          className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                          style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
                           <span>{viewAllLabel}</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
-                            {hasSubViews && <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${isP2Open ? "rotate-90" : ""}`} />}
-                          </span>
+                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
                         </button>
+                      );
+                    })()}
+                    {/* Group-by sub-views — only for Workspaces */}
+                    {activeCategory.type === "Workspaces" && (() => {
+                      const wsCount = workspaceRows.length;
+                      const byProjectSelected = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "project";
+                      const byStatusSelected  = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "status";
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setWsGroupMode("project"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
+                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                            style={!byProjectSelected ? { color: glassText } : undefined}
+                          >
+                            <span>View All Workspaces by Project</span>
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${byProjectSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{wsCount}</span>
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setWsGroupMode("status"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
+                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                            style={!byStatusSelected ? { color: glassText } : undefined}
+                          >
+                            <span>View All Workspaces by Status</span>
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${byStatusSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{wsCount}</span>
+                          </button>
+                        </>
                       );
                     })()}
                     {activeCategory.items.map(view => {
@@ -3958,35 +3974,6 @@ useEffect(() => {
                   </div>
                 </div>
 
-                {/* Panel 3 — Group By sub-views (shown when View All Workspaces is clicked) */}
-                {showPanel3 && (
-                  <div className="border-l p-3" style={{ borderColor: glassBorder, minWidth: 200, background: "red" }}>
-                    <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>Group By</p>
-                    <div className="space-y-0.5">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setWsGroupMode("none"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
-                        className={`flex w-full items-center rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${wsGroupMode === "none" && selectedGraphTitle === viewAllWorkspacesLabel ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                        style={wsGroupMode === "none" && selectedGraphTitle === viewAllWorkspacesLabel ? undefined : { color: glassText }}
-                      >
-                        View All
-                      </button>
-                      {(["project", "status"] as WsGroupMode[]).map(mode => (
-                        <button
-                          key={mode}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => { setWsGroupMode(mode); openGraph("Workspaces", viewAllWorkspacesLabel); }}
-                          className={`flex w-full items-center rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${wsGroupMode === mode && selectedGraphTitle === viewAllWorkspacesLabel ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                          style={wsGroupMode === mode && selectedGraphTitle === viewAllWorkspacesLabel ? undefined : { color: glassText }}
-                        >
-                          {groupByLabels[mode]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })()}
