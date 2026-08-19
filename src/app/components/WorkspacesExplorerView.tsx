@@ -3359,7 +3359,7 @@ function ExplorerSplashView({
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const useCaseDropdownRef = useRef<HTMLDivElement>(null);
   const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
-  const [useCaseMenuRect, setUseCaseMenuRect] = useState<{ top: number; left: number } | null>(null);
+  const hudCardRef = useRef<HTMLDivElement>(null);
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
@@ -3804,7 +3804,8 @@ useEffect(() => {
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         {!hudCollapsed && (
         <div
-          className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl"
+          ref={hudCardRef}
+          className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
           style={{ position: "relative", zIndex: 1, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
           onMouseDown={startHudDrag}
         >
@@ -3838,8 +3839,6 @@ useEffect(() => {
             ref={useCaseTriggerRef}
             type="button"
             onClick={() => {
-              const rect = useCaseTriggerRef.current?.getBoundingClientRect();
-              if (rect) setUseCaseMenuRect({ top: rect.bottom + 4, left: rect.left });
               setUseCaseMenuOpen(open => !open);
             }}
             aria-expanded={useCaseMenuOpen}
@@ -3878,12 +3877,12 @@ useEffect(() => {
                 ref={useCaseDropdownRef}
                 role="menu"
                 aria-label="Pre-defined Explorer views"
-                className="fixed z-[200] grid rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
+                className="absolute z-[200] grid rounded-[9px] border shadow-[0_18px_38px_rgba(0,0,0,0.2)] backdrop-blur-xl"
                 style={{
                   background: themeMode === "light" ? "rgba(249,250,252,0.96)" : "rgba(27,29,37,0.96)",
                   borderColor: glassBorder,
-                  top: useCaseMenuRect?.top ?? 0,
-                  left: useCaseMenuRect?.left ?? 0,
+                  top: "calc(100% + 4px)",
+                  left: 0,
                   width: showPanel3 ? 820 : 620,
                   gridTemplateColumns: showPanel3 ? "240px 1fr 200px" : "240px 1fr",
                 }}
