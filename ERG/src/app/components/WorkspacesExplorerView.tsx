@@ -120,7 +120,16 @@ const VIEW_TITLE_FILTER: Record<string, (row: WsRow, index?: number) => boolean>
 
 // Returns the filtered workspace rows for a given view title (or all rows if no filter defined).
 function getWorkspaceRowsForTitle(title: string | null): WsRow[] {
-  if (!title || !VIEW_TITLE_FILTER[title]) return workspaceRows;
+  if (!title) return workspaceRows;
+  if (title.startsWith("project:")) {
+    const key = title.slice(8);
+    return workspaceRows.filter(r => String(r.project ?? "Unknown") === key);
+  }
+  if (title.startsWith("status:")) {
+    const key = title.slice(7);
+    return workspaceRows.filter(r => String(r.status ?? "Unknown") === key);
+  }
+  if (!VIEW_TITLE_FILTER[title]) return workspaceRows;
   const fn = VIEW_TITLE_FILTER[title];
   return workspaceRows.filter((row, i) => fn(row, i));
 }
@@ -3317,6 +3326,7 @@ function ExplorerSplashView({
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
+  const [hoveredPanel2Item, setHoveredPanel2Item] = useState<"project" | "status" | null>(null);
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const useCaseDropdownRef = useRef<HTMLDivElement>(null);
   const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
@@ -3823,6 +3833,17 @@ useEffect(() => {
               "Terraform Versions": terraformVersionRows.length,
             };
             const viewAllWorkspacesLabel = "View All Workspaces";
+            const showPanel3 = activeCategory.type === "Workspaces" && hoveredPanel2Item !== null;
+            const projectCounts = new Map<string, number>();
+            const statusCounts = new Map<string, number>();
+            for (const row of workspaceRows) {
+              const p = String(row.project ?? "Unknown");
+              const s = String(row.status ?? "Unknown");
+              projectCounts.set(p, (projectCounts.get(p) ?? 0) + 1);
+              statusCounts.set(s, (statusCounts.get(s) ?? 0) + 1);
+            }
+            const sortedProjects = Array.from(projectCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            const sortedStatuses = Array.from(statusCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
             return (
               <div
                 ref={useCaseDropdownRef}
@@ -3834,8 +3855,8 @@ useEffect(() => {
                   borderColor: glassBorder,
                   top: useCaseMenuRect?.top ?? 0,
                   left: useCaseMenuRect?.left ?? 0,
-                  width: 620,
-                  gridTemplateColumns: "240px 1fr",
+                  width: showPanel3 ? 820 : 620,
+                  gridTemplateColumns: showPanel3 ? "240px 1fr 200px" : "240px 1fr",
                 }}
               >
                 {/* Panel 1 — Types */}
@@ -3895,27 +3916,31 @@ useEffect(() => {
                     })()}
                     {/* Group-by sub-views — only for Workspaces */}
                     {activeCategory.type === "Workspaces" && (() => {
-                      const byProjectSelected = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "project";
-                      const byStatusSelected  = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "status";
+                      const byProjectOpen     = hoveredPanel2Item === "project";
+                      const byStatusOpen      = hoveredPanel2Item === "status";
+                      const byProjectSelected = wsGroupMode === "project" && selectedGraphTitle !== null;
+                      const byStatusSelected  = wsGroupMode === "status" && selectedGraphTitle !== null;
                       return (
                         <>
                           <button
                             type="button"
                             role="menuitem"
-                            onClick={() => { setWsGroupMode("project"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
-                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                            style={!byProjectSelected ? { color: glassText } : undefined}
+                            onClick={() => setHoveredPanel2Item(byProjectOpen ? null : "project")}
+                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectOpen || byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                            style={!byProjectOpen && !byProjectSelected ? { color: glassText } : undefined}
                           >
                             <span className="pl-4">Organized by Project</span>
+                            <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${byProjectOpen ? "rotate-90" : ""}`} />
                           </button>
                           <button
                             type="button"
                             role="menuitem"
-                            onClick={() => { setWsGroupMode("status"); openGraph("Workspaces", viewAllWorkspacesLabel); }}
-                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                            style={!byStatusSelected ? { color: glassText } : undefined}
+                            onClick={() => setHoveredPanel2Item(byStatusOpen ? null : "status")}
+                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusOpen || byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                            style={!byStatusOpen && !byStatusSelected ? { color: glassText } : undefined}
                           >
                             <span className="pl-4">Organized by Status</span>
+                            <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${byStatusOpen ? "rotate-90" : ""}`} />
                           </button>
                         </>
                       );
@@ -3944,6 +3969,37 @@ useEffect(() => {
                   </div>
                 </div>
 
+                {/* Panel 3 — individual project or status keys */}
+                {showPanel3 && (() => {
+                  const isProject = hoveredPanel2Item === "project";
+                  const entries = isProject ? sortedProjects : sortedStatuses;
+                  const panelTitle = isProject ? "Projects" : "Statuses";
+                  return (
+                    <div className="border-l p-3" style={{ borderColor: glassBorder }}>
+                      <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>{panelTitle}</p>
+                      <div className="space-y-0.5">
+                        {entries.map(([key, count]) => {
+                          const groupLabel = isProject ? `project:${key}` : `status:${key}`;
+                          const isKeySelected = selectedGraphTitle === groupLabel;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => { setWsGroupMode(hoveredPanel2Item!); openGraph("Workspaces", groupLabel); }}
+                              className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isKeySelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
+                              style={!isKeySelected ? { color: glassText } : undefined}
+                            >
+                              <span className="capitalize">{key}</span>
+                              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isKeySelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
               </div>
             );
           })()}
@@ -3965,11 +4021,15 @@ useEffect(() => {
               ? getPolicySetRowsForTitle(selectedGraphTitle).length
               : typeRowCounts[selectedGraphType ?? ""] ?? 0;
           // Derive the exact label shown in the dropdown so the chip matches 1:1
-          const chipLabel = selectedGraphType === "Workspaces" && wsGroupMode === "project"
-            ? "Organized by Project"
-            : selectedGraphType === "Workspaces" && wsGroupMode === "status"
-              ? "Organized by Status"
-              : selectedGraphTitle;
+          const chipLabel = selectedGraphTitle?.startsWith("project:")
+            ? `Project: ${selectedGraphTitle.slice(8)}`
+            : selectedGraphTitle?.startsWith("status:")
+              ? `Status: ${selectedGraphTitle.slice(7)}`
+              : selectedGraphType === "Workspaces" && wsGroupMode === "project"
+                ? "Organized by Project"
+                : selectedGraphType === "Workspaces" && wsGroupMode === "status"
+                  ? "Organized by Status"
+                  : selectedGraphTitle;
           return (
             <div className="mt-2 flex flex-col gap-2">
               {/* Chip — label matches the dropdown item that was clicked, plus count */}
