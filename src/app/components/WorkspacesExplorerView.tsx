@@ -4051,9 +4051,9 @@ useEffect(() => {
               : typeRowCounts[selectedGraphType ?? ""] ?? 0;
           // Derive the exact label shown in the dropdown so the chip matches 1:1
           const chipLabel = selectedGraphTitle?.startsWith("project:")
-            ? `Project: ${selectedGraphTitle.slice(8)}`
+            ? `Workspaces organized by ${selectedGraphTitle.slice(8)}`
             : selectedGraphTitle?.startsWith("status:")
-              ? `Status: ${selectedGraphTitle.slice(7)}`
+              ? `Workspaces organized by ${selectedGraphTitle.slice(7)}`
               : selectedGraphType === "Workspaces" && wsGroupMode === "project"
                 ? "Organized by Project"
                 : selectedGraphType === "Workspaces" && wsGroupMode === "status"
