@@ -3907,6 +3907,8 @@ useEffect(() => {
                       const viewAllLabel = `View All ${activeCategory.type}`;
                       const isViewAllSelected = selectedGraphTitle === viewAllLabel && wsGroupMode === "none";
                       const viewAllCount = typeRowCounts[activeCategory.type] ?? 0;
+                      // Workspaces uses "All" as the display label; other types keep "View All X"
+                      const viewAllDisplayLabel = activeCategory.type === "Workspaces" ? "All" : viewAllLabel;
                       return (
                         <button
                           type="button"
@@ -3915,14 +3917,13 @@ useEffect(() => {
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                           style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
-                          <span>{viewAllLabel}</span>
+                          <span>{viewAllDisplayLabel}</span>
                           <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
                         </button>
                       );
                     })()}
                     {/* Group-by sub-views — only for Workspaces */}
                     {activeCategory.type === "Workspaces" && (() => {
-                      const wsCount = workspaceRows.length;
                       const byProjectSelected = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "project";
                       const byStatusSelected  = selectedGraphTitle === viewAllWorkspacesLabel && wsGroupMode === "status";
                       return (
@@ -3934,8 +3935,7 @@ useEffect(() => {
                             className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                             style={!byProjectSelected ? { color: glassText } : undefined}
                           >
-                            <span>View All Workspaces by Project</span>
-                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${byProjectSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{wsCount}</span>
+                            <span>Organized by Project</span>
                           </button>
                           <button
                             type="button"
@@ -3944,8 +3944,7 @@ useEffect(() => {
                             className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                             style={!byStatusSelected ? { color: glassText } : undefined}
                           >
-                            <span>View All Workspaces by Status</span>
-                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${byStatusSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{wsCount}</span>
+                            <span>Organized by Status</span>
                           </button>
                         </>
                       );
@@ -3996,10 +3995,12 @@ useEffect(() => {
               : typeRowCounts[selectedGraphType ?? ""] ?? 0;
           // Derive the exact label shown in the dropdown so the chip matches 1:1
           const chipLabel = selectedGraphType === "Workspaces" && wsGroupMode === "project"
-            ? "View All Workspaces by Project"
+            ? "Organized by Project"
             : selectedGraphType === "Workspaces" && wsGroupMode === "status"
-              ? "View All Workspaces by Status"
-              : selectedGraphTitle;
+              ? "Organized by Status"
+              : selectedGraphType === "Workspaces" && wsGroupMode === "none" && selectedGraphTitle === "View All Workspaces"
+                ? "All"
+                : selectedGraphTitle;
           return (
             <div className="mt-2 flex flex-col gap-2">
               {/* Chip — label matches the dropdown item that was clicked, plus count */}
