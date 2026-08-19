@@ -1104,6 +1104,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
       nodes.push({ id: `ws-${ws.id}`, label: ws.name, type: "workspace", secondary: `${ws.count} res`, data: {
         org: "hashicorp-demo",
         project: ws.project,
+        status: ws.status,
         run: ws.run,
         runStatus: ws.runStatus,
         currentRunApplied,
