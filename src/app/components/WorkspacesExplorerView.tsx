@@ -3994,18 +3994,20 @@ useEffect(() => {
             : selectedGraphType === "Policy Sets"
               ? getPolicySetRowsForTitle(selectedGraphTitle).length
               : typeRowCounts[selectedGraphType ?? ""] ?? 0;
-          const groupByLabels: Record<WsGroupMode, string> = { none: "None", project: "Project", status: "Status" };
+          // Derive the exact label shown in the dropdown so the chip matches 1:1
+          const chipLabel = selectedGraphType === "Workspaces" && wsGroupMode === "project"
+            ? "View All Workspaces by Project"
+            : selectedGraphType === "Workspaces" && wsGroupMode === "status"
+              ? "View All Workspaces by Status"
+              : selectedGraphTitle;
           return (
             <div className="mt-2 flex flex-col gap-2">
-              {/* Chip — title (+ grouped by suffix when active) + count */}
+              {/* Chip — label matches the dropdown item that was clicked, plus count */}
               <span className="flex w-fit items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
                 <span className="flex size-4 items-center justify-center text-[#656a76]">
                   <ActiveIcon size={14} />
                 </span>
-                {selectedGraphTitle}
-                {selectedGraphType === "Workspaces" && wsGroupMode !== "none" && (
-                  <span className="font-normal text-[#656a76]">grouped by {groupByLabels[wsGroupMode]}</span>
-                )}
+                {chipLabel}
                 <span className="font-normal text-[#656a76]">({resultCount})</span>
                 <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); setWsGroupMode("none"); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
                   <X size={13} />
