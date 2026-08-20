@@ -1628,13 +1628,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [wsDropdownOpen, setWsDropdownOpen] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(initialWorkspace ?? null);
   useEffect(() => { if (initialWorkspace !== undefined) setSelectedWorkspace(initialWorkspace ?? null); }, [initialWorkspace]);
-  const [providerSourceInput, setProviderSourceInput] = useState("");
-  const [providerVersionInput, setProviderVersionInput] = useState("");
-  const [providerSourceFilter, setProviderSourceFilter] = useState("");
-  const [providerVersionFilter, setProviderVersionFilter] = useState("");
 
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
 
@@ -1770,12 +1765,6 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
     if (resourceOverlay) return activeNodes;
-    if (activeType === "Providers" && (providerSourceFilter || providerVersionFilter)) {
-      return activeNodes.filter(n =>
-        (!providerSourceFilter || String(n.data?.name ?? "").toLowerCase().includes(providerSourceFilter.toLowerCase())) &&
-        (!providerVersionFilter || String(n.data?.version ?? "").toLowerCase().includes(providerVersionFilter.toLowerCase()))
-      );
-    }
     if (activeType === "Resources" && selectedWorkspace !== null) {
       return activeNodes.filter(n =>
         n.data?.workspace === selectedWorkspace ||
@@ -1783,7 +1772,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       );
     }
     return activeNodes;
-  }, [activeNodes, activeType, providerSourceFilter, providerVersionFilter, selectedWorkspace, resourceOverlay]);
+  }, [activeNodes, activeType, selectedWorkspace, resourceOverlay]);
 
   // Mirror the same 30% isolation stride used in buildTopoGraph.
   // We compute against the full nodes array (pre-filter) so the isolated set is stable.
@@ -1919,78 +1908,6 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       {/* The page-level dot canvas lives below this graph; keep the SVG surface clear. */}
       <div style={{ position: "absolute", top: 14, left: 16, zIndex: 10, display: "flex", flexDirection: "column", gap: 4, fontFamily: "inherit" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {activeType === "Providers" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "inherit" }}>
-            <span style={{ color: themeMode === "light" ? "#9b9cb8" : "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>Providers:</span>
-            <input
-              value={providerSourceInput}
-              onChange={e => setProviderSourceInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { setProviderSourceFilter(providerSourceInput); setProviderVersionFilter(providerVersionInput); } }}
-              placeholder="provider_source"
-              style={{ height: 30, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
-            />
-            <input
-              value={providerVersionInput}
-              onChange={e => setProviderVersionInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { setProviderSourceFilter(providerSourceInput); setProviderVersionFilter(providerVersionInput); } }}
-              placeholder="version_constraint"
-              style={{ height: 30, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "0 10px", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", width: 160, fontFamily: "inherit" }}
-            />
-            <button
-              type="button"
-              onClick={() => { setProviderSourceFilter(providerSourceInput); setProviderVersionFilter(providerVersionInput); }}
-              style={{ height: 30, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "0 14px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
-            >
-              Filter
-            </button>
-            {(providerSourceFilter || providerVersionFilter) && (
-              <button
-                type="button"
-                onClick={() => { setProviderSourceInput(""); setProviderVersionInput(""); setProviderSourceFilter(""); setProviderVersionFilter(""); }}
-                style={{ height: 30, background: "none", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "0 14px", color: "rgba(255,255,255,0.55)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        )}
-        {activeType === "Resources" && (
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setWsDropdownOpen(o => !o)}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, padding: "4px 10px", color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              <span style={{ color: "rgba(255,255,255,0.45)", marginRight: 2 }}>Workspace:</span>
-              {selectedWorkspace ?? "All"}
-              <ChevronDown size={12} style={{ opacity: 0.6 }} />
-            </button>
-            {wsDropdownOpen && (
-              <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, background: "rgba(38,40,48,0.97)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "6px 0", minWidth: 240, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", zIndex: 50 }}>
-              {[{ name: "All", count: null }, ...RESOURCE_WORKSPACES].map(ws => {
-                const isSelected = selectedWorkspace === (ws.name === "All" ? null : ws.name);
-                return (
-                  <button
-                    key={ws.name}
-                    type="button"
-                    onClick={() => { setSelectedWorkspace(ws.name === "All" ? null : ws.name); setWsDropdownOpen(false); }}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 16px", background: "none", border: "none", color: isSelected ? "#fff" : "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: isSelected ? 500 : 400, cursor: "pointer", textAlign: "left", fontFamily: "inherit", gap: 8 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.07)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "none")}
-                  >
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {isSelected && <span style={{ fontSize: 11 }}>✓</span>}
-                      {!isSelected && <span style={{ display: "inline-block", width: 15 }} />}
-                      {ws.name}
-                    </span>
-                    {ws.count !== null && <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>({ws.count})</span>}
-                  </button>
-                );
-              })}
-              </div>
-            )}
-          </div>
-        )}
         </div>{/* end inner row */}
         {activeType === "Resources" && (
           <span style={{ color: "rgba(255,255,255,0.38)", fontSize: 11, fontStyle: "italic", pointerEvents: "none", letterSpacing: "0.01em" }}>
@@ -2548,18 +2465,13 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               !selectedId && !blastRadiusId &&
               zoom.tx === 0 && zoom.ty === 0 && zoom.scale === 1 &&
               topoLayout === "radial" &&
-              selectedWorkspace === (initialWorkspace ?? null) &&
-              !providerSourceFilter && !providerVersionFilter;
+              selectedWorkspace === (initialWorkspace ?? null);
             if (!isInitial) {
               setSelectedId(null);
               setBlastRadiusId(null);
               setZoom({ tx: 0, ty: 0, scale: 1 });
               setTopoLayout("radial");
               setSelectedWorkspace(initialWorkspace ?? null);
-              setProviderSourceInput("");
-              setProviderVersionInput("");
-              setProviderSourceFilter("");
-              setProviderVersionFilter("");
             }
             setRefreshKey(k => k + 1);
           }}
