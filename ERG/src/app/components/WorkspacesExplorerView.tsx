@@ -4060,7 +4060,7 @@ useEffect(() => {
             background: "#ffffff",
             borderTop: "none", borderBottom: "none", borderLeft: "none", borderRight: "none",
             boxShadow: "none",
-            cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+            cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500,
             color: "#3b3d45", whiteSpace: "nowrap" as const, flexShrink: 0,
           };
 
@@ -4069,7 +4069,7 @@ useEffect(() => {
               {/* ── Base chip — [×] [icon + label (count)] [TABLE VIEW →] ── */}
               <div
                 className="flex w-full overflow-hidden"
-                style={{ minWidth: 0, borderRadius: 4, border: "1px solid rgba(59,61,69,0.4)", boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
+                style={{ minWidth: 0, borderRadius: 20, border: "1px solid rgba(59,61,69,0.4)", boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
                 onMouseDown={e => e.stopPropagation()}
               >
                 {/* Left segment — dismiss (square) */}
@@ -4077,7 +4077,7 @@ useEffect(() => {
                   type="button"
                   onClick={dismissAll}
                   aria-label="Dismiss view"
-                  style={{ ...segBase, width: 32, height: 32, borderRight: "1px solid rgba(59,61,69,0.4)", color: "#656a76" }}
+                  style={{ ...segBase, width: 32, height: 32, borderRight: "1px solid rgba(59,61,69,0.4)", color: "#656a76", background: "#f7f8fa" }}
                   className="hover:bg-[#f1f2f3] transition-colors"
                 >
                   <X size={12} />
@@ -4108,70 +4108,63 @@ useEffect(() => {
                       ...segBase,
                       height: 32,
                       paddingLeft: 13, paddingRight: 13, gap: 6,
-                      fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
                       background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
                       color: tableViewOpen ? "#0f62fe" : "#3b3d45",
                     }}
                     className="transition-colors hover:bg-[#f1f2f3]"
                   >
-                    {tableViewOpen ? <>Graph View</> : <>Table View</>}
+                    {tableViewOpen ? <>GRAPH VIEW</> : <>TABLE VIEW →</>}
                   </button>
                 )}
               </div>
 
-              {/* ── Sub chip — [×] [sub-context label] [TABLE VIEW?] ── */}
+              {/* ── Sub chip — [label] [TABLE VIEW?] — inset with VIEW connector ── */}
               {inSubContext && (
-                <div
-                  className="flex w-full overflow-hidden"
-                  style={{ minWidth: 0, borderRadius: 4, border: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`, boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
-                  onMouseDown={e => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={dismissAll}
-                    aria-label="Dismiss view"
-                    style={{
-                      ...segBase,
-                      width: 32, height: 32,
-                      borderRight: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`,
-                      color: isBlastSub ? "#D55E00" : "#656a76",
-                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
-                    }}
-                    className="hover:bg-[#f1f2f3] transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
-                  <div
-                    style={{
-                      ...segBase,
-                      flex: 1, minWidth: 0, height: 32,
-                      justifyContent: "flex-start", paddingLeft: 12, paddingRight: 12,
-                      borderRight: overlayInfo ? "1px solid rgba(59,61,69,0.4)" : "none",
-                      cursor: "default",
-                      color: isBlastSub ? "#D55E00" : "#3b3d45",
-                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
-                    }}
-                  >
-                    <span className="min-w-0 truncate">{subContextLabel}</span>
+                <div className="flex items-center" style={{ marginLeft: 32 }}>
+                  {/* Connector: curved bracket + VIEW label */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", marginRight: 6, flexShrink: 0 }}>
+                    <svg width="14" height="22" viewBox="0 0 14 22" fill="none" style={{ display: "block" }}>
+                      <path d="M13 0 Q13 11 1 11" stroke="rgba(59,61,69,0.35)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                    </svg>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#0f62fe", letterSpacing: "0.04em", lineHeight: 1, marginTop: 1 }}>VIEW</span>
                   </div>
-                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius */}
-                  {overlayInfo && (
-                    <button
-                      type="button"
-                      onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                  <div
+                    className="flex overflow-hidden"
+                    style={{ minWidth: 0, flex: 1, borderRadius: 20, border: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`, boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
+                    onMouseDown={e => e.stopPropagation()}
+                  >
+                    {/* Label segment */}
+                    <div
                       style={{
                         ...segBase,
-                        height: 32,
-                        paddingLeft: 13, paddingRight: 13,
-                        fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
-                        background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
-                        color: tableViewOpen ? "#0f62fe" : "#3b3d45",
+                        flex: 1, minWidth: 0, height: 32,
+                        justifyContent: "flex-start", paddingLeft: 14, paddingRight: 12,
+                        borderRight: overlayInfo ? `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}` : "none",
+                        cursor: "default",
+                        color: isBlastSub ? "#D55E00" : "#3b3d45",
+                        background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
                       }}
-                      className="transition-colors hover:bg-[#f1f2f3]"
                     >
-                      {tableViewOpen ? <>Graph View</> : <>Table View</>}
-                    </button>
-                  )}
+                      <span className="min-w-0 truncate">{subContextLabel}</span>
+                    </div>
+                    {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius */}
+                    {overlayInfo && (
+                      <button
+                        type="button"
+                        onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                        style={{
+                          ...segBase,
+                          height: 32,
+                          paddingLeft: 13, paddingRight: 13,
+                          background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
+                          color: tableViewOpen ? "#0f62fe" : "#3b3d45",
+                        }}
+                        className="transition-colors hover:bg-[#f1f2f3]"
+                      >
+                        {tableViewOpen ? <>GRAPH VIEW</> : <>TABLE VIEW →</>}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
