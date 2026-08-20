@@ -1600,7 +1600,7 @@ type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
   | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1616,6 +1616,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Notify parent whenever blast radius mode changes
+  useEffect(() => { onBlastRadiusChange?.(blastRadiusId); }, [blastRadiusId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset zoom and layout whenever activeType changes
   useEffect(() => {
@@ -2535,21 +2538,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       </div>
 
       {/* Zoom controls — bottom right, above layout switcher */}
-      <div style={{ position: "absolute", bottom: 62, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        {/* Table view toggle — only in View All views and not while blast radius is active */}
-        {onTableViewToggle && !blastRadiusId && (
-          <button
-            onClick={onTableViewToggle}
-            title={tableViewOpen ? "Close table view" : "Open table view"}
-            style={{ width: 30, height: 30, borderRadius: 6, border: tableViewOpen ? "1px solid rgba(16,96,255,0.4)" : (themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)"), background: tableViewOpen ? "rgba(16,96,255,0.12)" : (themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)"), color: tableViewOpen ? "#1060ff" : (themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)"), cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <ListOrdered size={13} />
-          </button>
-        )}
-        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
-        <button
+      <div style={{ position: "absolute", bottom: 62, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+        <div onClick={() => zoomBy(1.25)} title="Zoom in" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</div>
+        <div onClick={() => zoomBy(1 / 1.25)} title="Zoom out" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</div>
+        <div onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</div>
+        <div
           onClick={() => {
             const isInitial =
               !selectedId && !blastRadiusId &&
@@ -2571,10 +2564,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             setRefreshKey(k => k + 1);
           }}
           title="Refresh"
-          style={{ width: 30, height: 30, borderRadius: 6, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.12)" : "1px solid rgba(255,255,255,0.12)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.06)", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          role="button" tabIndex={0}
+          style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <RefreshCw size={13} />
-        </button>
+        </div>
       </div>
 
       {/* Legend key — bottom left */}
@@ -3364,6 +3358,7 @@ function ExplorerSplashView({
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
   const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
+  const [blastRadiusActive, setBlastRadiusActive] = useState(false);
   const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
@@ -3507,7 +3502,8 @@ useEffect(() => {
               setTableViewOpen(open => !open);
               if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
-            onOverlayWorkspaceChange={setOverlayInfo}
+            onOverlayWorkspaceChange={(info) => { setOverlayInfo(info); if (!info) setTableViewOpen(false); }}
+            onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
           />
@@ -4058,19 +4054,158 @@ useEffect(() => {
                 : selectedGraphType === "Workspaces" && wsGroupMode === "status"
                   ? "Organized by Status"
                   : selectedGraphTitle;
+
+          // Sub-context label when an overlay or blast radius is active
+          const subContextLabel = blastRadiusActive
+            ? "blast radius"
+            : overlayInfo?.kind === "resources"
+              ? `${overlayInfo.workspaceName} resources (${overlayInfo.rows.length})`
+              : overlayInfo?.kind === "modules"
+                ? `${overlayInfo.workspaceName} modules (${overlayInfo.rows.length})`
+                : overlayInfo?.kind === "providers"
+                  ? `${overlayInfo.workspaceName} providers (${overlayInfo.rows.length})`
+                  : null;
+
+          const inSubContext = subContextLabel !== null;
+
+          // Table toggle is available for predefined views regardless of sub-context state
+          const tableToggleAvailable = selectedGraphTitle !== null &&
+            (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:"));
+
+          function dismissAll() {
+            setSelectedGraphType(null);
+            setSelectedGraphTitle(null);
+            setWsGroupMode("none");
+            setOverlayInfo(null);
+            setTableViewOpen(false);
+          }
+
+          function exitSubContext() {
+            setOverlayInfo(null);
+            setTableViewOpen(false);
+          }
+
+          const isBlastSub = blastRadiusActive;
+
+          const segBase: React.CSSProperties = {
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "#ffffff",
+            borderTop: "none", borderBottom: "none", borderLeft: "none", borderRight: "none",
+            boxShadow: "none",
+            cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+            color: "#3b3d45", whiteSpace: "nowrap" as const, flexShrink: 0,
+          };
+
           return (
-            <div className="mt-2 flex flex-col gap-2">
-              {/* Chip — label matches the dropdown item that was clicked, plus count */}
-              <span className="flex w-fit items-center gap-1.5 rounded-full border border-[rgba(101,106,118,0.2)] bg-[#f1f2f3] pl-2 pr-2.5 py-1 text-[12px] font-medium text-[#3b3d45]">
-                <span className="flex size-4 items-center justify-center text-[#656a76]">
-                  <ActiveIcon size={14} />
-                </span>
-                {chipLabel}
-                <span className="font-normal text-[#656a76]">({resultCount})</span>
-                <button type="button" onClick={() => { setSelectedGraphType(null); setSelectedGraphTitle(null); setWsGroupMode("none"); }} className="hover:text-black ml-0.5" aria-label="Dismiss view">
-                  <X size={13} />
+            <div className="mt-2 flex flex-col gap-1.5">
+              {/* ── Base chip — [×] [icon + label (count)] [TABLE VIEW →] ── */}
+              <div
+                className="flex w-full overflow-hidden"
+                style={{ minWidth: 0, borderRadius: 4, border: "1px solid rgba(59,61,69,0.4)", boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
+                onMouseDown={e => e.stopPropagation()}
+              >
+                {/* Left segment — dismiss (square) */}
+                <button
+                  type="button"
+                  onClick={dismissAll}
+                  aria-label="Dismiss view"
+                  style={{ ...segBase, width: 32, height: 32, borderRight: "1px solid rgba(59,61,69,0.4)", color: "#656a76" }}
+                  className="hover:bg-[#f1f2f3] transition-colors"
+                >
+                  <X size={12} />
                 </button>
-              </span>
+
+                {/* Middle segment — icon + label + count */}
+                <div
+                  style={{
+                    ...segBase,
+                    flex: 1, minWidth: 0, height: 32,
+                    borderRight: tableToggleAvailable ? "1px solid rgba(59,61,69,0.4)" : "none",
+                    justifyContent: "flex-start",
+                    gap: 6, paddingLeft: 12, paddingRight: 8,
+                    cursor: "default",
+                  }}
+                >
+                  <span className="flex shrink-0 items-center text-[#656a76]"><ActiveIcon size={14} /></span>
+                  <span className="min-w-0 truncate">{chipLabel}</span>
+                  <span className="shrink-0 text-[#656a76]" style={{ fontWeight: 400 }}>({resultCount})</span>
+                </div>
+
+                {/* Right segment — TABLE VIEW → / GRAPH VIEW */}
+                {tableToggleAvailable && (
+                  <button
+                    type="button"
+                    onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                    style={{
+                      ...segBase,
+                      height: 32,
+                      paddingLeft: 13, paddingRight: 13, gap: 6,
+                      fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
+                      background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
+                      color: tableViewOpen ? "#0f62fe" : "#3b3d45",
+                    }}
+                    className="transition-colors hover:bg-[#f1f2f3]"
+                  >
+                    {tableViewOpen ? <>Graph View</> : <>Table View</>}
+                  </button>
+                )}
+              </div>
+
+              {/* ── Sub chip — [×] [sub-context label] [TABLE VIEW?] ── */}
+              {inSubContext && (
+                <div
+                  className="flex w-full overflow-hidden"
+                  style={{ minWidth: 0, borderRadius: 4, border: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`, boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
+                  onMouseDown={e => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={dismissAll}
+                    aria-label="Dismiss view"
+                    style={{
+                      ...segBase,
+                      width: 32, height: 32,
+                      borderRight: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`,
+                      color: isBlastSub ? "#D55E00" : "#656a76",
+                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
+                    }}
+                    className="hover:bg-[#f1f2f3] transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                  <div
+                    style={{
+                      ...segBase,
+                      flex: 1, minWidth: 0, height: 32,
+                      justifyContent: "flex-start", paddingLeft: 12, paddingRight: 12,
+                      borderRight: overlayInfo ? "1px solid rgba(59,61,69,0.4)" : "none",
+                      cursor: "default",
+                      color: isBlastSub ? "#D55E00" : "#3b3d45",
+                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
+                    }}
+                  >
+                    <span className="min-w-0 truncate">{subContextLabel}</span>
+                  </div>
+                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius */}
+                  {overlayInfo && (
+                    <button
+                      type="button"
+                      onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                      style={{
+                        ...segBase,
+                        height: 32,
+                        paddingLeft: 13, paddingRight: 13,
+                        fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
+                        background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
+                        color: tableViewOpen ? "#0f62fe" : "#3b3d45",
+                      }}
+                      className="transition-colors hover:bg-[#f1f2f3]"
+                    >
+                      {tableViewOpen ? <>Graph View</> : <>Table View</>}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -4513,6 +4648,8 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 activeType={activeType}
                 initialWorkspace={graphInitialWorkspace}
                 conditions={draftConditions}
+                themeMode={themeMode}
+                setThemeMode={setThemeMode}
                 onViewResources={(workspaceName) => {
                   setGraphInitialWorkspace(workspaceName);
                   setActiveType("Resources");
