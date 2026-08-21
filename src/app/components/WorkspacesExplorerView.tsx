@@ -3823,7 +3823,7 @@ useEffect(() => {
                     style={{ color: glassText }}
                   >
                     <span className="flex items-center gap-2"><ListOrdered size={14} className="shrink-0" />Saved views</span>
-                    <ChevronRight size={14} className="opacity-45" />
+                    <span className="shrink-0 rounded-full bg-[#e8eaf0] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#656a76]">{savedViews.length}</span>
                   </button>
                 </div>
 
