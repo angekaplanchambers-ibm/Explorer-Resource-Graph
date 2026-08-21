@@ -3215,7 +3215,6 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
                 <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
                   {query.label}
                 </span>
-                <span className="shrink-0 rounded-full bg-[#e8eaf0] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-[#656a76]">{queryCount}</span>
               </button>
             );
           })}
@@ -3846,7 +3845,6 @@ useEffect(() => {
                           style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
                           <span>{viewAllDisplayLabel}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isViewAllSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewAllCount}</span>
                         </button>
                       );
                     })()}
@@ -3898,7 +3896,6 @@ useEffect(() => {
                           style={!isSelected ? { color: glassText } : undefined}
                         >
                           <span>{view}</span>
-                          <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isSelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{viewCount}</span>
                         </button>
                       );
                     })}
@@ -3927,7 +3924,6 @@ useEffect(() => {
                               style={!isKeySelected ? { color: glassText } : undefined}
                             >
                               <span className="capitalize">{key}</span>
-                              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${isKeySelected ? "bg-[#0f62fe]/10 text-[#0f62fe]" : "bg-[#e8eaf0] text-[#656a76]"}`}>{count}</span>
                             </button>
                           );
                         })}
