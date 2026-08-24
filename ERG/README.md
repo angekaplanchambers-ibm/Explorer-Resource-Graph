@@ -1,11 +1,9 @@
+# Explorer Resource Graph
 
-  # Explorer Resource Graph
+A front-end app for exploring Terraform Cloud resources, workspaces, and runs — including a topology graph view, workspace relationship explorer, and TF Signal interaction layer.
 
-  This is a code bundle for Explorer Resource Graph. The original project is available at https://www.figma.com/design/NWVbgeaU6GNqwbj6gLfX8U/Explorer-Resource-Graph.
+## Running the code
 
-  ## Running the code
+Run `npm i` to install the dependencies.
 
-  Run `npm i` to install the dependencies.
-
-  Run `npm run dev` to start the development server.
-  
+Run `npm run dev` to start the development server.
