@@ -3249,6 +3249,10 @@ function ExplorerSplashView({
   useEffect(() => {
     setModalConditions([]);
     if (selectedGraphType !== "Workspaces") setWsGroupMode("none");
+    setHudSearch("");
+    setHudTypeFilter("All");
+    setHudExternalSelectId(null);
+    setHudPage(1);
   }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
   const [hudCollapsed, setHudCollapsed] = useState(false);
@@ -3256,6 +3260,11 @@ function ExplorerSplashView({
   const hudTabRef = useRef<HTMLButtonElement>(null);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
+  const hudListRef = useRef<HTMLDivElement>(null);
+  const [hudSearch, setHudSearch] = useState("");
+  const [hudTypeFilter, setHudTypeFilter] = useState("All");
+  const [hudExternalSelectId, setHudExternalSelectId] = useState<string | null>(null);
+  const [hudPage, setHudPage] = useState(1);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const modalQueryColumns =
@@ -3342,6 +3351,53 @@ useEffect(() => {
     };
   }, []);
 
+  const hudActiveNodes = useMemo((): TopoNode[] => {
+    if (!selectedGraphType) return [];
+    const conditions = conditionFields
+      .map((fieldId, i) => ({ fieldId, operator: conditionOperators[i], value: conditionValues[i]?.trim() ?? "" }))
+      .filter(c => c.fieldId && c.operator && c.value);
+    const { nodes: rawNodes } = buildTopoGraph(selectedGraphType, conditions, selectedGraphTitle ?? null);
+    if (selectedGraphType !== "Workspaces" || wsGroupMode === "none") return rawNodes;
+    const groupKey = (n: TopoNode): string =>
+      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
+    const hubType = wsGroupMode === "project" ? "ws-group-project" : "ws-group-status";
+    const groupCounts = new Map<string, number>();
+    for (const n of rawNodes) { const k = groupKey(n); groupCounts.set(k, (groupCounts.get(k) ?? 0) + 1); }
+    const hubNodes: TopoNode[] = [];
+    for (const [key, count] of groupCounts) {
+      hubNodes.push({ id: `hub-${wsGroupMode}-${key}`, label: key, type: hubType, secondary: `${count} workspace${count !== 1 ? "s" : ""}`, data: { group: key, count } });
+    }
+    return [...hubNodes, ...rawNodes];
+  }, [selectedGraphType, selectedGraphTitle, conditionFields, conditionOperators, conditionValues, wsGroupMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hudNodeTypes = useMemo(() => {
+    const types = new Set(hudActiveNodes.map(n => n.type));
+    return Array.from(types).sort();
+  }, [hudActiveNodes]);
+
+  const hudFilteredNodes = useMemo(() => {
+    const q = hudSearch.trim().toLowerCase();
+    return hudActiveNodes.filter(n => {
+      if (hudTypeFilter !== "All" && n.type !== hudTypeFilter) return false;
+      if (!q) return true;
+      return n.label.toLowerCase().includes(q) || n.secondary.toLowerCase().includes(q);
+    });
+  }, [hudActiveNodes, hudSearch, hudTypeFilter]);
+
+  const hudPageCount = Math.max(1, Math.ceil(hudFilteredNodes.length / 20));
+  const hudPageNodes = useMemo(
+    () => hudFilteredNodes.slice((hudPage - 1) * 20, hudPage * 20),
+    [hudFilteredNodes, hudPage]
+  );
+
+  useEffect(() => {
+    setHudPage(1);
+  }, [hudSearch, hudTypeFilter, selectedGraphType, selectedGraphTitle]);
+
+  useEffect(() => {
+    if (hudPage > hudPageCount) setHudPage(hudPageCount);
+  }, [hudPage, hudPageCount]);
+
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
@@ -3350,7 +3406,7 @@ useEffect(() => {
     : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
     : getWorkspaceRowsForTitle(selectedGraphTitle).length;
 
-  const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
+  const glassSurface = themeMode === "light" ? "rgba(255,255,255,1)" : "rgba(19,20,26,0.9)";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
   const glassText = themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)";
   const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
@@ -4085,6 +4141,146 @@ useEffect(() => {
             </div>
           );
         })()}
+
+        {(selectedGraphType && (hudActiveNodes.length > 0 || hudSearch || hudTypeFilter !== "All")) && (
+          <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+                Returned Nodes
+              </p>
+              <span className="text-[10px] tabular-nums" style={{ color: glassMuted }}>
+                {hudSearch || hudTypeFilter !== "All"
+                  ? `${hudFilteredNodes.length} of ${hudActiveNodes.length}`
+                  : `${hudActiveNodes.length}`}
+              </span>
+            </div>
+
+            {hudActiveNodes.length > 0 && (
+              <div className="flex gap-1.5 mb-2">
+                <label className="flex flex-1 min-w-0 h-7 items-center gap-1.5 rounded-[4px] border px-2 bg-white" style={{ borderColor: "rgba(59,61,69,0.35)" }}>
+                  <Search size={12} style={{ color: glassMuted, flexShrink: 0 }} />
+                  <input
+                    value={hudSearch}
+                    onChange={e => setHudSearch(e.target.value)}
+                    placeholder="Search nodes…"
+                    className="min-w-0 flex-1 text-[11px] outline-none bg-transparent"
+                    style={{ color: glassText }}
+                  />
+                  {hudSearch && (
+                    <button type="button" onClick={() => setHudSearch("")} style={{ color: glassMuted, background: "none", border: "none", padding: 0, cursor: "pointer", lineHeight: 1 }}>
+                      <X size={11} />
+                    </button>
+                  )}
+                </label>
+                {hudNodeTypes.length > 1 && (
+                  <label className="relative h-7 flex items-center border rounded-[4px] bg-white pl-2 pr-6 text-[11px] font-medium" style={{ borderColor: "rgba(59,61,69,0.35)", color: glassText, flexShrink: 0 }}>
+                    <select
+                      value={hudTypeFilter}
+                      onChange={e => setHudTypeFilter(e.target.value)}
+                      className="appearance-none bg-transparent outline-none cursor-pointer"
+                      aria-label="Filter by node type"
+                    >
+                      <option value="All">All types</option>
+                      {hudNodeTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-1.5" size={12} />
+                  </label>
+                )}
+              </div>
+            )}
+
+            <div ref={hudListRef} style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 160, overflowY: "auto" }}>
+              {hudFilteredNodes.length === 0
+                ? <div style={{ fontSize: 12, color: glassMuted, padding: "8px 0" }}>No nodes match your filter.</div>
+                : hudPageNodes.map(node => {
+                    const color = NODE_COLORS[node.type] ?? "#9b8ff5";
+                    const isSelected = hudExternalSelectId === node.id;
+                    return (
+                      <button
+                        key={node.id}
+                        type="button"
+                        onClick={() => setHudExternalSelectId(isSelected ? null : node.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: "100%",
+                          padding: "5px 8px",
+                          borderRadius: 14,
+                          background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)",
+                          border: isSelected
+                            ? `1px solid ${color}55`
+                            : themeMode === "light"
+                              ? "1px solid rgba(0,0,0,0.07)"
+                              : "1px solid rgba(255,255,255,0.08)",
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ width: 12, height: 12, borderRadius: 999, background: color, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0, fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                          {node.label}
+                        </div>
+                      </button>
+                    );
+                  })}
+            </div>
+
+            {hudFilteredNodes.length > 20 && (
+              <div className="mt-2 flex items-center justify-between" style={{ color: glassMuted }}>
+                <span className="text-[10px] tabular-nums">
+                  {(hudPage - 1) * 20 + 1}-{Math.min(hudPage * 20, hudFilteredNodes.length)} of {hudFilteredNodes.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHudPage(page => Math.max(1, page - 1));
+                      hudListRef.current?.scrollTo({ top: 0 });
+                    }}
+                    disabled={hudPage === 1}
+                    style={{
+                      height: 24,
+                      padding: "0 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(59,61,69,0.2)",
+                      background: "#ffffff",
+                      color: hudPage === 1 ? "#9ca3af" : glassText,
+                      cursor: hudPage === 1 ? "default" : "pointer",
+                      fontSize: 10,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Prev
+                  </button>
+                  <span className="text-[10px] tabular-nums">{hudPage}/{hudPageCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHudPage(page => Math.min(hudPageCount, page + 1));
+                      hudListRef.current?.scrollTo({ top: 0 });
+                    }}
+                    disabled={hudPage === hudPageCount}
+                    style={{
+                      height: 24,
+                      padding: "0 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(59,61,69,0.2)",
+                      background: "#ffffff",
+                      color: hudPage === hudPageCount ? "#9ca3af" : glassText,
+                      cursor: hudPage === hudPageCount ? "default" : "pointer",
+                      fontSize: 10,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <SuggestedQueriesList
           themeMode={themeMode}
