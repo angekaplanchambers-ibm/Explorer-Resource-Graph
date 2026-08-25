@@ -3461,18 +3461,7 @@ useEffect(() => {
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
           />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
-            <div className="flex size-14 items-center justify-center rounded-[14px] border bg-white shadow-[0_12px_32px_rgba(23,23,26,0.14)]" style={{ borderColor: glassBorder }}>
-              <ChartNoAxesCombined size={25} strokeWidth={1.65} />
-            </div>
-            <div className="max-w-[320px] text-center">
-              <p className="text-[15px] font-semibold">Get started.</p>
-              <p className="mt-1 text-[13px] leading-5" style={{ color: glassMuted }}>Select a Type or Use case to explore your Infrastructure.</p>
-            </div>
-
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Graph table view — centered modal */}
