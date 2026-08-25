@@ -3255,6 +3255,23 @@ function ExplorerSplashView({
     setHudPage(1);
   }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
+  // "centered" = initial overlay, "exiting" = shrinking away, "resting" = top-left (permanent after first use)
+  const [hudPhase, setHudPhase] = useState<"centered" | "exiting" | "resting">("centered");
+  const hudAnimDoneRef = useRef(false);
+  // Drive the one-time centered → exiting → resting animation on the very first graph selection.
+  const prevSelectedGraphTypeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevSelectedGraphTypeRef.current;
+    prevSelectedGraphTypeRef.current = selectedGraphType;
+    // Only fire once, and only when transitioning from the untouched empty state to a real graph.
+    // hudAnimDoneRef gates re-entry; no cleanup needed (clearing the timer would strand hudPhase
+    // in "exiting" and block the graph permanently, especially in React StrictMode).
+    if (!hudAnimDoneRef.current && prev === null && selectedGraphType !== null) {
+      hudAnimDoneRef.current = true;
+      setHudPhase("exiting");
+      setTimeout(() => setHudPhase("resting"), 320);
+    }
+  }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hudCollapsed, setHudCollapsed] = useState(false);
   const [hudCollapsedTabTop, setHudCollapsedTabTop] = useState<number | null>(null);
   const hudTabRef = useRef<HTMLButtonElement>(null);
@@ -3668,11 +3685,39 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* HUD wrapper — tab at bottom-right outside, card above tab in stacking order */}
-      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30 }}>
+      {/* HUD wrapper — centered on first load, top-left after first selection */}
+      <motion.div
+        style={hudPhase === "resting" ? {
+          position: "absolute",
+          left: hudPosition.x,
+          top: hudPosition.y,
+          zIndex: 30,
+          transformOrigin: "top left",
+        } : {
+          // "centered" and "exiting" — fixed, centered in the viewport.
+          // Use CSS `translate` (separate from `transform`) so Framer Motion's
+          // scale transform doesn't conflict with the centering offset.
+          // pointerEvents:none during "exiting" so the shrinking card never blocks graph clicks.
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          translate: "-50% -50%",
+          zIndex: 30,
+          transformOrigin: "center center",
+          pointerEvents: hudPhase === "exiting" ? "none" : undefined,
+        }}
+        initial={false}
+        animate={hudPhase === "exiting" ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
+        transition={hudPhase === "exiting"
+          ? { duration: 0.28, ease: [0.4, 0, 1, 1] }
+          : hudPhase === "resting"
+          ? { duration: 0.32, ease: [0, 0, 0.2, 1] }
+          : { duration: 0 }
+        }
+      >
 
-        {/* Tab — rendered first (lower z), attached to outside-right bottom corner */}
-        <button
+        {/* Tab — only shown once the HUD has settled in its top-left resting position */}
+        {hudPhase === "resting" && <button
           ref={hudTabRef}
           type="button"
           onClick={e => {
@@ -3732,7 +3777,7 @@ useEffect(() => {
           <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", lineHeight: 1 }}>
             {hudCollapsed ? "VIEW" : "HIDE"}
           </span>
-        </button>
+        </button>}
 
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         {!hudCollapsed && (
@@ -4291,7 +4336,7 @@ useEffect(() => {
         </div>
         </div>
         )}
-      </div>
+      </motion.div>
 
     </div>
   );
