@@ -4273,9 +4273,9 @@ useEffect(() => {
                           width: "100%",
                           padding: "5px 8px",
                           borderRadius: 14,
-                          background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)",
+                          background: isSelected ? `${color}18` : themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)",
                           border: isSelected
-                            ? `1px solid ${color}55`
+                            ? `1px solid ${color}cc`
                             : themeMode === "light"
                               ? "1px solid rgba(0,0,0,0.07)"
                               : "1px solid rgba(255,255,255,0.08)",
@@ -4284,8 +4284,8 @@ useEffect(() => {
                           textAlign: "left",
                         }}
                       >
-                        <div style={{ width: 12, height: 12, borderRadius: 999, background: color, flexShrink: 0 }} />
-                        <div style={{ minWidth: 0, fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: 999, background: color, flexShrink: 0, boxShadow: isSelected ? `0 0 0 2px ${themeMode === "light" ? "#fff" : "#1c1e2b"}, 0 0 0 3px ${color}` : "none" }} />
+                        <div style={{ minWidth: 0, fontSize: 11, fontWeight: 600, color: isSelected ? color : themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
                           {node.label}
                         </div>
                       </button>
