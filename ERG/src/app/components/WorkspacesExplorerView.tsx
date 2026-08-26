@@ -1572,7 +1572,7 @@ type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
   | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle, externalSelectId }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void; externalSelectId?: string | null }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1598,7 +1598,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
     setShowEdges(true);
   }, [activeType, refreshKey]);
+
+  // When the HUD list selects a node externally: select it, zoom in, and center the viewport on it
+  useEffect(() => {
+    if (!externalSelectId) return;
+    const pos = positions.get(externalSelectId);
+    if (!pos) return;
+    setSelectedId(externalSelectId);
+    setZoom(prev => {
+      const s = Math.max(prev.scale, 1.8);
+      return { scale: s, tx: VW / 2 - pos.x * s, ty: VH / 2 - pos.y * s };
+    });
+  }, [externalSelectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
+  const preOverlaySelectedId = useRef<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(initialWorkspace ?? null);
   useEffect(() => { if (initialWorkspace !== undefined) setSelectedWorkspace(initialWorkspace ?? null); }, [initialWorkspace]);
@@ -1733,6 +1747,17 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const gridPositions = useMemo(() => runGridLayout(activeNodes), [activeNodes]);
 
   const positions = topoLayout === "grid" ? gridPositions : topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
+
+  // Whenever the node layout changes (new overlay/blast radius) keep the selected node centered
+  useEffect(() => {
+    if (!selectedId) return;
+    const pos = positions.get(selectedId);
+    if (!pos) return;
+    setZoom(prev => {
+      const s = Math.max(prev.scale, 1.8);
+      return { scale: s, tx: VW / 2 - pos.x * s, ty: VH / 2 - pos.y * s };
+    });
+  }, [positions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
@@ -2070,7 +2095,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); }}
+              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit resource view
@@ -2100,7 +2125,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); }}
+              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit module view
@@ -2133,7 +2158,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); }}
+              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit provider view
@@ -2258,9 +2283,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
                       return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
                     });
+                    preOverlaySelectedId.current = selectedId;
                     setViewResourcesWsName(wsName);
                     onOverlayWorkspaceChange?.({ kind: "resources", workspaceName: wsName, rows: synRows });
                     setViewResourcesCount(count);
+                    setSelectedId(`ws-res-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
@@ -2275,9 +2302,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const name = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
                       return [name, base[1], base[2], base[3], wsName] as const;
                     });
+                    preOverlaySelectedId.current = selectedId;
                     setViewModulesWsName(wsName);
                     setViewModulesCount(modCount);
                     onOverlayWorkspaceChange?.({ kind: "modules", workspaceName: wsName, rows: modRows });
+                    setSelectedId(`ws-mod-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
@@ -2292,9 +2321,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const name = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
                       return [name, base[1], base[2], base[3], wsName] as const;
                     });
+                    preOverlaySelectedId.current = selectedId;
                     setViewProvidersWsName(wsName);
                     setViewProvidersCount(provCount);
                     onOverlayWorkspaceChange?.({ kind: "providers", workspaceName: wsName, rows: provRows });
+                    setSelectedId(`ws-prov-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
@@ -3460,6 +3491,7 @@ useEffect(() => {
             onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
+            externalSelectId={hudExternalSelectId}
           />
         ) : null}
       </div>
