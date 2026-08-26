@@ -3257,6 +3257,7 @@ function ExplorerSplashView({
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
   navOpen: boolean;
 }) {
+  const [viewMode, setViewMode] = useState<"graph" | "classic">("graph");
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
@@ -3402,7 +3403,7 @@ useEffect(() => {
         className="absolute bottom-0 left-0 right-0 top-0 z-10 overflow-hidden"
         style={{ background: themeMode === "light" ? "transparent" : "#13141a" }}
       >
-        {selectedGraphType ? (
+        {selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
             activeType={selectedGraphType}
             graphTitle={selectedGraphTitle}
@@ -3418,6 +3419,20 @@ useEffect(() => {
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
           />
+        ) : selectedGraphType && viewMode === "classic" ? (
+          <div className="absolute inset-0 overflow-auto bg-[#fafafa] p-6">
+            <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+            <TopologyTableView
+              type={selectedGraphType}
+              graphTitle={selectedGraphTitle}
+              conditions={modalConditions}
+              visibleColumnIds={visibleColumnIds}
+              onNavigate={(type) => openGraph(type, type)}
+              onSelectResource={setSelectedResourceId}
+              overlayInfo={overlayInfo}
+              wsGroupMode={wsGroupMode}
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
             <div className="flex size-14 items-center justify-center rounded-[14px] border bg-white shadow-[0_12px_32px_rgba(23,23,26,0.14)]" style={{ borderColor: glassBorder }}>
@@ -3432,9 +3447,9 @@ useEffect(() => {
         )}
       </div>
 
-      {/* Graph table view — centered modal */}
+      {/* Graph table view — centered modal (Graph mode only) */}
       <AnimatePresence>
-        {tableViewOpen && selectedGraphType && (
+        {tableViewOpen && selectedGraphType && viewMode === "graph" && (
           <>
             {/* Backdrop */}
             <motion.div
@@ -3738,6 +3753,56 @@ useEffect(() => {
         </div>
       </div>
 
+      {/* View mode toggle — Graph / Classic */}
+      <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
+        <div
+          className="flex overflow-hidden rounded-[4px] border text-[12px] font-medium"
+          style={{ borderColor: "rgba(59,61,69,0.4)" }}
+        >
+          <button
+            type="button"
+            onClick={() => setViewMode("graph")}
+            style={{
+              flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: viewMode === "graph" ? "#0f62fe" : "#ffffff",
+              color: viewMode === "graph" ? "#ffffff" : "#3b3d45",
+              border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              borderRight: "1px solid rgba(59,61,69,0.4)",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="2.5" fill="currentColor" />
+              <circle cx="2.5" cy="4" r="2" fill="currentColor" />
+              <circle cx="13.5" cy="4" r="2" fill="currentColor" />
+              <circle cx="2.5" cy="12" r="2" fill="currentColor" />
+              <circle cx="13.5" cy="12" r="2" fill="currentColor" />
+              <line x1="4.5" y1="4" x2="6" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="11.5" y1="4" x2="10" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="4.5" y1="12" x2="6" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+              <line x1="11.5" y1="12" x2="10" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+            Graph
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("classic")}
+            style={{
+              flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: viewMode === "classic" ? "#0f62fe" : "#ffffff",
+              color: viewMode === "classic" ? "#ffffff" : "#3b3d45",
+              border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="3" width="14" height="2" rx="0.5" fill="currentColor" />
+              <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
+              <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
+            </svg>
+            Classic
+          </button>
+        </div>
+      </div>
+
       {/* Browse Types dropdown + selected tag */}
       <div className="mt-3" ref={useCaseMenuRef} onMouseDown={event => event.stopPropagation()}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Browse</p>
@@ -4028,7 +4093,7 @@ useEffect(() => {
                   style={{
                     ...segBase,
                     flex: 1, minWidth: 0, height: 32,
-                    borderRight: tableToggleAvailable ? "1px solid rgba(59,61,69,0.4)" : "none",
+                    borderRight: tableToggleAvailable && viewMode === "graph" ? "1px solid rgba(59,61,69,0.4)" : "none",
                     justifyContent: "flex-start",
                     gap: 6, paddingLeft: 12, paddingRight: 8,
                     cursor: "default",
@@ -4040,7 +4105,7 @@ useEffect(() => {
                 </div>
 
                 {/* Right segment — TABLE VIEW → / GRAPH VIEW */}
-                {tableToggleAvailable && (
+                {tableToggleAvailable && viewMode === "graph" && (
                   <button
                     type="button"
                     onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
@@ -4094,8 +4159,8 @@ useEffect(() => {
                   >
                     <span className="min-w-0 truncate">{subContextLabel}</span>
                   </div>
-                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius */}
-                  {overlayInfo && (
+                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius, not Classic mode */}
+                  {overlayInfo && viewMode === "graph" && (
                     <button
                       type="button"
                       onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
