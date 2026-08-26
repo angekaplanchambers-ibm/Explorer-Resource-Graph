@@ -3326,6 +3326,19 @@ function ExplorerSplashView({
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
   useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-collapse HUD only when first entering Classic mode with a type selected.
+  // Switching back and forth between Graph/Classic should not force-collapse again.
+  const prevViewModeRef = useRef<"graph" | "classic">("graph");
+  useEffect(() => {
+    const prev = prevViewModeRef.current;
+    prevViewModeRef.current = viewMode;
+    if (viewMode === "classic" && prev === "graph" && selectedGraphType) {
+      // Entering Classic for the first time — collapse and pin tab position.
+      setHudCollapsedTabTop(125);
+      setHudCollapsed(true);
+    }
+  }, [viewMode, selectedGraphType]);
+
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
     const matchesType = savedType === "All types" || view.type === savedType;
@@ -3495,19 +3508,48 @@ useEffect(() => {
             externalSelectId={hudExternalSelectId}
           />
         ) : selectedGraphType && viewMode === "classic" ? (
-          <div className="absolute inset-0 overflow-auto bg-[#fafafa] p-6">
-            <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-            <TopologyTableView
-              type={selectedGraphType}
-              graphTitle={selectedGraphTitle}
-              conditions={modalConditions}
-              visibleColumnIds={visibleColumnIds}
-              onNavigate={(type) => openGraph(type, type)}
-              onSelectResource={setSelectedResourceId}
-              overlayInfo={overlayInfo}
-              wsGroupMode={wsGroupMode}
-            />
-          </div>
+          (() => {
+            const hudExpanded = !hudCollapsed && hudPhase === "resting";
+            const leftInset = hudExpanded ? hudPosition.x + 425 + 16 : 32;
+            const transition = "padding-left 0.3s cubic-bezier(0.25,0.8,0.25,1)";
+            return (
+              <div className="absolute inset-0 overflow-auto" style={{ background: "transparent" }}>
+                {/* Page header */}
+                <div
+                  className="flex items-center justify-between pb-4 pt-7"
+                  style={{ paddingLeft: leftInset, paddingRight: 32, transition }}
+                >
+                  <h1 className="text-[22px] font-semibold leading-tight" style={{ color: glassText }}>
+                    {selectedGraphTitle ?? selectedGraphType}
+                  </h1>
+                  <ActionsDropdown
+                    columns={modalQueryColumns}
+                    visibleColumnIds={visibleColumnIds}
+                    onApply={setVisibleColumnIds}
+                  />
+                </div>
+
+                {/* Query builder */}
+                <div style={{ paddingLeft: leftInset, paddingRight: 32, transition }}>
+                  <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                </div>
+
+                {/* Table */}
+                <div style={{ paddingLeft: leftInset, paddingRight: 32, paddingBottom: 32, transition }}>
+                  <TopologyTableView
+                    type={selectedGraphType}
+                    graphTitle={selectedGraphTitle}
+                    conditions={modalConditions}
+                    visibleColumnIds={visibleColumnIds}
+                    onNavigate={(type) => openGraph(type, type)}
+                    onSelectResource={setSelectedResourceId}
+                    overlayInfo={overlayInfo}
+                    wsGroupMode={wsGroupMode}
+                  />
+                </div>
+              </div>
+            );
+          })()
         ) : null}
       </div>
 
@@ -3758,8 +3800,13 @@ useEffect(() => {
           type="button"
           onClick={e => {
             e.stopPropagation();
-            if (!hudCollapsed && hudTabRef.current) {
-              setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
+            if (!hudCollapsed) {
+              // In Classic mode with a table showing, always pin to 125px.
+              if (viewMode === "classic" && selectedGraphType) {
+                setHudCollapsedTabTop(125);
+              } else if (hudTabRef.current) {
+                setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
+              }
             }
             setHudCollapsed(c => !c);
           }}
@@ -3787,7 +3834,7 @@ useEffect(() => {
             transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
           } : {
             position: "absolute",
-            bottom: 25,
+            top: 25,
             left: "100%",
             width: 44,
             height: 52,
@@ -4273,7 +4320,7 @@ useEffect(() => {
           );
         })()}
 
-        {(selectedGraphType && (hudActiveNodes.length > 0 || hudSearch || hudTypeFilter !== "All")) && (
+        {(selectedGraphType && viewMode === "graph" && (hudActiveNodes.length > 0 || hudSearch || hudTypeFilter !== "All")) && (
           <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
