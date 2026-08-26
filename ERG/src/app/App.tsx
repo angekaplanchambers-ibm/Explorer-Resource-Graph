@@ -39,7 +39,7 @@ export default function App() {
     }, 760);
   }
 
-  const sideOpen = dockMode === "right" && stepActive && !workbenchOpen;
+  const sideOpen = dockMode === "right" && !workbenchOpen;
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -101,6 +101,7 @@ export default function App() {
             className="flex-1 min-h-0"
             style={{
               paddingBottom: dockMode === "bottom" ? "72px" : 0,
+              paddingRight: sideOpen ? SIDE_PANEL_W : 0,
               transition: "padding-bottom 0.4s cubic-bezier(0.25,0.8,0.25,1)",
             }}
           >

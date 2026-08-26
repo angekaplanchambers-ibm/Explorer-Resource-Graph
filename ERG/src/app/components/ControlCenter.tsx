@@ -656,7 +656,6 @@ function DockSideToggle({ value, onChange }: { value: DockSide; onChange: (v: Do
   const btnBase: React.CSSProperties = { width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: "none", transition: "background 0.15s" };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-      <span style={{ color: M.textMuted, fontSize: "11px", fontFamily: M.font, fontWeight: 500, whiteSpace: "nowrap" }}>Dock side</span>
       <div style={{ display: "flex", gap: "2px", backgroundColor: M.darkItem, borderRadius: 5, padding: 2, border: `1px solid ${M.darkBorder}` }}>
         {/* Bottom-dock icon */}
         <button
@@ -1249,7 +1248,7 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
   const isBudgetStep = activeStep?.label?.toLowerCase().includes("breakdown");
   const isRightDock = dockMode === "right";
 
-  // Side panel mode — render as a fixed right panel beside the workspace
+  // Step-detail side panel — only when a step is active in right-dock mode
   if (isRightDock && activeOp && activeStep) {
     return (
       <SidePanelView
@@ -1264,6 +1263,77 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
     );
   }
 
+  // ── Right-dock drawer shell ───────────────────────────────────────────────
+  if (isRightDock) {
+    return (
+      <div style={{
+        position: "fixed", right: 0, top: 60, bottom: 0, width: 420, zIndex: 49,
+        backgroundColor: M.dark, borderLeft: `1px solid ${M.darkBorder}`,
+        display: "flex", flexDirection: "column", fontFamily: M.font,
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.3)",
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 10px 12px", borderBottom: `1px solid ${M.darkBorder}`, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Terminal size={11} color="white" />
+            </div>
+            <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+          </div>
+          <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
+        </div>
+
+        {/* Chat / ops content */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+          <div style={{ display: signalTab === "chat" ? "flex" : "none", width: "100%", height: "100%" }}>
+            <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} />
+          </div>
+          <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ color: M.textMuted, fontSize: "11px", letterSpacing: "0.04em" }}>terraform-signal v0.1.0 — type a command or ask a question</span>
+              <span style={{ color: M.darkBorder, fontSize: "11px" }}>────────────────────────────────────────────</span>
+              <span style={{ color: M.textMuted, fontSize: "11px", marginTop: 8 }}>$&nbsp;<span style={{ color: M.textDim }}>_</span></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Input bar */}
+        <div style={{ borderTop: `1px solid ${M.darkBorder}`, padding: "8px 12px 10px", flexShrink: 0, backgroundColor: M.dark }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 6, backgroundColor: M.inputBg, border: `1px solid ${M.darkBorder}` }}>
+              <Plus size={14} color={M.textMuted} style={{ flexShrink: 0 }} />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onFocus={() => setSignalTab("chat")}
+                onKeyDown={e => {
+                  if (e.key === "Enter" && !e.shiftKey && query.trim()) {
+                    e.preventDefault();
+                    chatSendRef.current?.(query);
+                    setQuery("");
+                  }
+                }}
+                placeholder="Ask about your Terraform fleet…"
+                style={{ flex: 1, background: "none", border: "none", outline: "none", color: M.text, fontSize: "13px", fontFamily: M.font }}
+              />
+              {query && <X size={13} color={M.textMuted} style={{ cursor: "pointer", flexShrink: 0 }} onClick={() => { setQuery(""); setActiveOp(null); }} />}
+            </div>
+            <button
+              onClick={() => { setSignalTab("ops"); }}
+              title="CLI"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 10px", height: 28, borderRadius: 6, border: `1px solid ${M.darkBorder}`, backgroundColor: signalTab === "ops" ? M.darkItem : "transparent", color: signalTab === "ops" ? M.text : M.textMuted, cursor: "pointer", flexShrink: 0 }}
+            >
+              <Pen size={13} />
+              <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: M.font, whiteSpace: "nowrap" }}>CLI</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Bottom-dock drawer ────────────────────────────────────────────────────
   return (
     <div
       className="fixed bottom-0 left-0 z-50"
@@ -1321,22 +1391,25 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
       <div style={{ backgroundColor: M.dark, borderTop: `1px solid ${M.darkBorder}` }}>
         <div style={{ display: "flex", flexDirection: "column", padding: "8px 12px 10px" }}>
 
-          {/* Row 1: brand — only in collapsed state */}
+          {/* Row 1: brand + dock toggle — only in collapsed state */}
           {panel === "bar" && (
-            <button
-              type="button"
-              onClick={togglePanel}
-              aria-label="Open Terraform Signal"
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, marginBottom: 6, cursor: "pointer", alignSelf: "flex-start" }}
-            >
-              <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Terminal size={11} color="white" />
-              </div>
-              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <button
+                type="button"
+                onClick={togglePanel}
+                aria-label="Open Terraform Signal"
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Terminal size={11} color="white" />
+                </div>
+                <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+              </button>
+              <DockSideToggle value={(dockMode ?? "bottom") as DockSide} onChange={v => onDockChange?.(v)} />
+            </div>
           )}
 
-          {/* Row 2: input + controls */}
+          {/* Row 2: input + CLI */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 6, backgroundColor: M.inputBg, border: `1px solid ${M.darkBorder}` }}>
               <Plus size={14} color={M.textMuted} style={{ flexShrink: 0 }} />
@@ -1361,7 +1434,7 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             <button
               onClick={() => { setSignalTab("ops"); setPanel("expanded"); }}
               title="CLI"
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 10px", height: 28, borderRadius: 6, border: `1px solid ${M.darkBorder}`, backgroundColor: signalTab === "ops" && panel === "expanded" ? M.darkItem : "transparent", color: signalTab === "ops" && panel === "expanded" ? M.text : M.textMuted, cursor: "pointer", flexShrink: 0 }}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "0 10px", height: 28, borderRadius: 6, border: `1px solid ${M.darkBorder}`, backgroundColor: signalTab === "ops" && panel === "expanded" ? M.darkItem : "transparent", color: signalTab === "ops" && panel === "expanded" ? M.text : M.textMuted, cursor: "pointer", flexShrink: 0 }}
             >
               <Pen size={13} />
               <span style={{ fontSize: "11px", fontWeight: 500, fontFamily: M.font, whiteSpace: "nowrap" }}>CLI</span>
