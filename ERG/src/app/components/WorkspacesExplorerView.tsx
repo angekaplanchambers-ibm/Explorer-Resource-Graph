@@ -3510,14 +3510,14 @@ useEffect(() => {
         ) : selectedGraphType && viewMode === "classic" ? (
           (() => {
             const hudExpanded = !hudCollapsed && hudPhase === "resting";
-            const leftInset = hudExpanded ? hudPosition.x + 425 + 16 : 32;
+            const leftInset = hudExpanded ? hudPosition.x + 425 + 16 : 50;
             const transition = "padding-left 0.3s cubic-bezier(0.25,0.8,0.25,1)";
             return (
               <div className="absolute inset-0 overflow-auto" style={{ background: "transparent" }}>
                 {/* Page header */}
                 <div
                   className="flex items-center justify-between pb-4 pt-7"
-                  style={{ paddingLeft: leftInset, paddingRight: 32, transition }}
+                  style={{ paddingLeft: leftInset, paddingRight: 50, transition }}
                 >
                   <h1 className="text-[22px] font-semibold leading-tight" style={{ color: glassText }}>
                     {selectedGraphTitle ?? selectedGraphType}
@@ -3530,12 +3530,12 @@ useEffect(() => {
                 </div>
 
                 {/* Query builder */}
-                <div style={{ paddingLeft: leftInset, paddingRight: 32, transition }}>
+                <div style={{ paddingLeft: leftInset, paddingRight: 50, transition }}>
                   <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
                 </div>
 
                 {/* Table */}
-                <div style={{ paddingLeft: leftInset, paddingRight: 32, paddingBottom: 32, transition }}>
+                <div style={{ paddingLeft: leftInset, paddingRight: 50, paddingBottom: 50, transition }}>
                   <TopologyTableView
                     type={selectedGraphType}
                     graphTitle={selectedGraphTitle}
@@ -3891,21 +3891,44 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* View mode toggle — Graph / Classic */}
+      {/* View mode toggle — sliding pill, Graph / Classic */}
       <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View Mode</p>
         <div
-          className="flex overflow-hidden rounded-[4px] border text-[12px] font-medium"
-          style={{ borderColor: "rgba(59,61,69,0.4)" }}
+          style={{
+            position: "relative",
+            display: "flex",
+            background: "rgba(59,61,69,0.07)",
+            borderRadius: 999,
+            padding: 3,
+          }}
         >
+          {/* Sliding pill */}
+          <div
+            style={{
+              position: "absolute",
+              top: 3,
+              bottom: 3,
+              left: viewMode === "graph" ? 3 : "50%",
+              width: "calc(50% - 3px)",
+              background: "#ffffff",
+              borderRadius: 999,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+              transition: "left 200ms ease-in-out",
+              pointerEvents: "none",
+            }}
+          />
+          {/* Graph button */}
           <button
             type="button"
             onClick={() => setViewMode("graph")}
             style={{
-              flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: viewMode === "graph" ? "#0f62fe" : "#ffffff",
-              color: viewMode === "graph" ? "#ffffff" : "#3b3d45",
-              border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
-              borderRight: "1px solid rgba(59,61,69,0.4)",
+              flex: 1, position: "relative", zIndex: 1,
+              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              color: viewMode === "graph" ? "#0f62fe" : "rgba(59,61,69,0.55)",
+              transition: "color 200ms ease-in-out",
             }}
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -3921,14 +3944,17 @@ useEffect(() => {
             </svg>
             Graph
           </button>
+          {/* Classic button */}
           <button
             type="button"
             onClick={() => setViewMode("classic")}
             style={{
-              flex: 1, height: 28, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: viewMode === "classic" ? "#0f62fe" : "#ffffff",
-              color: viewMode === "classic" ? "#ffffff" : "#3b3d45",
-              border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              flex: 1, position: "relative", zIndex: 1,
+              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)",
+              transition: "color 200ms ease-in-out",
             }}
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
