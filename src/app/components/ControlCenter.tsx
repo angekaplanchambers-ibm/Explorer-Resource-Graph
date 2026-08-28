@@ -7,17 +7,17 @@ import { TFSignalChat } from "./TFSignalChat";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const M = {
-  dark: "#131313",
-  darkItem: "#262626",
-  darkBorder: "#393939",
-  blue: "#0043ce",
-  green: "#24a148",
+  dark: "#ffffff",
+  darkItem: "#f1f2f3",
+  darkBorder: "rgba(101,106,118,0.2)",
+  blue: "#1060ff",
+  green: "#00781e",
   amber: "#D97706",
   red: "#da1e28",
-  text: "#f4f4f4",
-  textDim: "#c6c6c6",
-  textMuted: "#8d8d8d",
-  inputBg: "rgba(236,238,242,0.1)",
+  text: "#0c0c0e",
+  textDim: "#3b3d45",
+  textMuted: "#656a76",
+  inputBg: "rgba(101,106,118,0.06)",
   font: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
 };
 
@@ -65,11 +65,11 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
     <div className="flex flex-col h-full" style={{ backgroundColor: M.dark }}>
       {/* Search + collapse button */}
       <div style={{ padding: "16px 20px 16px 20px", display: "flex", alignItems: "center", gap: "8px" }}>
-        <div style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: "8px", height: "40px", display: "flex", alignItems: "center", padding: "0 12px", flex: 1 }}>
+        <div style={{ backgroundColor: M.inputBg, borderRadius: "8px", height: "40px", display: "flex", alignItems: "center", padding: "0 12px", flex: 1, border: `1px solid ${M.darkBorder}` }}>
           <input
             placeholder="Search sessions"
             className="flex-1 bg-transparent outline-none"
-            style={{ color: "#777", fontSize: "12px", fontFamily: M.font }}
+            style={{ color: M.textMuted, fontSize: "12px", fontFamily: M.font }}
           />
         </div>
         {onCollapse && (
@@ -77,7 +77,7 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
             onClick={onCollapse}
             title="Collapse sessions"
             style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, border: "none", background: "transparent", cursor: "pointer", color: M.textMuted, flexShrink: 0, transition: "background 0.12s" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+            onMouseEnter={e => (e.currentTarget.style.background = M.darkItem)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             <svg width="18" height="15" viewBox="0 0 14 12" fill="none">
@@ -89,7 +89,7 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
 
       {/* Recent label — matches Figma px-[20px] */}
       <div style={{ padding: "0 20px 8px" }}>
-        <p style={{ color: "#777", fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font }}>Recent</p>
+        <p style={{ color: M.textMuted, fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font }}>Recent</p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -98,7 +98,7 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
           <div
             className="cursor-pointer"
             style={{ padding: "12px 20px", borderBottom: `1px solid ${M.darkBorder}` }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
           >
             {/* Blue dot + Active */}
@@ -106,14 +106,14 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
               <svg width="10" height="10" viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
                 <circle cx="5" cy="5" r="5" fill="#3A47E6" />
               </svg>
-              <span style={{ color: "#c6c6c6", fontSize: "11px", fontFamily: M.font }}>Active</span>
+              <span style={{ color: M.textMuted, fontSize: "11px", fontFamily: M.font }}>Active</span>
             </div>
             {/* Title */}
-            <p style={{ color: "#f4f4f4", fontSize: "12px", fontWeight: 500, fontFamily: M.font, lineHeight: "1.4" }}>
+            <p style={{ color: M.text, fontSize: "12px", fontWeight: 500, fontFamily: M.font, lineHeight: "1.4" }}>
               {activeSession.label}
             </p>
             {/* Description */}
-            <p style={{ color: "#777", fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font, marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p style={{ color: M.textMuted, fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font, marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {activeSession.desc}
             </p>
           </div>
@@ -125,16 +125,16 @@ function SessionList({ onCollapse }: { onCollapse?: () => void }) {
             key={s.id}
             className="cursor-pointer"
             style={{ padding: "10px 20px", borderBottom: `1px solid ${M.darkBorder}`, backgroundColor: "transparent" }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.04)")}
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <CcStatusIcon status={s.status} />
-              <p style={{ color: "#c6c6c6", fontSize: "12px", fontWeight: 500, fontFamily: M.font, lineHeight: "1.4" }}>
+              <p style={{ color: M.text, fontSize: "12px", fontWeight: 500, fontFamily: M.font, lineHeight: "1.4" }}>
                 {s.label}
               </p>
             </div>
-            <p style={{ color: "#777", fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font, marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p style={{ color: M.textMuted, fontSize: "11px", letterSpacing: "0.32px", fontFamily: M.font, marginTop: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {s.desc}
             </p>
           </div>
@@ -631,8 +631,8 @@ function TriagePanel({ op, onBack, onStepClick, onOpenWorkbench }: { op: Recomme
                     <span
                       role="button"
                       onClick={e => { e.stopPropagation(); onOpenWorkbench?.(step.workbenchQuery!); }}
-                      style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: "#4f8fff", border: "1px solid rgba(79,143,255,0.5)", fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "4px 9px", borderRadius: "4px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(79,143,255,0.1)"; }}
+                      style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: M.blue, border: `1px solid rgba(16,96,255,0.4)`, fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "4px 9px", borderRadius: "4px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(16,96,255,0.08)"; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
                     >
                       <Terminal size={10} /> Open in Workbench
@@ -659,24 +659,24 @@ function DockSideToggle({ value, onChange }: { value: DockSide; onChange: (v: Do
       <div style={{ display: "flex", gap: "2px", backgroundColor: M.darkItem, borderRadius: 5, padding: 2, border: `1px solid ${M.darkBorder}` }}>
         {/* Bottom-dock icon */}
         <button
-          style={{ ...btnBase, backgroundColor: value === "bottom" ? "#2a2a40" : "transparent" }}
+          style={{ ...btnBase, backgroundColor: value === "bottom" ? "rgba(16,96,255,0.1)" : "transparent" }}
           onClick={() => onChange("bottom")}
           title="Dock to bottom"
         >
           <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
-            <rect x="0.5" y="0.5" width="13" height="11" rx="1.5" stroke={value === "bottom" ? "#4f8fff" : M.textMuted} strokeWidth="1" />
-            <rect x="1" y="7" width="12" height="4" rx="1" fill={value === "bottom" ? "#4f8fff" : M.textMuted} opacity={value === "bottom" ? 0.9 : 0.35} />
+            <rect x="0.5" y="0.5" width="13" height="11" rx="1.5" stroke={value === "bottom" ? M.blue : M.textMuted} strokeWidth="1" />
+            <rect x="1" y="7" width="12" height="4" rx="1" fill={value === "bottom" ? M.blue : M.textMuted} opacity={value === "bottom" ? 0.9 : 0.35} />
           </svg>
         </button>
         {/* Right-dock icon */}
         <button
-          style={{ ...btnBase, backgroundColor: value === "right" ? "#2a2a40" : "transparent" }}
+          style={{ ...btnBase, backgroundColor: value === "right" ? "rgba(16,96,255,0.1)" : "transparent" }}
           onClick={() => onChange("right")}
           title="Dock to right"
         >
           <svg width="14" height="12" viewBox="0 0 14 12" fill="none">
-            <rect x="0.5" y="0.5" width="13" height="11" rx="1.5" stroke={value === "right" ? "#4f8fff" : M.textMuted} strokeWidth="1" />
-            <rect x="8" y="1" width="5" height="10" rx="1" fill={value === "right" ? "#4f8fff" : M.textMuted} opacity={value === "right" ? 0.9 : 0.35} />
+            <rect x="0.5" y="0.5" width="13" height="11" rx="1.5" stroke={value === "right" ? M.blue : M.textMuted} strokeWidth="1" />
+            <rect x="8" y="1" width="5" height="10" rx="1" fill={value === "right" ? M.blue : M.textMuted} opacity={value === "right" ? 0.9 : 0.35} />
           </svg>
         </button>
       </div>
@@ -730,8 +730,8 @@ function StepDetailPanel({ op, step, onBack, onOpenWorkbench, showBudgetTable, o
           {step.workbenchQuery && (
             <button
               onClick={() => onOpenWorkbench?.(step.workbenchQuery!)}
-              style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: "#4f8fff", border: "1px solid rgba(79,143,255,0.4)", fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "3px 9px", borderRadius: "4px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(79,143,255,0.1)"; }}
+              style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: M.blue, border: `1px solid rgba(16,96,255,0.4)`, fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "3px 9px", borderRadius: "4px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(16,96,255,0.08)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
             >
               <Terminal size={10} /> Open in Workbench
@@ -771,7 +771,7 @@ function StepDetailPanel({ op, step, onBack, onOpenWorkbench, showBudgetTable, o
           </div>
 
           {/* Suggestions footer */}
-          <div style={{ borderTop: `1px solid ${M.darkBorder}`, backgroundColor: "#111111", padding: "10px 16px 12px", flexShrink: 0 }}>
+          <div style={{ borderTop: `1px solid ${M.darkBorder}`, backgroundColor: "#f8f9fa", padding: "10px 16px 12px", flexShrink: 0 }}>
             <p style={{ color: M.textMuted, fontSize: "10px", fontFamily: M.font, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>What would you like to do?</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
               {suggestions.map((s, i) => {
@@ -801,7 +801,7 @@ function StepDetailPanel({ op, step, onBack, onOpenWorkbench, showBudgetTable, o
         </div>
 
         {/* Right: evidence sidebar — slides in from right */}
-        <div style={{ width: "20%", minWidth: 180, flexShrink: 0, borderLeft: `1px solid ${M.darkBorder}`, backgroundColor: "#0d0d0d", display: "flex", flexDirection: "column", overflow: "hidden", ...evidenceEnter }}>
+        <div style={{ width: "20%", minWidth: 180, flexShrink: 0, borderLeft: `1px solid ${M.darkBorder}`, backgroundColor: "#f8f9fa", display: "flex", flexDirection: "column", overflow: "hidden", ...evidenceEnter }}>
           <div style={{ padding: "12px 16px 8px", borderBottom: `1px solid ${M.darkBorder}`, flexShrink: 0 }}>
             <p style={{ color: M.textMuted, fontSize: "10px", fontFamily: M.font, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Evidence</p>
           </div>
@@ -864,11 +864,11 @@ const WORKFLOWS = [
 
 function AutomatedWorkflows({ onOpenWorkbench }: { onOpenWorkbench?: (q?: string) => void }) {
   return (
-    <div className="flex flex-col overflow-y-auto flex-1 min-w-0" style={{ borderLeft: `1px solid ${M.darkBorder}`, backgroundColor: "#0e0e0e" }}>
+    <div className="flex flex-col overflow-y-auto flex-1 min-w-0" style={{ borderLeft: `1px solid ${M.darkBorder}`, backgroundColor: "#f8f9fa" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-3 pb-2 flex-shrink-0">
         <div>
-          <p style={{ color: "#f4f4f4", fontSize: "11px", fontWeight: 600, fontFamily: M.font, letterSpacing: "0.06em", textTransform: "uppercase" }}>Operation Catalog</p>
+          <p style={{ color: M.text, fontSize: "11px", fontWeight: 600, fontFamily: M.font, letterSpacing: "0.06em", textTransform: "uppercase" }}>Operation Catalog</p>
           <p style={{ color: M.textMuted, fontSize: "11px", fontFamily: M.font, marginTop: "1px" }}>Launch a multi-step campaign in the Workbench</p>
         </div>
       </div>
@@ -893,7 +893,7 @@ function AutomatedWorkflows({ onOpenWorkbench }: { onOpenWorkbench?: (q?: string
 
             {/* Text */}
             <div className="flex-1 min-w-0">
-              <p style={{ color: "#f4f4f4", fontSize: "12px", fontFamily: M.font, fontWeight: 600, lineHeight: "1.4" }}>{w.label}</p>
+              <p style={{ color: "#1a1a1a", fontSize: "12px", fontFamily: M.font, fontWeight: 600, lineHeight: "1.4" }}>{w.label}</p>
               <p style={{ color: M.textMuted, fontSize: "11px", fontFamily: M.font, marginTop: "3px", lineHeight: "1.5" }}>{w.desc}</p>
             </div>
 
@@ -923,7 +923,7 @@ function CollapsedSessionsStrip({ onExpand }: { onExpand: () => void }) {
   return (
     <div
       className="flex-shrink-0 flex flex-col items-center"
-      style={{ width: "36px", borderRight: `1px solid ${M.darkBorder}`, backgroundColor: "#0e0e0e", cursor: "pointer" }}
+      style={{ width: "36px", borderRight: `1px solid ${M.darkBorder}`, backgroundColor: "#f1f2f3", cursor: "pointer" }}
       onClick={onExpand}
       title="Expand sessions"
     >
@@ -1008,12 +1008,11 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
 
   return (
     <div style={{
-      position: "fixed", right: 0, top: 60, bottom: 0, width: 420, zIndex: 49,
+      width: "100%", height: "100%",
       backgroundColor: M.dark, borderLeft: `1px solid ${M.darkBorder}`,
       display: "flex", flexDirection: "column", fontFamily: M.font,
-      transform: visible ? "translateX(0)" : "translateX(100%)",
-      transition: "transform 0.4s cubic-bezier(0.25,0.8,0.25,1)",
-      boxShadow: "-4px 0 24px rgba(0,0,0,0.3)",
+      opacity: visible ? 1 : 0,
+      transition: "opacity 0.3s cubic-bezier(0.25,0.8,0.25,1)",
     }}>
       {/* Header — row 1: Back + title */}
       <div style={{ padding: "9px 12px 0", flexShrink: 0 }}>
@@ -1031,8 +1030,8 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
           {step.workbenchQuery ? (
             <button
               onClick={() => onOpenWorkbench?.(step.workbenchQuery!)}
-              style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: "#4f8fff", border: "1px solid rgba(79,143,255,0.4)", fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "3px 9px", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(79,143,255,0.1)"; }}
+              style={{ display: "flex", alignItems: "center", gap: "5px", backgroundColor: "transparent", color: M.blue, border: `1px solid rgba(16,96,255,0.4)`, fontSize: "11px", fontWeight: 600, fontFamily: M.font, padding: "3px 9px", borderRadius: "4px", cursor: "pointer", whiteSpace: "nowrap" }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(16,96,255,0.08)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
             >
               <Terminal size={10} /> Open in Workbench
@@ -1086,7 +1085,7 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
       </div>
 
       {/* Suggestions — anchored above input */}
-      <div style={{ borderTop: `1px solid ${M.darkBorder}`, padding: "10px 12px 8px", flexShrink: 0, backgroundColor: "#111111" }}>
+      <div style={{ borderTop: `1px solid ${M.darkBorder}`, padding: "10px 12px 8px", flexShrink: 0, backgroundColor: "#f8f9fa" }}>
         <p style={{ color: M.textMuted, fontSize: "9px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>What would you like to do?</p>
         <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
           {suggestions.map((s, i) => {
@@ -1133,7 +1132,7 @@ interface ControlCenterProps {
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "bottom", onDockChange, onStepActiveChange }: ControlCenterProps) {
+export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
   const [signalTab, setSignalTab] = useState<"ops" | "chat">("ops");
@@ -1267,10 +1266,9 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
   if (isRightDock) {
     return (
       <div style={{
-        position: "fixed", right: 0, top: 60, bottom: 0, width: 420, zIndex: 49,
+        width: "100%", height: "100%",
         backgroundColor: M.dark, borderLeft: `1px solid ${M.darkBorder}`,
         display: "flex", flexDirection: "column", fontFamily: M.font,
-        boxShadow: "-4px 0 24px rgba(0,0,0,0.3)",
       }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 10px 12px", borderBottom: `1px solid ${M.darkBorder}`, flexShrink: 0 }}>

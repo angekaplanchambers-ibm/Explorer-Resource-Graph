@@ -3,17 +3,17 @@ import { motion } from "motion/react";
 
 // ── Tokens (copied from ControlCenter.tsx) ────────────────────────────────────
 const M = {
-  dark: "#131313",
-  darkItem: "#262626",
-  darkBorder: "#393939",
-  blue: "#0043ce",
-  green: "#24a148",
+  dark: "#ffffff",
+  darkItem: "#f1f2f3",
+  darkBorder: "rgba(101,106,118,0.2)",
+  blue: "#1060ff",
+  green: "#00781e",
   amber: "#D97706",
   red: "#da1e28",
-  text: "#f4f4f4",
-  textDim: "#c6c6c6",
-  textMuted: "#8d8d8d",
-  inputBg: "rgba(236,238,242,0.1)",
+  text: "#0c0c0e",
+  textDim: "#3b3d45",
+  textMuted: "#656a76",
+  inputBg: "rgba(101,106,118,0.06)",
   font: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
 };
 
