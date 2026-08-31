@@ -975,7 +975,7 @@ SCENARIOS.provider_upgrade_failure = {
                 { label: "Component",   value: "terraform · networking · payments" },
                 { label: "Linked PR",   value: "PR #247 · fix/aws-provider-v5-compat" },
                 { label: "Affected",    value: "2 workspaces · networking-prod-core · payments-prod-us-east" },
-                { label: "Reporter",    value: "Terraform Signal (automated)" },
+                { label: "Reporter",    value: "Terraform Agent (automated)" },
               ],
               label: "Create Jira ticket",
               continuation: [
@@ -3170,7 +3170,7 @@ const [scenario, setScenario] = useState<Scenario>(SCENARIOS.default);
           <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4 }} className="flex items-center justify-center flex-shrink-0">
             <Terminal size={11} color="white" />
           </div>
-          <span style={{ color: M.textWhite, fontSize: "13px", fontWeight: 600 }}>Terraform Signal</span>
+          <span style={{ color: M.textWhite, fontSize: "13px", fontWeight: 600 }}>Terraform Agent</span>
           <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: "rgba(0,67,206,0.2)", color: "#6ea6ff", border: "1px solid rgba(0,67,206,0.4)", fontWeight: 600 }}>Workbench</span>
         </div>
         <div className="flex items-center gap-3">

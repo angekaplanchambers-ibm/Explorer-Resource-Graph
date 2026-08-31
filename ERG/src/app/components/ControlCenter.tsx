@@ -1276,7 +1276,7 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <Terminal size={11} color="white" />
             </div>
-            <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+            <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Agent</span>
           </div>
           <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
         </div>
@@ -1346,7 +1346,7 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
               <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Terminal size={11} color="white" />
               </div>
-              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Agent</span>
             </div>
             <button
               onClick={() => setPanel("bar")}
@@ -1394,13 +1394,13 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             <button
               type="button"
               onClick={togglePanel}
-              aria-label="Open Terraform Signal"
+              aria-label="Open Terraform Agent"
               style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, marginBottom: 6, cursor: "pointer", alignSelf: "flex-start" }}
             >
               <div style={{ backgroundColor: M.blue, width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Terminal size={11} color="white" />
               </div>
-              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Signal</span>
+              <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Agent</span>
             </button>
           )}
 
