@@ -1495,6 +1495,38 @@ function curvePath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
 }
 
+// Arc layout — places origin at center of horizontal axis with upstream left, downstream right.
+// upstreamIds / downstreamIds determine which side each node sits on.
+function computeArcLayout(
+  originId: string,
+  upstreamIds: string[],
+  downstreamIds: string[],
+): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  const cy = VH / 2;
+  const originX = VW / 2;
+  const xSpacing = NODE_SIZE + 100;
+  const yStep = NODE_SIZE + 32;
+
+  pos.set(originId, { x: originX, y: cy });
+
+  upstreamIds.forEach((id, i) => {
+    const step = upstreamIds.length - i;
+    const x = originX - xSpacing * step;
+    const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
+    pos.set(id, { x, y });
+  });
+
+  downstreamIds.forEach((id, i) => {
+    const step = i + 1;
+    const x = originX + xSpacing * step;
+    const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
+    pos.set(id, { x, y });
+  });
+
+  return pos;
+}
+
 type LucideIcon = React.ComponentType<LucideProps>;
 
 const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
@@ -1509,7 +1541,7 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
 // Fallback for unknown types
 const DEFAULT_NODE_ICON: LucideIcon = Server;
 
-type TopoLayout = "force" | "stacked" | "radial" | "grid";
+type TopoLayout = "force" | "stacked" | "radial" | "grid" | "arc";
 type WsGroupMode = "none" | "project" | "status";
 
 // Returns key-value pairs for a node's popover, using the column labels for the active type.
@@ -1611,11 +1643,14 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewProvidersCount, setViewProvidersCount] = useState<number>(0);
   const [wsPopoverView, setWsPopoverView] = useState<"main" | "modules">("main");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+  const [manualLayout, setManualLayout] = useState<Exclude<TopoLayout, "arc">>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [showEdges, setShowEdges] = useState<boolean>(true);
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const topoLayout: TopoLayout = blastRadiusId ? "arc" : manualLayout;
+  const setTopoLayout = (l: TopoLayout) => { if (l !== "arc") setManualLayout(l as Exclude<TopoLayout, "arc">); };
 
   // Notify parent whenever blast radius mode changes
   useEffect(() => { onBlastRadiusChange?.(blastRadiusId); }, [blastRadiusId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1623,7 +1658,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   // Reset zoom and layout whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
-    setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+    setManualLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
     setShowEdges(true);
   }, [activeType, refreshKey]);
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
@@ -1760,7 +1795,10 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
   const gridPositions = useMemo(() => runGridLayout(activeNodes), [activeNodes]);
 
-  const positions = topoLayout === "grid" ? gridPositions : topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
+  const positions_base = topoLayout === "grid" ? gridPositions
+    : topoLayout === "stacked" ? stackedPositions
+    : topoLayout === "radial" ? radialPositions
+    : forcePositions;
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
@@ -1809,8 +1847,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   }, [hoveredId, edges]);
 
   // Blast radius: BFS depth map for all reachable nodes + visible set limited to 1 hop
-  const { blastRadiusSet, blastDepthMap } = useMemo(() => {
-    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>() };
+  const { blastRadiusSet, blastDepthMap, arcPositions } = useMemo(() => {
+    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>(), arcPositions: new Map<string, { x: number; y: number }>() };
     const visited = new Set<string>([blastRadiusId]);
     const depthMap = new Map<string, number>([[blastRadiusId, 0]]);
     const queue: string[] = [blastRadiusId];
@@ -1831,8 +1869,19 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     for (const [id, depth] of depthMap) {
       if (depth <= 1) visibleSet.add(id);
     }
-    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap };
+    // Arc layout positions — computed here so blastRadiusSet is available
+    const upstreamIds: string[] = [];
+    const downstreamIds: string[] = [];
+    for (const e of activeEdges) {
+      if (e.target === blastRadiusId && visibleSet.has(e.source)) upstreamIds.push(e.source);
+      if (e.source === blastRadiusId && visibleSet.has(e.target)) downstreamIds.push(e.target);
+    }
+    const arcPos = computeArcLayout(blastRadiusId, upstreamIds, downstreamIds);
+
+    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap, arcPositions: arcPos };
   }, [blastRadiusId, activeEdges]);
+
+  const positions = topoLayout === "arc" && blastRadiusId ? arcPositions : positions_base;
 
   const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
@@ -1937,13 +1986,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               100% { opacity: 1; transform: scale(1); }
             }
           `}</style>
-          {/* Orange arrowhead — downstream edges, tip at end (markerEnd) */}
+          {/* Orange arrowhead — downstream edges in non-arc blast mode */}
           <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L8,3 z" fill="#D55E00" />
           </marker>
-          {/* Purple arrowhead — upstream edges, tip at start (markerStart), so reversed: tip points left */}
+          {/* Purple arrowhead — upstream edges in non-arc blast mode */}
           <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+          </marker>
+          {/* Arc layout — purple downstream arrowhead (tip at end) */}
+          <marker id="arc-arrow-downstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,5 L7,2.5 z" fill="#9b5de5" />
+          </marker>
+          {/* Arc layout — cyan upstream arrowhead (tip at end, path already drawn toward origin) */}
+          <marker id="arc-arrow-upstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,5 L7,2.5 z" fill="#00b4d8" />
           </marker>
         </defs>
 
@@ -1958,13 +2015,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
         {/* Zoomable content */}
         <g transform={groupTransform}>
-          {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
+          {/* Arc mode: horizontal baseline */}
+          {topoLayout === "arc" && blastRadiusId && (
+            <line
+              x1={80} y1={VH / 2} x2={VW - 80} y2={VH / 2}
+              stroke={themeMode === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)"}
+              strokeWidth={1 / scale}
+            />
+          )}
+
+          {/* Edges — in arc/blast mode: blast edges hidden here (drawn below), non-blast edges dimmed */}
           {showEdges && visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
             const pt = positions.get(edge.target);
             if (!ps || !pt) return null;
-            // Only edges directly touching the origin (depth 0) count as blast edges.
-            // Peer edges between two depth-1 nodes stay grey and visible.
+            // In arc mode all blast edges are drawn separately below; hide them here.
             const isBlastEdge = blastRadiusId
               ? (blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0) &&
                 blastRadiusSet.has(edge.source) && blastRadiusSet.has(edge.target)
@@ -1990,8 +2055,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             );
           })}
 
-          {/* Blast radius edges — only origin↔neighbour edges get orange/purple arrows */}
-          {showEdges && blastRadiusId && visibleEdges.map((edge, i) => {
+          {/* Arc layout blast edges — parabolic arcs bowing above (upstream/cyan) or below (downstream/purple) */}
+          {showEdges && blastRadiusId && topoLayout === "arc" && visibleEdges.map((edge, i) => {
             const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
             if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
             const ps = positions.get(edge.source);
@@ -1999,20 +2064,57 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             if (!ps || !pt) return null;
             const depthSource = blastDepthMap.get(edge.source) ?? 0;
             const depthTarget = blastDepthMap.get(edge.target) ?? 0;
-            // downstream: origin → outward (depth increases). upstream: back toward origin.
+            const isDownstream = depthSource <= depthTarget;
+            // Upstream arcs bow upward (negative Y), downstream arcs bow downward (positive Y).
+            const color = isDownstream ? "#9b5de5" : "#00b4d8";
+            // Arc from the far node toward origin (upstream) or from origin to far node (downstream).
+            const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
+            const mx = (fromPos.x + toPos.x) / 2;
+            const dist = Math.abs(toPos.x - fromPos.x);
+            // Arc height scales with horizontal distance so far nodes bow higher/lower.
+            const arcH = Math.max(60, dist * 0.55);
+            const bowY = isDownstream ? fromPos.y + arcH : fromPos.y - arcH;
+            // Pull the arrowhead tip back to the node boundary
+            const edx = toPos.x - fromPos.x;
+            const edy = toPos.y - fromPos.y;
+            const edist = Math.sqrt(edx * edx + edy * edy) || 1;
+            const pullBack = (NODE_R + 3) / scale;
+            const ex = toPos.x - (edx / edist) * pullBack;
+            const ey = toPos.y - (edy / edist) * pullBack;
+            // Quadratic Bézier arc
+            const d = `M ${fromPos.x} ${fromPos.y} Q ${mx} ${bowY} ${ex} ${ey}`;
+            return (
+              <path
+                key={`arc-${i}`}
+                d={d}
+                fill="none"
+                stroke={color}
+                strokeWidth={1.5 / scale}
+                strokeLinecap="round"
+                opacity={0.85}
+                markerEnd={isDownstream ? "url(#arc-arrow-downstream)" : "url(#arc-arrow-upstream)"}
+              />
+            );
+          })}
+
+          {/* Non-arc blast radius edges (force/radial/etc layouts) — straight colored lines with arrows */}
+          {showEdges && blastRadiusId && topoLayout !== "arc" && visibleEdges.map((edge, i) => {
+            const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
+            if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
+            const ps = positions.get(edge.source);
+            const pt = positions.get(edge.target);
+            if (!ps || !pt) return null;
+            const depthSource = blastDepthMap.get(edge.source) ?? 0;
+            const depthTarget = blastDepthMap.get(edge.target) ?? 0;
             const isDownstream = depthSource <= depthTarget;
             const color = isDownstream ? "#D55E00" : "#a855f7";
-            // For downstream: draw from upstream node toward downstream node, arrowhead at end.
-            // For upstream: draw from the far node toward origin, arrowhead at start (the far node end).
             const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
-            // Pull back the arrowhead end so the tip lands at the node boundary
             const dx = toPos.x - fromPos.x;
             const dy = toPos.y - fromPos.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             const pullBack = (NODE_R + 2) / scale;
             const ex = toPos.x - (dx / dist) * pullBack;
             const ey = toPos.y - (dy / dist) * pullBack;
-            // Also pull back the start for upstream so the arrowhead tip lands at the far node boundary
             const sx = isDownstream ? fromPos.x : fromPos.x + (dx / dist) * pullBack;
             const sy = isDownstream ? fromPos.y : fromPos.y + (dy / dist) * pullBack;
             return (
@@ -2048,7 +2150,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
             const isHub = node.type === "ws-group-project" || node.type === "ws-group-status";
-            const nR = isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+            // In arc mode the origin node is rendered 1.6× larger with a bright white ring.
+            const isArcOrigin = topoLayout === "arc" && isBlastOrigin;
+            const nR = isArcOrigin ? Math.round(NODE_R * 1.6) : isHub ? Math.round(NODE_R * 1.8) : NODE_R;
             const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
@@ -2069,7 +2173,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
                   {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {/* Arc origin: outer white glow ring */}
+                  {isArcOrigin && <circle r={nR + 7} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5} />}
+                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow || isArcOrigin ? { filter: `drop-shadow(0 0 ${isArcOrigin ? 60 : 40}px ${color})` } : undefined} />
                   {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
                   <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
                     {(() => {
@@ -2081,8 +2187,17 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       );
                     })()}
                   </foreignObject>
-                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isHub ? 12 : 10} fontWeight={isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isArcOrigin ? 12 : isHub ? 12 : 10} fontWeight={isArcOrigin ? "700" : isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
                   <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                  {/* Arc layout: "↑ upstream" / "downstream ↓" labels under neighbour nodes */}
+                  {topoLayout === "arc" && !isArcOrigin && inBlastRadius && (() => {
+                    const isUp = blastRadiusId ? activeEdges.some(e => e.target === blastRadiusId && e.source === node.id) : false;
+                    return (
+                      <text y={nR + 43} textAnchor="middle" fill={isUp ? "#00b4d8" : "#9b5de5"} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
+                        {isUp ? "↑ upstream" : "downstream ↓"}
+                      </text>
+                    );
+                  })()}
                 </g>
               </g>
             );
@@ -2329,7 +2444,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   View providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
                 </button>
                 <button
-                  onClick={() => setBlastRadiusId(selectedNode.id)}
+                  onClick={() => { setBlastRadiusId(selectedNode.id); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
                   style={{ height: 38, borderRadius: 8, border: "1px solid rgba(213,94,0,0.4)", background: "transparent", color: "#D55E00", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View blast radius <span>→</span>
@@ -2388,13 +2503,16 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-        {(["force", "stacked", "radial", "grid"] as TopoLayout[]).map(layout => {
-          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial", grid: "Grid" };
+        {(blastRadiusId
+          ? (["arc"] as TopoLayout[])
+          : (["force", "stacked", "radial", "grid"] as TopoLayout[])
+        ).map(layout => {
+          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial", grid: "Grid", arc: "Arc" };
           const isActive = topoLayout === layout;
           return (
             <button
               key={layout}
-              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }} // zoom already resets
+              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
               style={{
                 height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
                 borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",

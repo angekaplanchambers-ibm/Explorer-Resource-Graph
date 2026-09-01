@@ -420,6 +420,8 @@ const providerRows = [
 ] as const;
 
 function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { rows: ReadonlyArray<readonly [string, string, string, string, string]>; visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const columns = moduleTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const filteredRows = conditions.length
     ? rows.filter(([name, version, source, workspaceCount, workspaces]) =>
@@ -430,6 +432,8 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
         })
       )
     : rows;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
@@ -442,7 +446,7 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
-            {filteredRows.map(([name, version, source, workspaceCount, workspaces]) => (
+            {pageRows.map(([name, version, source, workspaceCount, workspaces]) => (
               <tr key={`${name}-${version}`} className="border-t border-[#dedfe3] bg-white">
                 {columns.map((column, ci) => {
                   const content = {
@@ -460,10 +464,13 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
         </table>
       </div>
       <TablePagination
-        currentPage={1}
-        totalPages={1}
+        currentPage={page}
+        totalPages={totalPages}
         totalItems={filteredRows.length}
-        pageSize={20}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        pageSizeOptions={[20, 50, 100]}
       />
     </>
   );
@@ -490,6 +497,8 @@ const terraformVersionRows = [
 ] as const;
 
 function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const columns = terraformVersionTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const filteredRows = conditions.length
     ? terraformVersionRows.filter(([version, workspaceCount, workspaces]) =>
@@ -500,19 +509,24 @@ function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { 
         })
       )
     : terraformVersionRows;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="w-full table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
-          <tbody className="text-[11px] text-[#52525b]">{filteredRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}</tbody>
+          <tbody className="text-[11px] text-[#52525b]">{pageRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}</tbody>
         </table>
       </div>
       <TablePagination
-        currentPage={1}
-        totalPages={1}
+        currentPage={page}
+        totalPages={totalPages}
         totalItems={filteredRows.length}
-        pageSize={20}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        pageSizeOptions={[20, 50, 100]}
       />
     </>
   );
@@ -721,6 +735,8 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
 }
 
 function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const allRows = sourceRowsProp ?? resourceRows;
   const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
@@ -733,13 +749,15 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
         })
       )
     : baseRows;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
         <table className="min-w-[2300px] table-fixed border-collapse text-left">
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
           <tbody className="text-[11px] text-[#52525b]">
-            {filteredRows.map(row => (
+            {pageRows.map(row => (
               <tr
                 key={row.id}
                 className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
@@ -769,10 +787,13 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
         </table>
       </div>
       <TablePagination
-        currentPage={1}
-        totalPages={172}
-        totalItems={3427}
-        pageSize={20}
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={filteredRows.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        pageSizeOptions={[20, 50, 100]}
       />
     </>
   );
@@ -917,6 +938,8 @@ const policySetColumns = [
 function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void; rows?: PolicySetRow[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const baseRows = rowsOverride ?? policySetRows;
   const filteredRows = conditions.length
     ? baseRows.filter(row =>
@@ -927,6 +950,8 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
         })
       )
     : baseRows;
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <>
@@ -943,7 +968,7 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
-            {filteredRows.map(row => {
+            {pageRows.map(row => {
               const isExpanded = expandedIds.has(row.id);
               return (
                 <React.Fragment key={row.id}>
@@ -1025,10 +1050,13 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
         </table>
       </div>
       <TablePagination
-        currentPage={1}
-        totalPages={1}
-        totalItems={policySetRows.length}
-        pageSize={20}
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={filteredRows.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
+        pageSizeOptions={[20, 50, 100]}
       />
     </>
   );
@@ -1467,6 +1495,44 @@ function curvePath(x1: number, y1: number, x2: number, y2: number): string {
   return `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
 }
 
+// Arc layout — places origin at center of horizontal axis with upstream left, downstream right.
+// upstreamIds / downstreamIds determine which side each node sits on.
+function computeArcLayout(
+  originId: string,
+  upstreamIds: string[],
+  downstreamIds: string[],
+): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  const cy = VH / 2;
+  const originX = VW / 2;
+  // Horizontal gap between node centres — large enough that nodes never touch side-to-side.
+  const xSpacing = NODE_SIZE + 100; // 128px centre-to-centre
+  // Vertical staircase step per node — large enough to clear the node height plus a gap.
+  const yStep = NODE_SIZE + 32; // 60px per step
+
+  pos.set(originId, { x: originX, y: cy });
+
+  // Upstream: nodes step left and alternate above/below cy (staircase).
+  // Node closest to origin is at step 1, farthest at step N.
+  upstreamIds.forEach((id, i) => {
+    const step = upstreamIds.length - i; // 1 = closest to origin
+    const x = originX - xSpacing * step;
+    // Alternate: odd steps go up (-y), even steps go down (+y)
+    const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
+    pos.set(id, { x, y });
+  });
+
+  // Downstream: nodes step right and alternate above/below cy (staircase).
+  downstreamIds.forEach((id, i) => {
+    const step = i + 1; // 1 = closest to origin
+    const x = originX + xSpacing * step;
+    const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
+    pos.set(id, { x, y });
+  });
+
+  return pos;
+}
+
 type LucideIcon = React.ComponentType<LucideProps>;
 
 const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>> = {
@@ -1481,7 +1547,7 @@ const NODE_ICONS: Record<string, React.ComponentType<{ size?: number; className?
 // Fallback for unknown types
 const DEFAULT_NODE_ICON: LucideIcon = Server;
 
-type TopoLayout = "force" | "stacked" | "radial" | "grid";
+type TopoLayout = "force" | "stacked" | "radial" | "grid" | "arc";
 type WsGroupMode = "none" | "project" | "status";
 
 // Returns key-value pairs for a node's popover, using the column labels for the active type.
@@ -1572,7 +1638,7 @@ type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
   | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle, externalSelectId }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void; externalSelectId?: string | null }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1583,11 +1649,18 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewProvidersCount, setViewProvidersCount] = useState<number>(0);
   const [wsPopoverView, setWsPopoverView] = useState<"main" | "modules">("main");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [topoLayout, setTopoLayout] = useState<TopoLayout>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+  // manualLayout = the user's chosen layout when not in blast radius mode.
+  // topoLayout = derived: always "arc" while blastRadiusId is set, otherwise manualLayout.
+  const [manualLayout, setManualLayout] = useState<Exclude<TopoLayout, "arc">>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [showEdges, setShowEdges] = useState<boolean>(true);
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Derived — no state, no effect, no delay.
+  const topoLayout: TopoLayout = blastRadiusId ? "arc" : manualLayout;
+  // setTopoLayout is only meaningful outside blast radius mode.
+  const setTopoLayout = (l: TopoLayout) => { if (l !== "arc") setManualLayout(l as Exclude<TopoLayout, "arc">); };
 
   // Notify parent whenever blast radius mode changes
   useEffect(() => { onBlastRadiusChange?.(blastRadiusId); }, [blastRadiusId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1595,24 +1668,10 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   // Reset zoom and layout whenever activeType changes
   useEffect(() => {
     setZoom({ tx: 0, ty: 0, scale: 1 });
-    setTopoLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
+    setManualLayout((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
     setShowEdges(true);
   }, [activeType, refreshKey]);
-
-  // When the HUD list selects a node externally: select it, zoom in, and center the viewport on it
-  useEffect(() => {
-    if (!externalSelectId) return;
-    const pos = positions.get(externalSelectId);
-    if (!pos) return;
-    setSelectedId(externalSelectId);
-    setZoom(prev => {
-      const s = Math.max(prev.scale, 1.8);
-      return { scale: s, tx: VW / 2 - pos.x * s, ty: VH / 2 - pos.y * s };
-    });
-  }, [externalSelectId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const dragRef = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
-  const preOverlaySelectedId = useRef<string | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string | null>(initialWorkspace ?? null);
   useEffect(() => { if (initialWorkspace !== undefined) setSelectedWorkspace(initialWorkspace ?? null); }, [initialWorkspace]);
@@ -1746,18 +1805,10 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
   const gridPositions = useMemo(() => runGridLayout(activeNodes), [activeNodes]);
 
-  const positions = topoLayout === "grid" ? gridPositions : topoLayout === "stacked" ? stackedPositions : topoLayout === "radial" ? radialPositions : forcePositions;
-
-  // Whenever the node layout changes (new overlay/blast radius) keep the selected node centered
-  useEffect(() => {
-    if (!selectedId) return;
-    const pos = positions.get(selectedId);
-    if (!pos) return;
-    setZoom(prev => {
-      const s = Math.max(prev.scale, 1.8);
-      return { scale: s, tx: VW / 2 - pos.x * s, ty: VH / 2 - pos.y * s };
-    });
-  }, [positions]); // eslint-disable-line react-hooks/exhaustive-deps
+  const positions_base = topoLayout === "grid" ? gridPositions
+    : topoLayout === "stacked" ? stackedPositions
+    : topoLayout === "radial" ? radialPositions
+    : forcePositions;
 
   // Filter nodes/edges based on active filters (hide completely, don't dim)
   const visibleNodes = useMemo(() => {
@@ -1806,8 +1857,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   }, [hoveredId, edges]);
 
   // Blast radius: BFS depth map for all reachable nodes + visible set limited to 1 hop
-  const { blastRadiusSet, blastDepthMap } = useMemo(() => {
-    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>() };
+  const { blastRadiusSet, blastDepthMap, arcPositions } = useMemo(() => {
+    if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>(), arcPositions: new Map<string, { x: number; y: number }>() };
     const visited = new Set<string>([blastRadiusId]);
     const depthMap = new Map<string, number>([[blastRadiusId, 0]]);
     const queue: string[] = [blastRadiusId];
@@ -1828,8 +1879,19 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     for (const [id, depth] of depthMap) {
       if (depth <= 1) visibleSet.add(id);
     }
-    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap };
+    // Arc layout positions — computed here so blastRadiusSet is available
+    const upstreamIds: string[] = [];
+    const downstreamIds: string[] = [];
+    for (const e of activeEdges) {
+      if (e.target === blastRadiusId && visibleSet.has(e.source)) upstreamIds.push(e.source);
+      if (e.source === blastRadiusId && visibleSet.has(e.target)) downstreamIds.push(e.target);
+    }
+    const arcPos = computeArcLayout(blastRadiusId, upstreamIds, downstreamIds);
+
+    return { blastRadiusSet: visibleSet, blastDepthMap: depthMap, arcPositions: arcPos };
   }, [blastRadiusId, activeEdges]);
+
+  const positions = topoLayout === "arc" && blastRadiusId ? arcPositions : positions_base;
 
   const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
@@ -1934,13 +1996,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               100% { opacity: 1; transform: scale(1); }
             }
           `}</style>
-          {/* Orange arrowhead — downstream edges, tip at end (markerEnd) */}
+          {/* Orange arrowhead — downstream edges in non-arc blast mode */}
           <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L8,3 z" fill="#D55E00" />
           </marker>
-          {/* Purple arrowhead — upstream edges, tip at start (markerStart), so reversed: tip points left */}
+          {/* Purple arrowhead — upstream edges in non-arc blast mode */}
           <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+          </marker>
+          {/* Arc layout — purple downstream arrowhead (tip at end) */}
+          <marker id="arc-arrow-downstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,5 L7,2.5 z" fill="#9b5de5" />
+          </marker>
+          {/* Arc layout — cyan upstream arrowhead (tip at end, path already drawn toward origin) */}
+          <marker id="arc-arrow-upstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,5 L7,2.5 z" fill="#00b4d8" />
           </marker>
         </defs>
 
@@ -1955,13 +2025,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
         {/* Zoomable content */}
         <g transform={groupTransform}>
-          {/* Edges — in blast mode: blast edges hidden here (drawn orange below), non-blast edges dimmed */}
+          {/* Arc mode: horizontal baseline */}
+          {topoLayout === "arc" && blastRadiusId && (
+            <line
+              x1={80} y1={VH / 2} x2={VW - 80} y2={VH / 2}
+              stroke={themeMode === "light" ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.12)"}
+              strokeWidth={1 / scale}
+            />
+          )}
+
+          {/* Edges — in arc/blast mode: blast edges hidden here (drawn below), non-blast edges dimmed */}
           {showEdges && visibleEdges.map((edge, i) => {
             const ps = positions.get(edge.source);
             const pt = positions.get(edge.target);
             if (!ps || !pt) return null;
-            // Only edges directly touching the origin (depth 0) count as blast edges.
-            // Peer edges between two depth-1 nodes stay grey and visible.
+            // In arc mode all blast edges are drawn separately below; hide them here.
             const isBlastEdge = blastRadiusId
               ? (blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0) &&
                 blastRadiusSet.has(edge.source) && blastRadiusSet.has(edge.target)
@@ -1987,8 +2065,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             );
           })}
 
-          {/* Blast radius edges — only origin↔neighbour edges get orange/purple arrows */}
-          {showEdges && blastRadiusId && visibleEdges.map((edge, i) => {
+          {/* Arc layout blast edges — parabolic arcs bowing above (upstream/cyan) or below (downstream/purple) */}
+          {showEdges && blastRadiusId && topoLayout === "arc" && visibleEdges.map((edge, i) => {
             const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
             if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
             const ps = positions.get(edge.source);
@@ -1996,20 +2074,57 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             if (!ps || !pt) return null;
             const depthSource = blastDepthMap.get(edge.source) ?? 0;
             const depthTarget = blastDepthMap.get(edge.target) ?? 0;
-            // downstream: origin → outward (depth increases). upstream: back toward origin.
+            const isDownstream = depthSource <= depthTarget;
+            // Upstream arcs bow upward (negative Y), downstream arcs bow downward (positive Y).
+            const color = isDownstream ? "#9b5de5" : "#00b4d8";
+            // Arc from the far node toward origin (upstream) or from origin to far node (downstream).
+            const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
+            const mx = (fromPos.x + toPos.x) / 2;
+            const dist = Math.abs(toPos.x - fromPos.x);
+            // Arc height scales with horizontal distance so far nodes bow higher/lower.
+            const arcH = Math.max(60, dist * 0.55);
+            const bowY = isDownstream ? fromPos.y + arcH : fromPos.y - arcH;
+            // Pull the arrowhead tip back to the node boundary
+            const edx = toPos.x - fromPos.x;
+            const edy = toPos.y - fromPos.y;
+            const edist = Math.sqrt(edx * edx + edy * edy) || 1;
+            const pullBack = (NODE_R + 3) / scale;
+            const ex = toPos.x - (edx / edist) * pullBack;
+            const ey = toPos.y - (edy / edist) * pullBack;
+            // Quadratic Bézier arc
+            const d = `M ${fromPos.x} ${fromPos.y} Q ${mx} ${bowY} ${ex} ${ey}`;
+            return (
+              <path
+                key={`arc-${i}`}
+                d={d}
+                fill="none"
+                stroke={color}
+                strokeWidth={1.5 / scale}
+                strokeLinecap="round"
+                opacity={0.85}
+                markerEnd={isDownstream ? "url(#arc-arrow-downstream)" : "url(#arc-arrow-upstream)"}
+              />
+            );
+          })}
+
+          {/* Non-arc blast radius edges (force/radial/etc layouts) — straight colored lines with arrows */}
+          {showEdges && blastRadiusId && topoLayout !== "arc" && visibleEdges.map((edge, i) => {
+            const isOriginEdge = blastDepthMap.get(edge.source) === 0 || blastDepthMap.get(edge.target) === 0;
+            if (!isOriginEdge || !blastRadiusSet.has(edge.source) || !blastRadiusSet.has(edge.target)) return null;
+            const ps = positions.get(edge.source);
+            const pt = positions.get(edge.target);
+            if (!ps || !pt) return null;
+            const depthSource = blastDepthMap.get(edge.source) ?? 0;
+            const depthTarget = blastDepthMap.get(edge.target) ?? 0;
             const isDownstream = depthSource <= depthTarget;
             const color = isDownstream ? "#D55E00" : "#a855f7";
-            // For downstream: draw from upstream node toward downstream node, arrowhead at end.
-            // For upstream: draw from the far node toward origin, arrowhead at start (the far node end).
             const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
-            // Pull back the arrowhead end so the tip lands at the node boundary
             const dx = toPos.x - fromPos.x;
             const dy = toPos.y - fromPos.y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 1;
             const pullBack = (NODE_R + 2) / scale;
             const ex = toPos.x - (dx / dist) * pullBack;
             const ey = toPos.y - (dy / dist) * pullBack;
-            // Also pull back the start for upstream so the arrowhead tip lands at the far node boundary
             const sx = isDownstream ? fromPos.x : fromPos.x + (dx / dist) * pullBack;
             const sy = isDownstream ? fromPos.y : fromPos.y + (dy / dist) * pullBack;
             return (
@@ -2045,7 +2160,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             // Interaction states are expressed with an outline, never by replacing the node's category color.
             const color = NODE_COLORS[node.type] ?? "#9b8ff5";
             const isHub = node.type === "ws-group-project" || node.type === "ws-group-status";
-            const nR = isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+            // In arc mode the origin node is rendered 1.6× larger with a bright white ring.
+            const isArcOrigin = topoLayout === "arc" && isBlastOrigin;
+            const nR = isArcOrigin ? Math.round(NODE_R * 1.6) : isHub ? Math.round(NODE_R * 1.8) : NODE_R;
             const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
@@ -2066,7 +2183,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
                 >
                   {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow ? { filter: `drop-shadow(0 0 40px ${color})` } : undefined} />
+                  {/* Arc origin: outer white glow ring */}
+                  {isArcOrigin && <circle r={nR + 7} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5} />}
+                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow || isArcOrigin ? { filter: `drop-shadow(0 0 ${isArcOrigin ? 60 : 40}px ${color})` } : undefined} />
                   {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
                   <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
                     {(() => {
@@ -2078,8 +2197,17 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       );
                     })()}
                   </foreignObject>
-                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isHub ? 12 : 10} fontWeight={isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isArcOrigin ? 12 : isHub ? 12 : 10} fontWeight={isArcOrigin ? "700" : isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
                   <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                  {/* Arc layout: "↑ upstream" / "downstream ↓" labels under neighbour nodes */}
+                  {topoLayout === "arc" && !isArcOrigin && inBlastRadius && (() => {
+                    const isUp = blastRadiusId ? activeEdges.some(e => e.target === blastRadiusId && e.source === node.id) : false;
+                    return (
+                      <text y={nR + 43} textAnchor="middle" fill={isUp ? "#00b4d8" : "#9b5de5"} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
+                        {isUp ? "↑ upstream" : "downstream ↓"}
+                      </text>
+                    );
+                  })()}
                 </g>
               </g>
             );
@@ -2095,7 +2223,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
+              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit resource view
@@ -2125,7 +2253,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
+              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit module view
@@ -2158,7 +2286,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         return (
           <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
             <button
-              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); setSelectedId(preOverlaySelectedId.current); preOverlaySelectedId.current = null; }}
+              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); }}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
             >
               ← exit provider view
@@ -2283,11 +2411,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
                       return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
                     });
-                    preOverlaySelectedId.current = selectedId;
                     setViewResourcesWsName(wsName);
                     onOverlayWorkspaceChange?.({ kind: "resources", workspaceName: wsName, rows: synRows });
                     setViewResourcesCount(count);
-                    setSelectedId(`ws-res-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
@@ -2302,11 +2428,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const name = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
                       return [name, base[1], base[2], base[3], wsName] as const;
                     });
-                    preOverlaySelectedId.current = selectedId;
                     setViewModulesWsName(wsName);
                     setViewModulesCount(modCount);
                     onOverlayWorkspaceChange?.({ kind: "modules", workspaceName: wsName, rows: modRows });
-                    setSelectedId(`ws-mod-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
@@ -2321,18 +2445,16 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                       const name = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
                       return [name, base[1], base[2], base[3], wsName] as const;
                     });
-                    preOverlaySelectedId.current = selectedId;
                     setViewProvidersWsName(wsName);
                     setViewProvidersCount(provCount);
                     onOverlayWorkspaceChange?.({ kind: "providers", workspaceName: wsName, rows: provRows });
-                    setSelectedId(`ws-prov-ov-${wsName}`);
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
                 </button>
                 <button
-                  onClick={() => setBlastRadiusId(selectedNode.id)}
+                  onClick={() => { setBlastRadiusId(selectedNode.id); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
                   style={{ height: 38, borderRadius: 8, border: "1px solid rgba(213,94,0,0.4)", background: "transparent", color: "#D55E00", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View blast radius <span>→</span>
@@ -2391,13 +2513,16 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
-        {(["force", "stacked", "radial", "grid"] as TopoLayout[]).map(layout => {
-          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial", grid: "Grid" };
+        {(blastRadiusId
+          ? (["arc"] as TopoLayout[])
+          : (["force", "stacked", "radial", "grid"] as TopoLayout[])
+        ).map(layout => {
+          const labels: Record<TopoLayout, string> = { force: "Force", stacked: "Stacked", radial: "Radial", grid: "Grid", arc: "Arc" };
           const isActive = topoLayout === layout;
           return (
             <button
               key={layout}
-              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }} // zoom already resets
+              onClick={() => { setTopoLayout(layout); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
               style={{
                 height: 26, padding: "0 12px", borderRadius: 5, border: "1px solid",
                 borderColor: isActive ? (themeMode === "light" ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.3)") : "transparent",
@@ -2459,10 +2584,10 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
       {/* Zoom controls — bottom right, above layout switcher */}
       <div style={{ position: "absolute", bottom: 62, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => zoomBy(1.25)} title="Zoom in" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-        <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-        <button onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</button>
-        <button
+        <div onClick={() => zoomBy(1.25)} title="Zoom in" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>+</div>
+        <div onClick={() => zoomBy(1 / 1.25)} title="Zoom out" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.7)", fontSize: 20, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>−</div>
+        <div onClick={() => setZoom({ tx: 0, ty: 0, scale: 1 })} title="Reset zoom" role="button" tabIndex={0} style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.5)", fontSize: 10, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.02em" }}>FIT</div>
+        <div
           onClick={() => {
             const isInitial =
               !selectedId && !blastRadiusId &&
@@ -2479,10 +2604,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             setRefreshKey(k => k + 1);
           }}
           title="Refresh"
-          style={{ width: 30, height: 30, borderRadius: 5, border: "1px solid transparent", background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          role="button" tabIndex={0}
+          style={{ width: 30, height: 30, borderRadius: 5, background: "transparent", color: themeMode === "light" ? "rgba(0,0,0,0.6)" : "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           <RefreshCw size={13} />
-        </button>
+        </div>
       </div>
 
       {/* Legend key — bottom left */}
@@ -3267,6 +3393,7 @@ function ExplorerSplashView({
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const useCaseDropdownRef = useRef<HTMLDivElement>(null);
   const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
+  const hudCardRef = useRef<HTMLDivElement>(null);
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
   const [tableViewOpen, setTableViewOpen] = useState(false);
@@ -3281,41 +3408,13 @@ function ExplorerSplashView({
   useEffect(() => {
     setModalConditions([]);
     if (selectedGraphType !== "Workspaces") setWsGroupMode("none");
-    setHudSearch("");
-    setHudTypeFilter("All");
-    setHudExternalSelectId(null);
-    setHudPage(1);
   }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
-  // "centered" = initial overlay, "exiting" = shrinking away, "resting" = top-left (permanent after first use)
-  const [hudPhase, setHudPhase] = useState<"centered" | "exiting" | "resting">("centered");
-  const hudAnimDoneRef = useRef(false);
-  // Drive the one-time centered → exiting → resting animation on the very first graph selection.
-  const prevSelectedGraphTypeRef = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevSelectedGraphTypeRef.current;
-    prevSelectedGraphTypeRef.current = selectedGraphType;
-    // Only fire once, and only when transitioning from the untouched empty state to a real graph.
-    // hudAnimDoneRef gates re-entry; no cleanup needed (clearing the timer would strand hudPhase
-    // in "exiting" and block the graph permanently, especially in React StrictMode).
-    if (!hudAnimDoneRef.current && prev === null && selectedGraphType !== null) {
-      hudAnimDoneRef.current = true;
-      setHudPhase("exiting");
-      setTimeout(() => setHudPhase("resting"), 320);
-    }
-  }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
   const [hudCollapsed, setHudCollapsed] = useState(false);
   const [hudCollapsedTabTop, setHudCollapsedTabTop] = useState<number | null>(null);
   const hudTabRef = useRef<HTMLButtonElement>(null);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
-  const hudListRef = useRef<HTMLDivElement>(null);
-  const [hudSearch, setHudSearch] = useState("");
-  const [hudTypeFilter, setHudTypeFilter] = useState("All");
-  const [hudExternalSelectId, setHudExternalSelectId] = useState<string | null>(null);
-  const [hudPage, setHudPage] = useState(1);
-  const [hudNlQuery, setHudNlQuery] = useState("");
-  const [hudNlNoMatch, setHudNlNoMatch] = useState(false);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const modalQueryColumns =
@@ -3328,19 +3427,6 @@ function ExplorerSplashView({
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
   useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-collapse HUD only when first entering Classic mode with a type selected.
-  // Switching back and forth between Graph/Classic should not force-collapse again.
-  const prevViewModeRef = useRef<"graph" | "classic">("graph");
-  useEffect(() => {
-    const prev = prevViewModeRef.current;
-    prevViewModeRef.current = viewMode;
-    if (viewMode === "classic" && prev === "graph" && selectedGraphType) {
-      // Entering Classic for the first time — collapse and pin tab position.
-      setHudCollapsedTabTop(125);
-      setHudCollapsed(true);
-    }
-  }, [viewMode, selectedGraphType]);
-
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
     const matchesType = savedType === "All types" || view.type === savedType;
@@ -3352,24 +3438,6 @@ function ExplorerSplashView({
     setSelectedGraphTitle(title);
     setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
-  }
-
-  function submitNlSearch(raw: string) {
-    const q = raw.trim().toLowerCase();
-    if (!q) return;
-    const entries: Array<{ type: string; title: string }> = [];
-    for (const cat of USE_CASE_CATEGORIES) {
-      entries.push({ type: cat.type, title: `View All ${cat.type}` });
-      for (const item of cat.items) entries.push({ type: cat.type, title: item });
-    }
-    const exact = entries.find(e => e.title.toLowerCase() === q || e.type.toLowerCase() === q);
-    if (exact) { openGraph(exact.type, exact.title); setHudNlQuery(""); return; }
-    const sw = entries.find(e => e.title.toLowerCase().startsWith(q) || e.type.toLowerCase().startsWith(q));
-    if (sw) { openGraph(sw.type, sw.title); setHudNlQuery(""); return; }
-    const inc = entries.find(e => e.title.toLowerCase().includes(q) || e.type.toLowerCase().includes(q));
-    if (inc) { openGraph(inc.type, inc.title); setHudNlQuery(""); return; }
-    setHudNlNoMatch(true);
-    setTimeout(() => setHudNlNoMatch(false), 1400);
   }
 
 function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
@@ -3433,53 +3501,6 @@ useEffect(() => {
     };
   }, []);
 
-  const hudActiveNodes = useMemo((): TopoNode[] => {
-    if (!selectedGraphType) return [];
-    const conditions = conditionFields
-      .map((fieldId, i) => ({ fieldId, operator: conditionOperators[i], value: conditionValues[i]?.trim() ?? "" }))
-      .filter(c => c.fieldId && c.operator && c.value);
-    const { nodes: rawNodes } = buildTopoGraph(selectedGraphType, conditions, selectedGraphTitle ?? null);
-    if (selectedGraphType !== "Workspaces" || wsGroupMode === "none") return rawNodes;
-    const groupKey = (n: TopoNode): string =>
-      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
-    const hubType = wsGroupMode === "project" ? "ws-group-project" : "ws-group-status";
-    const groupCounts = new Map<string, number>();
-    for (const n of rawNodes) { const k = groupKey(n); groupCounts.set(k, (groupCounts.get(k) ?? 0) + 1); }
-    const hubNodes: TopoNode[] = [];
-    for (const [key, count] of groupCounts) {
-      hubNodes.push({ id: `hub-${wsGroupMode}-${key}`, label: key, type: hubType, secondary: `${count} workspace${count !== 1 ? "s" : ""}`, data: { group: key, count } });
-    }
-    return [...hubNodes, ...rawNodes];
-  }, [selectedGraphType, selectedGraphTitle, conditionFields, conditionOperators, conditionValues, wsGroupMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const hudNodeTypes = useMemo(() => {
-    const types = new Set(hudActiveNodes.map(n => n.type));
-    return Array.from(types).sort();
-  }, [hudActiveNodes]);
-
-  const hudFilteredNodes = useMemo(() => {
-    const q = hudSearch.trim().toLowerCase();
-    return hudActiveNodes.filter(n => {
-      if (hudTypeFilter !== "All" && n.type !== hudTypeFilter) return false;
-      if (!q) return true;
-      return n.label.toLowerCase().includes(q) || n.secondary.toLowerCase().includes(q);
-    });
-  }, [hudActiveNodes, hudSearch, hudTypeFilter]);
-
-  const hudPageCount = Math.max(1, Math.ceil(hudFilteredNodes.length / 20));
-  const hudPageNodes = useMemo(
-    () => hudFilteredNodes.slice((hudPage - 1) * 20, hudPage * 20),
-    [hudFilteredNodes, hudPage]
-  );
-
-  useEffect(() => {
-    setHudPage(1);
-  }, [hudSearch, hudTypeFilter, selectedGraphType, selectedGraphTitle]);
-
-  useEffect(() => {
-    if (hudPage > hudPageCount) setHudPage(hudPageCount);
-  }, [hudPage, hudPageCount]);
-
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
@@ -3488,7 +3509,7 @@ useEffect(() => {
     : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
     : getWorkspaceRowsForTitle(selectedGraphTitle).length;
 
-  const glassSurface = themeMode === "light" ? "rgba(255,255,255,1)" : "rgba(19,20,26,0.9)";
+  const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
   const glassText = themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)";
   const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
@@ -3525,52 +3546,33 @@ useEffect(() => {
             onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
-            externalSelectId={hudExternalSelectId}
           />
         ) : selectedGraphType && viewMode === "classic" ? (
-          (() => {
-            const hudExpanded = !hudCollapsed && hudPhase === "resting";
-            const leftInset = hudExpanded ? hudPosition.x + 425 + 16 : 50;
-            const transition = "padding-left 0.3s cubic-bezier(0.25,0.8,0.25,1)";
-            return (
-              <div className="absolute inset-0 overflow-auto" style={{ background: "transparent" }}>
-                {/* Page header */}
-                <div
-                  className="flex items-center justify-between pb-4 pt-7"
-                  style={{ paddingLeft: leftInset, paddingRight: 50, transition }}
-                >
-                  <h1 className="text-[22px] font-semibold leading-tight" style={{ color: glassText }}>
-                    {selectedGraphTitle ?? selectedGraphType}
-                  </h1>
-                  <ActionsDropdown
-                    columns={modalQueryColumns}
-                    visibleColumnIds={visibleColumnIds}
-                    onApply={setVisibleColumnIds}
-                  />
-                </div>
+          <div className="absolute inset-0 overflow-auto bg-[#fafafa]" style={{ padding: "24px 50px 50px" }}>
+            <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+            <TopologyTableView
+              type={selectedGraphType}
+              graphTitle={selectedGraphTitle}
+              conditions={modalConditions}
+              visibleColumnIds={visibleColumnIds}
+              onNavigate={(type) => openGraph(type, type)}
+              onSelectResource={setSelectedResourceId}
+              overlayInfo={overlayInfo}
+              wsGroupMode={wsGroupMode}
+            />
+          </div>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
+            <div className="flex size-14 items-center justify-center rounded-[14px] border bg-white shadow-[0_12px_32px_rgba(23,23,26,0.14)]" style={{ borderColor: glassBorder }}>
+              <ChartNoAxesCombined size={25} strokeWidth={1.65} />
+            </div>
+            <div className="max-w-[320px] text-center">
+              <p className="text-[15px] font-semibold">Get started.</p>
+              <p className="mt-1 text-[13px] leading-5" style={{ color: glassMuted }}>Select a Type or Use case to explore your Infrastructure.</p>
+            </div>
 
-                {/* Query builder */}
-                <div style={{ paddingLeft: leftInset, paddingRight: 50, transition }}>
-                  <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                </div>
-
-                {/* Table */}
-                <div style={{ paddingLeft: leftInset, paddingRight: 50, paddingBottom: 50, transition }}>
-                  <TopologyTableView
-                    type={selectedGraphType}
-                    graphTitle={selectedGraphTitle}
-                    conditions={modalConditions}
-                    visibleColumnIds={visibleColumnIds}
-                    onNavigate={(type) => openGraph(type, type)}
-                    onSelectResource={setSelectedResourceId}
-                    overlayInfo={overlayInfo}
-                    wsGroupMode={wsGroupMode}
-                  />
-                </div>
-              </div>
-            );
-          })()
-        ) : null}
+          </div>
+        )}
       </div>
 
       {/* Graph table view — centered modal (Graph mode only) */}
@@ -3783,50 +3785,17 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* HUD wrapper — centered on first load, top-left after first selection */}
-      <motion.div
-        style={hudPhase === "resting" ? {
-          position: "absolute",
-          left: hudPosition.x,
-          top: hudPosition.y,
-          zIndex: 30,
-          transformOrigin: "top left",
-        } : {
-          // "centered" and "exiting" — fixed, centered in the viewport.
-          // Use CSS `translate` (separate from `transform`) so Framer Motion's
-          // scale transform doesn't conflict with the centering offset.
-          // pointerEvents:none during "exiting" so the shrinking card never blocks graph clicks.
-          position: "fixed",
-          top: "50%",
-          left: "50%",
-          translate: "-50% -50%",
-          zIndex: 30,
-          transformOrigin: "center center",
-          pointerEvents: hudPhase === "exiting" ? "none" : undefined,
-        }}
-        initial={false}
-        animate={hudPhase === "exiting" ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
-        transition={hudPhase === "exiting"
-          ? { duration: 0.28, ease: [0.4, 0, 1, 1] }
-          : hudPhase === "resting"
-          ? { duration: 0.32, ease: [0, 0, 0.2, 1] }
-          : { duration: 0 }
-        }
-      >
+      {/* HUD wrapper — tab at bottom-right outside, card above tab in stacking order */}
+      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30 }}>
 
-        {/* Tab — only shown once the HUD has settled in its top-left resting position */}
-        {hudPhase === "resting" && <button
+        {/* Tab — rendered first (lower z), attached to outside-right bottom corner */}
+        <button
           ref={hudTabRef}
           type="button"
           onClick={e => {
             e.stopPropagation();
-            if (!hudCollapsed) {
-              // In Classic mode with a table showing, always pin to 125px.
-              if (viewMode === "classic" && selectedGraphType) {
-                setHudCollapsedTabTop(125);
-              } else if (hudTabRef.current) {
-                setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
-              }
+            if (!hudCollapsed && hudTabRef.current) {
+              setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
             }
             setHudCollapsed(c => !c);
           }}
@@ -3854,7 +3823,7 @@ useEffect(() => {
             transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
           } : {
             position: "absolute",
-            top: 25,
+            bottom: 25,
             left: "100%",
             width: 44,
             height: 52,
@@ -3880,11 +3849,12 @@ useEffect(() => {
           <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", lineHeight: 1 }}>
             {hudCollapsed ? "VIEW" : "HIDE"}
           </span>
-        </button>}
+        </button>
 
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         {!hudCollapsed && (
         <div
+          ref={hudCardRef}
           className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
           style={{ position: "relative", zIndex: 1, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
           onMouseDown={startHudDrag}
@@ -3982,62 +3952,9 @@ useEffect(() => {
               <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
               <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
             </svg>
-            Table
+            Classic
           </button>
         </div>
-      </div>
-
-      {/* I want to find — natural-language search */}
-      <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>I want to find...</p>
-        <label
-          className="flex h-10 w-full items-center gap-2 rounded-[10px] border px-3 transition-colors"
-          style={{
-            background: themeMode === "light" ? "#ffffff" : "rgba(255,255,255,0.06)",
-            borderColor: hudNlNoMatch ? "#da1e28" : (themeMode === "light" ? "#c9ccd2" : "rgba(255,255,255,0.18)"),
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-          }}
-        >
-          <input
-            value={hudNlQuery}
-            onChange={e => { setHudNlQuery(e.target.value); if (hudNlNoMatch) setHudNlNoMatch(false); }}
-            onKeyDown={e => { if (e.key === "Enter") submitNlSearch(hudNlQuery); }}
-            placeholder="Describe your query..."
-            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9299a6]"
-            style={{ color: glassText }}
-            aria-label="Search Types and Use Cases"
-          />
-          <button
-            type="button"
-            onClick={() => submitNlSearch(hudNlQuery)}
-            onMouseDown={e => e.stopPropagation()}
-            aria-label="Apply search"
-            style={{
-              flexShrink: 0,
-              width: 28,
-              height: 28,
-              borderRadius: 7,
-              border: "none",
-              background: themeMode === "light" ? "#f1f2f3" : "rgba(255,255,255,0.1)",
-              color: hudNlQuery ? "#0f62fe" : (themeMode === "light" ? "#9299a6" : "rgba(255,255,255,0.35)"),
-              cursor: hudNlQuery ? "pointer" : "default",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "color 0.15s, background 0.15s",
-            }}
-            onMouseEnter={e => { if (hudNlQuery) (e.currentTarget as HTMLButtonElement).style.background = themeMode === "light" ? "#e4e6ea" : "rgba(255,255,255,0.16)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = themeMode === "light" ? "#f1f2f3" : "rgba(255,255,255,0.1)"; }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </label>
-        {hudNlNoMatch && (
-          <p className="mt-1 text-[11px]" style={{ color: "#da1e28" }}>No matching type or use case found.</p>
-        )}
       </div>
 
       {/* Browse Types dropdown + selected tag */}
@@ -4264,6 +4181,7 @@ useEffect(() => {
                 : selectedGraphType === "Workspaces" && wsGroupMode === "status"
                   ? "Organized by Status"
                   : selectedGraphTitle;
+
           // Sub-context label when an overlay or blast radius is active
           const subContextLabel = blastRadiusActive
             ? "blast radius"
@@ -4419,146 +4337,6 @@ useEffect(() => {
           );
         })()}
 
-        {(selectedGraphType && viewMode === "graph" && (hudActiveNodes.length > 0 || hudSearch || hudTypeFilter !== "All")) && (
-          <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
-                Returned Nodes
-              </p>
-              <span className="text-[10px] tabular-nums" style={{ color: glassMuted }}>
-                {hudSearch || hudTypeFilter !== "All"
-                  ? `${hudFilteredNodes.length} of ${hudActiveNodes.length}`
-                  : `${hudActiveNodes.length}`}
-              </span>
-            </div>
-
-            {hudActiveNodes.length > 0 && (
-              <div className="flex gap-1.5 mb-2">
-                <label className="flex flex-1 min-w-0 h-7 items-center gap-1.5 rounded-[4px] border px-2 bg-white" style={{ borderColor: "rgba(59,61,69,0.35)" }}>
-                  <Search size={12} style={{ color: glassMuted, flexShrink: 0 }} />
-                  <input
-                    value={hudSearch}
-                    onChange={e => setHudSearch(e.target.value)}
-                    placeholder="Search nodes…"
-                    className="min-w-0 flex-1 text-[11px] outline-none bg-transparent"
-                    style={{ color: glassText }}
-                  />
-                  {hudSearch && (
-                    <button type="button" onClick={() => setHudSearch("")} style={{ color: glassMuted, background: "none", border: "none", padding: 0, cursor: "pointer", lineHeight: 1 }}>
-                      <X size={11} />
-                    </button>
-                  )}
-                </label>
-                {hudNodeTypes.length > 1 && (
-                  <label className="relative h-7 flex items-center border rounded-[4px] bg-white pl-2 pr-6 text-[11px] font-medium" style={{ borderColor: "rgba(59,61,69,0.35)", color: glassText, flexShrink: 0 }}>
-                    <select
-                      value={hudTypeFilter}
-                      onChange={e => setHudTypeFilter(e.target.value)}
-                      className="appearance-none bg-transparent outline-none cursor-pointer"
-                      aria-label="Filter by node type"
-                    >
-                      <option value="All">All types</option>
-                      {hudNodeTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-1.5" size={12} />
-                  </label>
-                )}
-              </div>
-            )}
-
-            <div ref={hudListRef} style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 160, overflowY: "auto" }}>
-              {hudFilteredNodes.length === 0
-                ? <div style={{ fontSize: 12, color: glassMuted, padding: "8px 0" }}>No nodes match your filter.</div>
-                : hudPageNodes.map(node => {
-                    const color = NODE_COLORS[node.type] ?? "#9b8ff5";
-                    const isSelected = hudExternalSelectId === node.id;
-                    return (
-                      <button
-                        key={node.id}
-                        type="button"
-                        onClick={() => setHudExternalSelectId(isSelected ? null : node.id)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          width: "100%",
-                          padding: "5px 8px",
-                          borderRadius: 14,
-                          background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)",
-                          border: isSelected
-                            ? "1px solid rgba(0,0,0,0.35)"
-                            : themeMode === "light"
-                              ? "1px solid rgba(0,0,0,0.07)"
-                              : "1px solid rgba(255,255,255,0.08)",
-                          cursor: "pointer",
-                          fontFamily: "inherit",
-                          textAlign: "left",
-                        }}
-                      >
-                        <div style={{ width: 12, height: 12, borderRadius: 999, background: color, flexShrink: 0, boxShadow: isSelected ? `0 0 0 2px ${themeMode === "light" ? "#fff" : "#1c1e2b"}, 0 0 0 3px ${color}` : "none" }} />
-                        <div style={{ minWidth: 0, fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
-                          {node.label}
-                        </div>
-                      </button>
-                    );
-                  })}
-            </div>
-
-            {hudFilteredNodes.length > 20 && (
-              <div className="mt-2 flex items-center justify-between" style={{ color: glassMuted }}>
-                <span className="text-[10px] tabular-nums">
-                  {(hudPage - 1) * 20 + 1}-{Math.min(hudPage * 20, hudFilteredNodes.length)} of {hudFilteredNodes.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHudPage(page => Math.max(1, page - 1));
-                      hudListRef.current?.scrollTo({ top: 0 });
-                    }}
-                    disabled={hudPage === 1}
-                    style={{
-                      height: 24,
-                      padding: "0 8px",
-                      borderRadius: 6,
-                      border: "1px solid rgba(59,61,69,0.2)",
-                      background: "#ffffff",
-                      color: hudPage === 1 ? "#9ca3af" : glassText,
-                      cursor: hudPage === 1 ? "default" : "pointer",
-                      fontSize: 10,
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    Prev
-                  </button>
-                  <span className="text-[10px] tabular-nums">{hudPage}/{hudPageCount}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setHudPage(page => Math.min(hudPageCount, page + 1));
-                      hudListRef.current?.scrollTo({ top: 0 });
-                    }}
-                    disabled={hudPage === hudPageCount}
-                    style={{
-                      height: 24,
-                      padding: "0 8px",
-                      borderRadius: 6,
-                      border: "1px solid rgba(59,61,69,0.2)",
-                      background: "#ffffff",
-                      color: hudPage === hudPageCount ? "#9ca3af" : glassText,
-                      cursor: hudPage === hudPageCount ? "default" : "pointer",
-                      fontSize: 10,
-                      fontFamily: "inherit",
-                    }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         <SuggestedQueriesList
           themeMode={themeMode}
           glassText={glassText}
@@ -4568,7 +4346,7 @@ useEffect(() => {
         </div>
         </div>
         )}
-      </motion.div>
+      </div>
 
     </div>
   );
@@ -4593,6 +4371,7 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
   const [activeView, setActiveView] = useState<"table" | "graph">("table");
   const [graphInitialWorkspace, setGraphInitialWorkspace] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [selectedDetailResourceId, setSelectedDetailResourceId] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState<string | null>(null);
   const isModulesView = activeType === "Modules";
   const isProvidersView = activeType === "Providers";
@@ -4688,6 +4467,7 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
   }
 
   function navigateToType(type: string) {
+    setSelectedDetailResourceId(null);
     setActiveType(type);
     setCustomTitle(null);
     setActiveView("table");
@@ -4705,6 +4485,7 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
   }
 
   function navigateToTypeWithFilter(type: string, field: string, operator: string, value: string) {
+    setSelectedDetailResourceId(null);
     setActiveType(type);
     setCustomTitle(null);
     setActiveView("table");
@@ -4723,6 +4504,7 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
   }
 
   function navigateToUseCase(type: string, title: string) {
+    setSelectedDetailResourceId(null);
     setActiveType(type);
     setCustomTitle(title);
     setActiveView("table");
@@ -4993,6 +4775,8 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 activeType={activeType}
                 initialWorkspace={graphInitialWorkspace}
                 conditions={draftConditions}
+                themeMode={themeMode}
+                setThemeMode={setThemeMode}
                 onViewResources={(workspaceName) => {
                   setGraphInitialWorkspace(workspaceName);
                   setActiveType("Resources");
@@ -5000,7 +4784,25 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 }}
               />
             </div>
-          ) : isPolicySetsView ? <PolicySetsTable conditions={draftConditions} onNavigate={navigateToType} /> : isTerraformVersionsView ? <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> : isResourcesView ? <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> : isRegistryView ? <RegistryTable rows={isModulesView ? moduleRows : providerRows} visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> :<>
+          ) : isPolicySetsView ? <PolicySetsTable conditions={draftConditions} onNavigate={navigateToType} /> : isTerraformVersionsView ? <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> : isResourcesView ? (
+            selectedDetailResourceId ? (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDetailResourceId(null)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: "1px solid #dedfe3", background: "rgba(0,0,0,0.04)", color: "#656a76", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}
+                >
+                  ← back to table
+                </button>
+                <ResourceDetailView
+                  row={resourceRows.find(r => r.id === selectedDetailResourceId)!}
+                  themeMode={themeMode}
+                />
+              </div>
+            ) : (
+              <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} />
+            )
+          ) : isRegistryView ? <RegistryTable rows={isModulesView ? moduleRows : providerRows} visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> :<>
           <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
             <table className="min-w-[5000px] table-fixed border-collapse text-left">
               <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
