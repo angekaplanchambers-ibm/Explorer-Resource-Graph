@@ -3314,6 +3314,8 @@ function ExplorerSplashView({
   const [hudTypeFilter, setHudTypeFilter] = useState("All");
   const [hudExternalSelectId, setHudExternalSelectId] = useState<string | null>(null);
   const [hudPage, setHudPage] = useState(1);
+  const [hudNlQuery, setHudNlQuery] = useState("");
+  const [hudNlNoMatch, setHudNlNoMatch] = useState(false);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const modalQueryColumns =
@@ -3350,6 +3352,24 @@ function ExplorerSplashView({
     setSelectedGraphTitle(title);
     setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
+  }
+
+  function submitNlSearch(raw: string) {
+    const q = raw.trim().toLowerCase();
+    if (!q) return;
+    const entries: Array<{ type: string; title: string }> = [];
+    for (const cat of USE_CASE_CATEGORIES) {
+      entries.push({ type: cat.type, title: `View All ${cat.type}` });
+      for (const item of cat.items) entries.push({ type: cat.type, title: item });
+    }
+    const exact = entries.find(e => e.title.toLowerCase() === q || e.type.toLowerCase() === q);
+    if (exact) { openGraph(exact.type, exact.title); setHudNlQuery(""); return; }
+    const sw = entries.find(e => e.title.toLowerCase().startsWith(q) || e.type.toLowerCase().startsWith(q));
+    if (sw) { openGraph(sw.type, sw.title); setHudNlQuery(""); return; }
+    const inc = entries.find(e => e.title.toLowerCase().includes(q) || e.type.toLowerCase().includes(q));
+    if (inc) { openGraph(inc.type, inc.title); setHudNlQuery(""); return; }
+    setHudNlNoMatch(true);
+    setTimeout(() => setHudNlNoMatch(false), 1400);
   }
 
 function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
@@ -3965,6 +3985,59 @@ useEffect(() => {
             Classic
           </button>
         </div>
+      </div>
+
+      {/* I want to find — natural-language search */}
+      <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>I want to find...</p>
+        <label
+          className="flex h-10 w-full items-center gap-2 rounded-[10px] border px-3 transition-colors"
+          style={{
+            background: themeMode === "light" ? "#ffffff" : "rgba(255,255,255,0.06)",
+            borderColor: hudNlNoMatch ? "#da1e28" : (themeMode === "light" ? "#c9ccd2" : "rgba(255,255,255,0.18)"),
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+          }}
+        >
+          <input
+            value={hudNlQuery}
+            onChange={e => { setHudNlQuery(e.target.value); if (hudNlNoMatch) setHudNlNoMatch(false); }}
+            onKeyDown={e => { if (e.key === "Enter") submitNlSearch(hudNlQuery); }}
+            placeholder="Describe your query..."
+            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#9299a6]"
+            style={{ color: glassText }}
+            aria-label="Search Types and Use Cases"
+          />
+          <button
+            type="button"
+            onClick={() => submitNlSearch(hudNlQuery)}
+            onMouseDown={e => e.stopPropagation()}
+            aria-label="Apply search"
+            style={{
+              flexShrink: 0,
+              width: 28,
+              height: 28,
+              borderRadius: 7,
+              border: "none",
+              background: themeMode === "light" ? "#f1f2f3" : "rgba(255,255,255,0.1)",
+              color: hudNlQuery ? "#0f62fe" : (themeMode === "light" ? "#9299a6" : "rgba(255,255,255,0.35)"),
+              cursor: hudNlQuery ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={e => { if (hudNlQuery) (e.currentTarget as HTMLButtonElement).style.background = themeMode === "light" ? "#e4e6ea" : "rgba(255,255,255,0.16)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = themeMode === "light" ? "#f1f2f3" : "rgba(255,255,255,0.1)"; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </label>
+        {hudNlNoMatch && (
+          <p className="mt-1 text-[11px]" style={{ color: "#da1e28" }}>No matching type or use case found.</p>
+        )}
       </div>
 
       {/* Browse Types dropdown + selected tag */}
