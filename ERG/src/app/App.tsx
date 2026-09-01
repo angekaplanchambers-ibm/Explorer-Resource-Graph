@@ -22,6 +22,7 @@ export default function App() {
   const [pendingOpTriage, setPendingOpTriage] = useState<string | undefined>(undefined);
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
+  const [agentOpen, setAgentOpen] = useState(true);
   const [stepActive, setStepActive] = useState(false); // mirrors whether a step is open in ControlCenter
   const [navOpen, setNavOpen] = useState(false);
   const [panelW, setPanelW] = useState(SIDE_PANEL_DEFAULT);
@@ -141,51 +142,84 @@ export default function App() {
 
             {/* Right-dock panel — in-flow flex column, shown only when dockMode=right */}
             {dockMode === "right" && !workbenchOpen && (
-              <div style={{ width: panelW, flexShrink: 0, display: "flex", flexDirection: "row", overflow: "hidden", position: "relative" }}>
-                {/* Resize handle tab */}
-                <div
-                  onMouseDown={startPanelDrag}
+              <div style={{ position: "relative", flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
+                {/* Toggle tab — floats over content at the panel's left edge, mirrors the left nav tab exactly */}
+                <button
+                  type="button"
+                  onClick={() => setAgentOpen(o => !o)}
+                  aria-label={agentOpen ? "Collapse agent panel" : "Expand agent panel"}
                   style={{
                     position: "absolute",
-                    left: -6,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: 12,
-                    height: 48,
-                    cursor: "ew-resize",
+                    right: agentOpen ? panelW : 0,
+                    top: 16,
+                    width: 36,
+                    height: 40,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    zIndex: 10,
+                    background: "#fafafa",
+                    border: "1px solid #DEDFE3",
+                    borderRight: "none",
+                    borderRadius: "6px 0 0 6px",
+                    boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
+                    cursor: "pointer",
+                    color: "#656a76",
+                    zIndex: 20,
+                    transition: "right 0.3s cubic-bezier(0.25,0.8,0.25,1)",
                   }}
-                  title="Drag to resize panel"
                 >
+                  {agentOpen ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+                </button>
+
+                {/* Resize handle — only active when panel is open */}
+                {agentOpen && (
                   <div
+                    onMouseDown={startPanelDrag}
                     style={{
-                      width: 4,
-                      height: 32,
-                      borderRadius: 2,
-                      backgroundColor: "rgba(101,106,118,0.25)",
-                      transition: "background-color 0.15s",
+                      position: "absolute",
+                      left: -6,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 12,
+                      height: 48,
+                      cursor: "ew-resize",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: 10,
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
-                  />
-                </div>
+                    title="Drag to resize panel"
+                  >
+                    <div
+                      style={{
+                        width: 4,
+                        height: 32,
+                        borderRadius: 2,
+                        backgroundColor: "rgba(101,106,118,0.25)",
+                        transition: "background-color 0.15s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
+                    />
+                  </div>
+                )}
+
                 {/* Panel content */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                  <ControlCenter
-                    initialQuery={pendingQuery}
-                    onQueryHandled={() => setPendingQuery(undefined)}
-                    openOpTriage={pendingOpTriage}
-                    onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
-                    onOpenWorkbench={openWorkbench}
-                    pageContext={page}
-                    dockMode={dockMode}
-                    onDockChange={setDockMode}
-                    onStepActiveChange={setStepActive}
-                  />
-                </div>
+                {agentOpen && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                    <ControlCenter
+                      initialQuery={pendingQuery}
+                      onQueryHandled={() => setPendingQuery(undefined)}
+                      openOpTriage={pendingOpTriage}
+                      onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
+                      onOpenWorkbench={openWorkbench}
+                      pageContext={page}
+                      dockMode={dockMode}
+                      onDockChange={setDockMode}
+                      onStepActiveChange={setStepActive}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

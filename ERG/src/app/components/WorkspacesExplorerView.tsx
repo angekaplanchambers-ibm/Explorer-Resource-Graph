@@ -3982,7 +3982,7 @@ useEffect(() => {
               <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
               <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
             </svg>
-            Classic
+            Table
           </button>
         </div>
       </div>
