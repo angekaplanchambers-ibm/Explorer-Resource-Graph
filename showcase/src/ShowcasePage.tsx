@@ -13,7 +13,6 @@ const pageStyle: CSSProperties = {
 };
 
 const mainContent: CSSProperties = {
-  marginLeft: 220,
   padding: '48px 64px',
   maxWidth: 1200,
   boxSizing: 'border-box',
@@ -101,8 +100,8 @@ export function ShowcasePage({ config }: ShowcasePageProps) {
   const navWidth = layout.navWidth ?? 220;
   const mainStyle: CSSProperties = {
     ...mainContent,
-    marginLeft: layout.nav ? cssLength(navWidth) : 0,
     padding: cssLength(layout.contentPadding) ?? (layout.mode === 'mockup' ? 24 : '48px 64px'),
+    paddingLeft: layout.nav ? cssLength(navWidth) : undefined,
     maxWidth: layout.contentMaxWidth === 'none'
       ? 'none'
       : (cssLength(layout.contentMaxWidth) ?? (layout.mode === 'mockup' ? 'none' : 1200)),
