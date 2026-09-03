@@ -1628,6 +1628,9 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
   return Object.entries(d).slice(0, 6).map(([k, v]) => ({ label: k, value: str(v) }));
 }
 
+const BLAST_DOWNSTREAM_COLOR = "#3b82f6";
+const BLAST_UPSTREAM_COLOR = "#a855f7";
+
 type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
@@ -1986,21 +1989,21 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               100% { opacity: 1; transform: scale(1); }
             }
           `}</style>
-          {/* Orange arrowhead — downstream edges in non-arc blast mode */}
+          {/* Blue arrowhead — downstream edges in blast mode */}
           <marker id="blast-arrow-downstream" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L8,3 z" fill="#D55E00" />
+            <path d="M0,0 L0,6 L8,3 z" fill={BLAST_DOWNSTREAM_COLOR} />
           </marker>
-          {/* Purple arrowhead — upstream edges in non-arc blast mode */}
+          {/* Purple arrowhead — upstream edges in blast mode */}
           <marker id="blast-arrow-upstream" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L8,3 z" fill="#a855f7" />
+            <path d="M0,0 L0,6 L8,3 z" fill={BLAST_UPSTREAM_COLOR} />
           </marker>
-          {/* Arc layout — purple downstream arrowhead (tip at end) */}
+          {/* Arc layout — blue downstream arrowhead (tip at end) */}
           <marker id="arc-arrow-downstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,5 L7,2.5 z" fill="#9b5de5" />
+            <path d="M0,0 L0,5 L7,2.5 z" fill={BLAST_DOWNSTREAM_COLOR} />
           </marker>
-          {/* Arc layout — cyan upstream arrowhead (tip at end, path already drawn toward origin) */}
+          {/* Arc layout — purple upstream arrowhead (tip at end, path already drawn toward origin) */}
           <marker id="arc-arrow-upstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,5 L7,2.5 z" fill="#00b4d8" />
+            <path d="M0,0 L0,5 L7,2.5 z" fill={BLAST_UPSTREAM_COLOR} />
           </marker>
         </defs>
 
@@ -2066,7 +2069,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const depthTarget = blastDepthMap.get(edge.target) ?? 0;
             const isDownstream = depthSource <= depthTarget;
             // Upstream arcs bow upward (negative Y), downstream arcs bow downward (positive Y).
-            const color = isDownstream ? "#9b5de5" : "#00b4d8";
+            const color = isDownstream ? BLAST_DOWNSTREAM_COLOR : BLAST_UPSTREAM_COLOR;
             // Arc from the far node toward origin (upstream) or from origin to far node (downstream).
             const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
             const mx = (fromPos.x + toPos.x) / 2;
@@ -2107,7 +2110,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const depthSource = blastDepthMap.get(edge.source) ?? 0;
             const depthTarget = blastDepthMap.get(edge.target) ?? 0;
             const isDownstream = depthSource <= depthTarget;
-            const color = isDownstream ? "#D55E00" : "#a855f7";
+            const color = isDownstream ? BLAST_DOWNSTREAM_COLOR : BLAST_UPSTREAM_COLOR;
             const [fromPos, toPos] = isDownstream ? [ps, pt] : [pt, ps];
             const dx = toPos.x - fromPos.x;
             const dy = toPos.y - fromPos.y;
@@ -2193,7 +2196,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   {topoLayout === "arc" && !isArcOrigin && inBlastRadius && (() => {
                     const isUp = blastRadiusId ? activeEdges.some(e => e.target === blastRadiusId && e.source === node.id) : false;
                     return (
-                      <text y={nR + 43} textAnchor="middle" fill={isUp ? "#00b4d8" : "#9b5de5"} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
+                      <text y={nR + 43} textAnchor="middle" fill={isUp ? BLAST_UPSTREAM_COLOR : BLAST_DOWNSTREAM_COLOR} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
                         {isUp ? "↑ upstream" : "downstream ↓"}
                       </text>
                     );
@@ -2345,11 +2348,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               {/* Downstream section */}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#D55E00" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#D55E00" /></svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: "#D55E00", textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_DOWNSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_DOWNSTREAM_COLOR} /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_DOWNSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
                 </div>
                 {downstreamNodes.length > 0
-                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, "#D55E00"))}</div>
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, BLAST_DOWNSTREAM_COLOR))}</div>
                   : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
                 }
               </div>
@@ -2357,11 +2360,11 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
               {/* Upstream section */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke="#a855f7" strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill="#a855f7" /></svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#7c3aed" : "#c084fc", textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
+                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_UPSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_UPSTREAM_COLOR} /></svg>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_UPSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
                 </div>
                 {upstreamNodes.length > 0
-                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, "#a855f7"))}</div>
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, BLAST_UPSTREAM_COLOR))}</div>
                   : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
                 }
               </div>
@@ -2445,7 +2448,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                 </button>
                 <button
                   onClick={() => { setBlastRadiusId(selectedNode.id); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
-                  style={{ height: 38, borderRadius: 8, border: "1px solid rgba(213,94,0,0.4)", background: "transparent", color: "#D55E00", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+                  style={{ height: 38, borderRadius: 8, border: `1px solid ${BLAST_DOWNSTREAM_COLOR}66`, background: "transparent", color: BLAST_DOWNSTREAM_COLOR, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
                   View blast radius <span>→</span>
                 </button>
@@ -4272,7 +4275,7 @@ useEffect(() => {
               {inSubContext && (
                 <div
                   className="flex w-full overflow-hidden"
-                  style={{ minWidth: 0, borderRadius: 4, border: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`, boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
+                  style={{ minWidth: 0, borderRadius: 4, border: "1px solid rgba(59,61,69,0.4)", boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
                   onMouseDown={e => e.stopPropagation()}
                 >
                   <button
@@ -4282,9 +4285,9 @@ useEffect(() => {
                     style={{
                       ...segBase,
                       width: 32, height: 32,
-                      borderRight: `1px solid ${isBlastSub ? "rgba(213,94,0,0.4)" : "rgba(59,61,69,0.4)"}`,
-                      color: isBlastSub ? "#D55E00" : "#656a76",
-                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
+                      borderRight: "1px solid rgba(59,61,69,0.4)",
+                      color: "#656a76",
+                      background: "#ffffff",
                     }}
                     className="hover:bg-[#f1f2f3] transition-colors"
                   >
@@ -4297,8 +4300,8 @@ useEffect(() => {
                       justifyContent: "flex-start", paddingLeft: 12, paddingRight: 12,
                       borderRight: overlayInfo ? "1px solid rgba(59,61,69,0.4)" : "none",
                       cursor: "default",
-                      color: isBlastSub ? "#D55E00" : "#3b3d45",
-                      background: isBlastSub ? "rgba(213,94,0,0.04)" : "#ffffff",
+                      color: "#3b3d45",
+                      background: "#ffffff",
                     }}
                   >
                     <span className="min-w-0 truncate">{subContextLabel}</span>
