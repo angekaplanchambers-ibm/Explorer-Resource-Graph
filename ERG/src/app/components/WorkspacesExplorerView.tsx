@@ -3418,6 +3418,7 @@ function ExplorerSplashView({
   const hudTabRef = useRef<HTMLButtonElement>(null);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
+  const [hudCardWidth, setHudCardWidth] = useState(425);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const modalQueryColumns =
@@ -3504,6 +3505,17 @@ useEffect(() => {
     };
   }, []);
 
+  useEffect(() => {
+    const el = hudCardRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setHudCardWidth(el.offsetWidth);
+    });
+    observer.observe(el);
+    setHudCardWidth(el.offsetWidth);
+    return () => observer.disconnect();
+  }, [hudCollapsed]);
+
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
     : selectedGraphType === "Modules" ? moduleRows.length
@@ -3531,8 +3543,8 @@ useEffect(() => {
 
       {/* Topology graph */}
       <div
-        className="absolute bottom-0 left-0 right-0 top-0 z-10 overflow-hidden"
-        style={{ background: "transparent" }}
+        className="absolute bottom-0 right-0 top-0 z-10 overflow-hidden"
+        style={{ background: "transparent", left: (viewMode === "classic" && !hudCollapsed) ? hudPosition.x + hudCardWidth + 16 : 0, transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}
       >
         {selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
@@ -3551,7 +3563,7 @@ useEffect(() => {
             setWsGroupMode={setWsGroupMode}
           />
         ) : selectedGraphType && viewMode === "classic" ? (
-          <div className="absolute inset-0 overflow-auto bg-transparent" style={{ padding: "24px 50px 50px" }}>
+          <div className="absolute inset-0 overflow-auto bg-transparent" style={{ paddingTop: 24, paddingRight: 50, paddingBottom: 50, paddingLeft: 50 }}>
             <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
             <TopologyTableView
               type={selectedGraphType}
