@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  ChevronDown, Terminal, X, ChevronLeft,
+  ChevronDown, ChevronRight, Terminal, X, ChevronLeft,
   RefreshCw, Plus, ExternalLink, Pen,
 } from "lucide-react";
 import { TFSignalChat } from "./TFSignalChat";
@@ -983,12 +983,13 @@ function BudgetBreakdownTable({ compact }: { compact?: boolean }) {
 
 // ── Side panel view (dockMode === "right") ─────────────────────────────────────
 
-function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavigate, showBudgetTable }: {
+function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavigate, showBudgetTable, onClose }: {
   op: RecommendedOp; step: NextStep; onBack: () => void;
   onOpenWorkbench?: (q: string) => void;
   onDockChange?: (m: "bottom" | "right") => void;
   onNavigate?: (dest: string) => void;
   showBudgetTable?: boolean;
+  onClose?: () => void;
 }) {
   const sevColor = SEV_COLOR[op.severity];
   const sevLabel = SEV_LABEL[op.severity];
@@ -1037,7 +1038,20 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
               <Terminal size={10} /> Open in Workbench
             </button>
           ) : <div />}
-          <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
+            {onClose && (
+              <button
+                onClick={onClose}
+                title="Close panel"
+                style={{ width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: `1px solid ${M.darkBorder}`, backgroundColor: "transparent", color: M.textMuted, transition: "background 0.15s", flexShrink: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1128,11 +1142,12 @@ interface ControlCenterProps {
   dockMode?: "bottom" | "right";
   onDockChange?: (m: "bottom" | "right") => void;
   onStepActiveChange?: (active: boolean) => void;
+  onClose?: () => void;
 }
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange }: ControlCenterProps) {
+export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
   const [signalTab, setSignalTab] = useState<"ops" | "chat">("ops");
@@ -1258,6 +1273,7 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
         onDockChange={onDockChange}
         onNavigate={(dest) => { closeStep(); }}
         showBudgetTable={isBudgetStep}
+        onClose={onClose}
       />
     );
   }
@@ -1278,7 +1294,20 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             </div>
             <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Agent</span>
           </div>
-          <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
+            {onClose && (
+              <button
+                onClick={onClose}
+                title="Close panel"
+                style={{ width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: `1px solid ${M.darkBorder}`, backgroundColor: "transparent", color: M.textMuted, transition: "background 0.15s", flexShrink: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+              >
+                <ChevronRight size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Chat / ops content */}

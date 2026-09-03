@@ -22,6 +22,7 @@ export default function App() {
   const [pendingOpTriage, setPendingOpTriage] = useState<string | undefined>(undefined);
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
+  const [agentOpen, setAgentOpen] = useState(true);
   const [stepActive, setStepActive] = useState(false); // mirrors whether a step is open in ControlCenter
   const [navOpen, setNavOpen] = useState(false);
   const [panelW, setPanelW] = useState(SIDE_PANEL_DEFAULT);
@@ -141,52 +142,117 @@ export default function App() {
 
             {/* Right-dock panel — in-flow flex column, shown only when dockMode=right */}
             {dockMode === "right" && !workbenchOpen && (
-              <div style={{ width: panelW, flexShrink: 0, display: "flex", flexDirection: "row", overflow: "hidden", position: "relative" }}>
-                {/* Resize handle tab */}
+              agentOpen ? (
+                <div style={{ width: panelW, flexShrink: 0, display: "flex", flexDirection: "row", overflow: "hidden", position: "relative" }}>
+                  {/* Resize handle tab */}
+                  <div
+                    onMouseDown={startPanelDrag}
+                    style={{
+                      position: "absolute",
+                      left: -6,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 12,
+                      height: 48,
+                      cursor: "ew-resize",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      zIndex: 10,
+                    }}
+                    title="Drag to resize panel"
+                  >
+                    <div
+                      style={{
+                        width: 4,
+                        height: 32,
+                        borderRadius: 2,
+                        backgroundColor: "rgba(101,106,118,0.25)",
+                        transition: "background-color 0.15s",
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
+                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
+                    />
+                  </div>
+                  {/* Panel content */}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                    <ControlCenter
+                      initialQuery={pendingQuery}
+                      onQueryHandled={() => setPendingQuery(undefined)}
+                      openOpTriage={pendingOpTriage}
+                      onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
+                      onOpenWorkbench={openWorkbench}
+                      pageContext={page}
+                      dockMode={dockMode}
+                      onDockChange={setDockMode}
+                      onStepActiveChange={setStepActive}
+                      onClose={() => setAgentOpen(false)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Collapsed tab strip — shown when agent drawer is closed */
                 <div
-                  onMouseDown={startPanelDrag}
                   style={{
-                    position: "absolute",
-                    left: -6,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: 12,
-                    height: 48,
-                    cursor: "ew-resize",
+                    width: 36,
+                    flexShrink: 0,
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 10,
+                    backgroundColor: "white",
+                    borderLeft: "1px solid #e5e7eb",
                   }}
-                  title="Drag to resize panel"
                 >
+                  <button
+                    onClick={() => setAgentOpen(true)}
+                    title="Open Terraform Agent"
+                    style={{
+                      width: 36,
+                      height: 40,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      border: "none",
+                      borderBottom: "1px solid #e5e7eb",
+                      backgroundColor: "transparent",
+                      cursor: "pointer",
+                      color: "#777777",
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#f0f6ff")}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    {/* Panel-open icon — mirror of the session panel expand icon */}
+                    <svg width="18" height="15" viewBox="0 0 14 12" fill="none">
+                      <path d="M13 0H1C0.45 0 0 0.45 0 1V11C0 11.55 0.45 12 1 12H13C13.55 12 14 11.55 14 11V1C14 0.45 13.55 0 13 0ZM13 5.5H7.9L9.7 3.7L9 3L6 6L9 9L9.7 8.3L7.9 6.5H13V11H5V1H13V5.5Z" fill="currentColor" />
+                    </svg>
+                  </button>
                   <div
                     style={{
-                      width: 4,
-                      height: 32,
-                      borderRadius: 2,
-                      backgroundColor: "rgba(101,106,118,0.25)",
-                      transition: "background-color 0.15s",
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
-                  />
+                  >
+                    <span
+                      style={{
+                        color: "#777777",
+                        fontSize: "11px",
+                        fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
+                        fontWeight: 500,
+                        letterSpacing: "0.06em",
+                        writingMode: "vertical-rl",
+                        textOrientation: "mixed",
+                        transform: "rotate(180deg)",
+                        userSelect: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Terraform Agent
+                    </span>
+                  </div>
                 </div>
-                {/* Panel content */}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                  <ControlCenter
-                    initialQuery={pendingQuery}
-                    onQueryHandled={() => setPendingQuery(undefined)}
-                    openOpTriage={pendingOpTriage}
-                    onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
-                    onOpenWorkbench={openWorkbench}
-                    pageContext={page}
-                    dockMode={dockMode}
-                    onDockChange={setDockMode}
-                    onStepActiveChange={setStepActive}
-                  />
-                </div>
-              </div>
+              )
             )}
           </div>
 

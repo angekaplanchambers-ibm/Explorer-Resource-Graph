@@ -3529,7 +3529,7 @@ useEffect(() => {
       {/* Topology graph */}
       <div
         className="absolute bottom-0 left-0 right-0 top-0 z-10 overflow-hidden"
-        style={{ background: themeMode === "light" ? "transparent" : "#13141a" }}
+        style={{ background: "transparent" }}
       >
         {selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
@@ -3548,7 +3548,7 @@ useEffect(() => {
             setWsGroupMode={setWsGroupMode}
           />
         ) : selectedGraphType && viewMode === "classic" ? (
-          <div className="absolute inset-0 overflow-auto bg-[#fafafa]" style={{ padding: "24px 50px 50px" }}>
+          <div className="absolute inset-0 overflow-auto bg-transparent" style={{ padding: "24px 50px 50px" }}>
             <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
             <TopologyTableView
               type={selectedGraphType}
@@ -3628,7 +3628,7 @@ useEffect(() => {
                   borderRadius: 12,
                   border: `1px solid ${glassBorder}`,
                   boxShadow: "0 24px 64px rgba(0,0,0,0.28)",
-                  background: glassSurface,
+                  background: themeMode === "light" ? "#ffffff" : "#13141a",
                   overflow: "hidden",
                   pointerEvents: "auto",
                 }}
@@ -3804,7 +3804,7 @@ useEffect(() => {
           style={hudCollapsed ? {
             position: "fixed",
             left: navOpen ? 280 : 0,
-            top: hudCollapsedTabTop ?? Math.max(64, hudPosition.y + 25),
+            top: 130,
             width: 44,
             height: 52,
             display: "flex",
@@ -3881,7 +3881,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* View mode toggle — sliding pill, Graph / Classic */}
+      {/* View mode toggle — sliding pill, Graph / Table View */}
       <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View Mode</p>
         <div
@@ -3934,7 +3934,7 @@ useEffect(() => {
             </svg>
             Graph
           </button>
-          {/* Classic button */}
+          {/* Table View button */}
           <button
             type="button"
             onClick={() => setViewMode("classic")}
@@ -3952,7 +3952,7 @@ useEffect(() => {
               <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
               <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
             </svg>
-            Classic
+            Table View
           </button>
         </div>
       </div>
@@ -4313,7 +4313,7 @@ useEffect(() => {
                   >
                     <span className="min-w-0 truncate">{subContextLabel}</span>
                   </div>
-                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius, not Classic mode */}
+                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius, not Table View mode */}
                   {overlayInfo && viewMode === "graph" && (
                     <button
                       type="button"
