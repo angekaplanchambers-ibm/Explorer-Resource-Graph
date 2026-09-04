@@ -3577,6 +3577,23 @@ useEffect(() => {
           />
         ) : selectedGraphType && viewMode === "classic" ? (
           <div className="absolute inset-0 overflow-auto bg-transparent" style={{ paddingTop: 24, paddingRight: 50, paddingBottom: 50, paddingLeft: 50 }}>
+            {/* Table view header — title + actions */}
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[15px] font-semibold" style={{ color: glassText }}>
+                  {selectedGraphTitle ?? selectedGraphType}
+                </p>
+                <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
+                  {tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing
+                  {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
+                </p>
+              </div>
+              <ActionsDropdown
+                columns={modalQueryColumns}
+                visibleColumnIds={visibleColumnIds}
+                onApply={setVisibleColumnIds}
+              />
+            </div>
             <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
             <TopologyTableView
               type={selectedGraphType}
