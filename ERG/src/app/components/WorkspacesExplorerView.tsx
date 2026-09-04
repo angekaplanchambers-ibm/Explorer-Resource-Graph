@@ -3419,6 +3419,10 @@ function ExplorerSplashView({
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
   const [hudCardWidth, setHudCardWidth] = useState(425);
+  // Intro animation: "intro" = centered on first load, "corner" = top-left (permanent after first selection)
+  const [hudPhase, setHudPhase] = useState<"intro" | "corner">("intro");
+  const [hudScale, setHudScale] = useState(1);
+  const hasEverSelected = useRef(false);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const modalQueryColumns =
@@ -3442,6 +3446,15 @@ function ExplorerSplashView({
     setSelectedGraphTitle(title);
     setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
+    // First-ever selection: shrink HUD to nothing, teleport to corner, then expand back out
+    if (!hasEverSelected.current) {
+      hasEverSelected.current = true;
+      setHudScale(0);
+      setTimeout(() => {
+        setHudPhase("corner");
+        setTimeout(() => setHudScale(1), 30);
+      }, 280);
+    }
   }
 
 function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
@@ -3839,7 +3852,7 @@ useEffect(() => {
           left: hudPosition.x + hudCardWidth,
           width: 44,
           height: 52,
-          display: "flex",
+          display: hudPhase === "intro" ? "none" : "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
@@ -3864,7 +3877,27 @@ useEffect(() => {
       </button>
 
       {/* HUD wrapper — only the card, slides in/out with transform */}
-      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30, transform: hudCollapsed ? "translateX(-120%)" : "translateX(0)", transition: "transform 0.3s cubic-bezier(0.25,0.8,0.25,1)", pointerEvents: hudCollapsed ? "none" : undefined }}>
+      <div
+        className="absolute"
+        style={hudPhase === "intro" ? {
+          left: "50%",
+          top: "50%",
+          zIndex: 30,
+          transform: `translate(-50%, -50%) scale(${hudScale})`,
+          transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+          transformOrigin: "center center",
+        } : {
+          left: hudPosition.x,
+          top: hudPosition.y,
+          zIndex: 30,
+          transform: hudCollapsed ? "translateX(-120%)" : `translateX(0) scale(${hudScale})`,
+          transition: hudScale < 1
+            ? "transform 0.28s cubic-bezier(0.4,0,0.2,1)"
+            : "transform 0.32s cubic-bezier(0.25,0.8,0.25,1)",
+          transformOrigin: "top left",
+          pointerEvents: hudCollapsed ? "none" : undefined,
+        }}
+      >
 
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         <div
