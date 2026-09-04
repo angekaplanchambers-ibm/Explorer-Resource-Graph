@@ -3514,7 +3514,7 @@ useEffect(() => {
     observer.observe(el);
     setHudCardWidth(el.offsetWidth);
     return () => observer.disconnect();
-  }, [hudCollapsed]);
+  }, []);
 
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
@@ -3800,74 +3800,73 @@ useEffect(() => {
         )}
       </AnimatePresence>
 
-      {/* HUD wrapper — tab at bottom-right outside, card above tab in stacking order */}
-      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30 }}>
+      {/* HUD tab — lives outside the animated wrapper so position:fixed works when collapsed */}
+      <button
+        ref={hudTabRef}
+        type="button"
+        onClick={e => {
+          e.stopPropagation();
+          if (!hudCollapsed && hudTabRef.current) {
+            setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
+          }
+          setHudCollapsed(c => !c);
+        }}
+        onMouseDown={e => e.stopPropagation()}
+        aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
+        style={hudCollapsed ? {
+          position: "fixed",
+          left: navOpen ? 280 : 0,
+          top: 130,
+          width: 44,
+          height: 52,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          background: "#fafafa",
+          border: "1px solid #DEDFE3",
+          borderLeft: "none",
+          borderRadius: "0 6px 6px 0",
+          boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
+          cursor: "pointer",
+          color: "#656a76",
+          zIndex: 35,
+          transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
+        } : {
+          position: "absolute",
+          top: hudPosition.y + 50,
+          left: hudPosition.x + hudCardWidth,
+          width: 44,
+          height: 52,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          background: "#fafafa",
+          border: "1px solid #DEDFE3",
+          borderLeft: "none",
+          borderRadius: "0 6px 6px 0",
+          boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
+          cursor: "pointer",
+          color: "#656a76",
+          zIndex: 31,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
+          <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
+        </svg>
+        <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", lineHeight: 1 }}>
+          {hudCollapsed ? "VIEW" : "HIDE"}
+        </span>
+      </button>
 
-        {/* Tab — rendered first (lower z), attached to outside-right bottom corner */}
-        <button
-          ref={hudTabRef}
-          type="button"
-          onClick={e => {
-            e.stopPropagation();
-            if (!hudCollapsed && hudTabRef.current) {
-              setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
-            }
-            setHudCollapsed(c => !c);
-          }}
-          onMouseDown={e => e.stopPropagation()}
-          aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
-          style={hudCollapsed ? {
-            position: "fixed",
-            left: navOpen ? 280 : 0,
-            top: 130,
-            width: 44,
-            height: 52,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            background: "#fafafa",
-            border: "1px solid #DEDFE3",
-            borderLeft: "none",
-            borderRadius: "0 6px 6px 0",
-            boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
-            cursor: "pointer",
-            color: "#656a76",
-            zIndex: 35,
-            transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
-          } : {
-            position: "absolute",
-            bottom: 25,
-            left: "100%",
-            width: 44,
-            height: 52,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            background: "#fafafa",
-            border: "1px solid #DEDFE3",
-            borderLeft: "none",
-            borderRadius: "0 6px 6px 0",
-            boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
-            cursor: "pointer",
-            color: "#656a76",
-            zIndex: 0,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path clipRule="evenodd" d="M11.914 4.97131C11.9979 4.71977 11.9324 4.44245 11.7449 4.25497C11.5574 4.06749 11.2801 4.00202 11.0286 4.08587L6.15359 5.71087C5.94456 5.78054 5.78054 5.94456 5.71087 6.15359L4.08587 11.0286C4.00202 11.2801 4.06749 11.5574 4.25497 11.7449C4.44245 11.9324 4.71977 11.9979 4.97131 11.914L9.8463 10.289C10.0553 10.2193 10.2193 10.0553 10.289 9.8463L11.914 4.97131ZM5.85674 10.1431L6.92834 6.92834L10.1431 5.85674L9.07155 9.07155L5.85674 10.1431Z" fill="currentColor" fillRule="evenodd" />
-            <path clipRule="evenodd" d="M8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0ZM1.5 8C1.5 4.41015 4.41015 1.5 8 1.5C11.5899 1.5 14.5 4.41015 14.5 8C14.5 11.5899 11.5899 14.5 8 14.5C4.41015 14.5 1.5 11.5899 1.5 8Z" fill="currentColor" fillRule="evenodd" />
-          </svg>
-          <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", lineHeight: 1 }}>
-            {hudCollapsed ? "VIEW" : "HIDE"}
-          </span>
-        </button>
+      {/* HUD wrapper — only the card, slides in/out with transform */}
+      <div className="absolute" style={{ left: hudPosition.x, top: hudPosition.y, zIndex: 30, transform: hudCollapsed ? "translateX(-120%)" : "translateX(0)", transition: "transform 0.3s cubic-bezier(0.25,0.8,0.25,1)", pointerEvents: hudCollapsed ? "none" : undefined }}>
 
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
-        {!hudCollapsed && (
         <div
           ref={hudCardRef}
           className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
@@ -4360,7 +4359,6 @@ useEffect(() => {
         />
         </div>
         </div>
-        )}
       </div>
 
     </div>
