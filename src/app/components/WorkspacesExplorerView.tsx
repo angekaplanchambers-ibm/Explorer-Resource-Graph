@@ -734,10 +734,9 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
   );
 }
 
-function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp, inlineDetail = false, themeMode = "light" }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows; inlineDetail?: boolean; themeMode?: "light" | "dark" }) {
+function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [inlineSelectedResourceId, setInlineSelectedResourceId] = useState<string | null>(null);
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const allRows = sourceRowsProp ?? resourceRows;
   const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
@@ -752,27 +751,6 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
     : baseRows;
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
-  function selectResource(id: string) {
-    if (inlineDetail) setInlineSelectedResourceId(id);
-    onSelectResource?.(id);
-  }
-  if (inlineDetail && inlineSelectedResourceId) {
-    const selectedRow = allRows.find(row => row.id === inlineSelectedResourceId);
-    if (selectedRow) {
-      return (
-        <div>
-          <button
-            type="button"
-            onClick={() => setInlineSelectedResourceId(null)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: "1px solid #dedfe3", background: "rgba(0,0,0,0.04)", color: "#656a76", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}
-          >
-            ← back to table
-          </button>
-          <ResourceDetailView row={selectedRow} themeMode={themeMode} />
-        </div>
-      );
-    }
-  }
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
@@ -783,25 +761,8 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
               <tr
                 key={row.id}
                 className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
-                style={{ cursor: onSelectResource ? "pointer" : "default" }}
-                onPointerDown={() => {
-                  selectResource(row.id);
-                }}
-                onMouseDown={() => {
-                  selectResource(row.id);
-                }}
-                onClick={() => {
-                  if (inlineDetail) setInlineSelectedResourceId(row.id);
-                  onSelectResource?.(row.id);
-                }}
-                onKeyDown={event => {
-                  if (onSelectResource && (event.key === "Enter" || event.key === " ")) {
-                    event.preventDefault();
-                    onSelectResource(row.id);
-                  }
-                }}
-                tabIndex={onSelectResource ? 0 : undefined}
-                aria-label={onSelectResource ? `View resource ${row.address}` : undefined}
+                style={{ cursor: "pointer" }}
+                onClick={() => onSelectResource?.(row.id)}
               >
                 {columns.map((column, ci) => {
                   const content = {
@@ -818,7 +779,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
                     sourceId: row.sourceId,
                     sourceUpdatedAt: row.sourceUpdatedAt,
                   };
-                  return <td key={column.id} onClick={() => selectResource(row.id)} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
+                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
                 })}
               </tr>
             ))}
@@ -1544,20 +1505,26 @@ function computeArcLayout(
   const pos = new Map<string, { x: number; y: number }>();
   const cy = VH / 2;
   const originX = VW / 2;
-  const xSpacing = NODE_SIZE + 100;
-  const yStep = NODE_SIZE + 32;
+  // Horizontal gap between node centres — large enough that nodes never touch side-to-side.
+  const xSpacing = NODE_SIZE + 100; // 128px centre-to-centre
+  // Vertical staircase step per node — large enough to clear the node height plus a gap.
+  const yStep = NODE_SIZE + 32; // 60px per step
 
   pos.set(originId, { x: originX, y: cy });
 
+  // Upstream: nodes step left and alternate above/below cy (staircase).
+  // Node closest to origin is at step 1, farthest at step N.
   upstreamIds.forEach((id, i) => {
-    const step = upstreamIds.length - i;
+    const step = upstreamIds.length - i; // 1 = closest to origin
     const x = originX - xSpacing * step;
+    // Alternate: odd steps go up (-y), even steps go down (+y)
     const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
     pos.set(id, { x, y });
   });
 
+  // Downstream: nodes step right and alternate above/below cy (staircase).
   downstreamIds.forEach((id, i) => {
-    const step = i + 1;
+    const step = i + 1; // 1 = closest to origin
     const x = originX + xSpacing * step;
     const y = cy + (step % 2 === 1 ? -yStep * Math.ceil(step / 2) : yStep * Math.floor(step / 2));
     pos.set(id, { x, y });
@@ -1685,13 +1652,17 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [viewProvidersCount, setViewProvidersCount] = useState<number>(0);
   const [wsPopoverView, setWsPopoverView] = useState<"main" | "modules">("main");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // manualLayout = the user's chosen layout when not in blast radius mode.
+  // topoLayout = derived: always "arc" while blastRadiusId is set, otherwise manualLayout.
   const [manualLayout, setManualLayout] = useState<Exclude<TopoLayout, "arc">>((activeType === "Providers" || activeType === "Modules" || activeType === "Workspaces") ? "force" : "radial");
   const [showEdges, setShowEdges] = useState<boolean>(true);
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Derived — no state, no effect, no delay.
   const topoLayout: TopoLayout = blastRadiusId ? "arc" : manualLayout;
+  // setTopoLayout is only meaningful outside blast radius mode.
   const setTopoLayout = (l: TopoLayout) => { if (l !== "arc") setManualLayout(l as Exclude<TopoLayout, "arc">); };
 
   // Notify parent whenever blast radius mode changes
@@ -4886,13 +4857,13 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 >
                   ← back to table
                 </button>
-                {(() => {
-                  const selectedResource = resourceRows.find(r => r.id === selectedDetailResourceId);
-                  return selectedResource ? <ResourceDetailView row={selectedResource} themeMode={themeMode} /> : null;
-                })()}
+                <ResourceDetailView
+                  row={resourceRows.find(r => r.id === selectedDetailResourceId)!}
+                  themeMode={themeMode}
+                />
               </div>
             ) : (
-              <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} inlineDetail themeMode={themeMode} />
+              <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} />
             )
           ) : isRegistryView ? <RegistryTable rows={isModulesView ? moduleRows : providerRows} visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> :<>
           <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">

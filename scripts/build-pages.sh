@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PAGES_DIR="$ROOT_DIR/.pages"
-APP_DIR="$ROOT_DIR/ERG"
+APP_DIR="$ROOT_DIR"
 
 rm -rf "$PAGES_DIR"
 mkdir -p "$PAGES_DIR"

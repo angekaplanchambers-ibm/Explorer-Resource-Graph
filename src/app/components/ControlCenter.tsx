@@ -1294,20 +1294,6 @@ export function ControlCenter({ initialQuery, onQueryHandled, openOpTriage, onOp
             </div>
             <span style={{ color: M.text, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>Terraform Agent</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
-            {onClose && (
-              <button
-                onClick={onClose}
-                title="Close panel"
-                style={{ width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: `1px solid ${M.darkBorder}`, backgroundColor: "transparent", color: M.textMuted, transition: "background 0.15s", flexShrink: 0 }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
-                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
-              >
-                <ChevronRight size={14} />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Chat / ops content */}
