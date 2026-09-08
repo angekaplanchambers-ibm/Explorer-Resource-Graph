@@ -761,8 +761,16 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
               <tr
                 key={row.id}
                 className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
-                style={{ cursor: "pointer" }}
+                style={{ cursor: onSelectResource ? "pointer" : "default" }}
                 onClick={() => onSelectResource?.(row.id)}
+                onKeyDown={event => {
+                  if (onSelectResource && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    onSelectResource(row.id);
+                  }
+                }}
+                tabIndex={onSelectResource ? 0 : undefined}
+                aria-label={onSelectResource ? `View resource ${row.address}` : undefined}
               >
                 {columns.map((column, ci) => {
                   const content = {
@@ -4847,10 +4855,10 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 >
                   ← back to table
                 </button>
-                <ResourceDetailView
-                  row={resourceRows.find(r => r.id === selectedDetailResourceId)!}
-                  themeMode={themeMode}
-                />
+                {(() => {
+                  const selectedResource = resourceRows.find(r => r.id === selectedDetailResourceId);
+                  return selectedResource ? <ResourceDetailView row={selectedResource} themeMode={themeMode} /> : null;
+                })()}
               </div>
             ) : (
               <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} />
