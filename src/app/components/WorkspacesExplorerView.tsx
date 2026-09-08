@@ -3587,7 +3587,11 @@ useEffect(() => {
       {/* Topology graph */}
       <div
         className="absolute bottom-0 right-0 top-0 z-10 overflow-hidden"
-        style={{ background: "transparent", left: (viewMode === "classic" && !hudCollapsed) ? hudPosition.x + hudCardWidth + 16 : 0, transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}
+        style={{
+          background: "transparent",
+          left: selectedGraphType && viewMode === "classic" && !hudCollapsed ? hudPosition.x + hudCardWidth + 16 : 0,
+          transition: selectedGraphType ? "left 0.3s cubic-bezier(0.25,0.8,0.25,1)" : "none",
+        }}
       >
         {selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
