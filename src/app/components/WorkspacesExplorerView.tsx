@@ -4813,6 +4813,16 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 </button>
               </div>
 
+            {selectedDetailResourceId && (
+              <button
+                type="button"
+                onClick={() => setSelectedDetailResourceId(null)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-3 text-[12px] font-medium text-[#656a76] hover:bg-[#f1f2f3]"
+              >
+                ← back to table
+              </button>
+            )}
+
             {/* Actions (3-dot) */}
             <div className="flex">
               <div className="relative">
@@ -4879,13 +4889,6 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
           ) : isPolicySetsView ? <PolicySetsTable conditions={draftConditions} onNavigate={navigateToType} /> : isTerraformVersionsView ? <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> : isResourcesView ? (
             selectedDetailResourceId ? (
               <div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDetailResourceId(null)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: "1px solid #dedfe3", background: "rgba(0,0,0,0.04)", color: "#656a76", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}
-                >
-                  ← back to table
-                </button>
                 <ResourceDetailView
                   row={resourceRows.find(r => r.id === selectedDetailResourceId)!}
                   themeMode={themeMode}
