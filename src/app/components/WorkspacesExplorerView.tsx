@@ -752,7 +752,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
     : baseRows;
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
-  const selectedRow = allRows.find(row => row.id === selectedRowId);
+  const selectedRow = onSelectResource ? null : allRows.find(row => row.id === selectedRowId);
   if (selectedRow) {
     return (
       <div>
@@ -768,7 +768,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
     );
   }
   const selectRow = (id: string) => {
-    setSelectedRowId(id);
+    if (!onSelectResource) setSelectedRowId(id);
     onSelectResource?.(id);
   };
   return (
@@ -3473,6 +3473,7 @@ function ExplorerSplashView({
   function openGraph(type: string, title = type) {
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
+    setSelectedResourceId(null);
     setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
     // First-ever selection: shrink HUD to nothing, teleport to corner, then expand back out
@@ -3617,23 +3618,44 @@ useEffect(() => {
                   {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
                 </p>
               </div>
-              <ActionsDropdown
-                columns={modalQueryColumns}
-                visibleColumnIds={visibleColumnIds}
-                onApply={setVisibleColumnIds}
-              />
+              <div className="flex items-center gap-2">
+                {selectedResourceId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedResourceId(null)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: `1px solid ${glassBorder}`, background: "rgba(0,0,0,0.04)", color: glassMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    ← back to table
+                  </button>
+                )}
+                <ActionsDropdown
+                  columns={modalQueryColumns}
+                  visibleColumnIds={visibleColumnIds}
+                  onApply={setVisibleColumnIds}
+                />
+              </div>
             </div>
-            <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-            <TopologyTableView
-              type={selectedGraphType}
-              graphTitle={selectedGraphTitle}
-              conditions={modalConditions}
-              visibleColumnIds={visibleColumnIds}
-              onNavigate={(type) => openGraph(type, type)}
-              onSelectResource={setSelectedResourceId}
-              overlayInfo={overlayInfo}
-              wsGroupMode={wsGroupMode}
-            />
+            {selectedResourceId ? (
+              (() => {
+                const row = (overlayInfo?.rows ?? resourceRows).find(item => item.id === selectedResourceId)
+                  ?? resourceRows.find(item => item.id === selectedResourceId);
+                return row ? <ResourceDetailView row={row} themeMode={themeMode} /> : null;
+              })()
+            ) : (
+              <>
+                <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                <TopologyTableView
+                  type={selectedGraphType}
+                  graphTitle={selectedGraphTitle}
+                  conditions={modalConditions}
+                  visibleColumnIds={visibleColumnIds}
+                  onNavigate={(type) => openGraph(type, type)}
+                  onSelectResource={setSelectedResourceId}
+                  overlayInfo={overlayInfo}
+                  wsGroupMode={wsGroupMode}
+                />
+              </>
+            )}
           </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 overflow-y-auto px-6 py-8" style={{ color: themeMode === "light" ? "#17171a" : "rgba(255,255,255,0.92)" }}>
