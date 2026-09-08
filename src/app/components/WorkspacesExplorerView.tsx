@@ -3568,6 +3568,7 @@ useEffect(() => {
     : getWorkspaceRowsForTitle(selectedGraphTitle).length;
 
   const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
+  const hudSurface = themeMode === "light" ? "#ffffff" : "#13141a";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
   const glassText = themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)";
   const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
@@ -3975,7 +3976,7 @@ useEffect(() => {
         <div
           ref={hudCardRef}
           className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
-          style={{ position: "relative", zIndex: 1, background: glassSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
+          style={{ position: "relative", zIndex: 1, background: hudSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
           onMouseDown={startHudDrag}
         >
       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: glassMuted }}>
