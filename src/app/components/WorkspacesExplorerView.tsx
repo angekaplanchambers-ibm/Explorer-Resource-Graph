@@ -3721,20 +3721,20 @@ useEffect(() => {
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {selectedResourceId ? (
+                    {selectedResourceId && (
                       <button
+                        type="button"
                         onClick={() => setSelectedResourceId(null)}
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: `1px solid ${glassBorder}`, background: "rgba(0,0,0,0.04)", color: glassMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
                       >
                         ← back to table
                       </button>
-                    ) : (
-                      <ActionsDropdown
-                        columns={modalQueryColumns}
-                        visibleColumnIds={visibleColumnIds}
-                        onApply={setVisibleColumnIds}
-                      />
                     )}
+                    <ActionsDropdown
+                      columns={modalQueryColumns}
+                      visibleColumnIds={visibleColumnIds}
+                      onApply={setVisibleColumnIds}
+                    />
                     <button type="button" onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
                       <X size={18} />
                     </button>
