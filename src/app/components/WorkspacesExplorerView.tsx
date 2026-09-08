@@ -734,9 +734,10 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
   );
 }
 
-function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
+function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp, inlineDetail = false, themeMode = "light" }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows; inlineDetail?: boolean; themeMode?: "light" | "dark" }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [inlineSelectedResourceId, setInlineSelectedResourceId] = useState<string | null>(null);
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const allRows = sourceRowsProp ?? resourceRows;
   const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
@@ -751,6 +752,27 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
     : baseRows;
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  function selectResource(id: string) {
+    if (inlineDetail) setInlineSelectedResourceId(id);
+    onSelectResource?.(id);
+  }
+  if (inlineDetail && inlineSelectedResourceId) {
+    const selectedRow = allRows.find(row => row.id === inlineSelectedResourceId);
+    if (selectedRow) {
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={() => setInlineSelectedResourceId(null)}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: "1px solid #dedfe3", background: "rgba(0,0,0,0.04)", color: "#656a76", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}
+          >
+            ← back to table
+          </button>
+          <ResourceDetailView row={selectedRow} themeMode={themeMode} />
+        </div>
+      );
+    }
+  }
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
@@ -762,7 +784,16 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
                 key={row.id}
                 className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
                 style={{ cursor: onSelectResource ? "pointer" : "default" }}
-                onClick={() => onSelectResource?.(row.id)}
+                onPointerDown={() => {
+                  selectResource(row.id);
+                }}
+                onMouseDown={() => {
+                  selectResource(row.id);
+                }}
+                onClick={() => {
+                  if (inlineDetail) setInlineSelectedResourceId(row.id);
+                  onSelectResource?.(row.id);
+                }}
                 onKeyDown={event => {
                   if (onSelectResource && (event.key === "Enter" || event.key === " ")) {
                     event.preventDefault();
@@ -787,7 +818,7 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
                     sourceId: row.sourceId,
                     sourceUpdatedAt: row.sourceUpdatedAt,
                   };
-                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
+                  return <td key={column.id} onClick={() => selectResource(row.id)} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
                 })}
               </tr>
             ))}
@@ -4861,7 +4892,7 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
                 })()}
               </div>
             ) : (
-              <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} />
+              <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} onSelectResource={setSelectedDetailResourceId} inlineDetail themeMode={themeMode} />
             )
           ) : isRegistryView ? <RegistryTable rows={isModulesView ? moduleRows : providerRows} visibleColumnIds={visibleColumnIds} conditions={draftConditions} onNavigate={navigateToType} /> :<>
           <div className="overflow-x-auto overflow-y-hidden rounded-[6px] border border-[#dedfe3]">
