@@ -142,9 +142,37 @@ export default function App() {
 
             {/* Right-dock panel — in-flow flex column, shown only when dockMode=right */}
             {dockMode === "right" && !workbenchOpen && (
-              agentOpen ? (
-                <div style={{ width: panelW, flexShrink: 0, display: "flex", flexDirection: "row", overflow: "hidden", position: "relative" }}>
-                  {/* Resize handle tab */}
+              <div style={{ position: "relative", flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
+                {/* Toggle tab — floats over content at the panel's left edge, mirrors the left nav tab exactly */}
+                <button
+                  type="button"
+                  onClick={() => setAgentOpen(o => !o)}
+                  aria-label={agentOpen ? "Collapse agent panel" : "Expand agent panel"}
+                  style={{
+                    position: "absolute",
+                    right: agentOpen ? panelW : 0,
+                    top: 16,
+                    width: 36,
+                    height: 40,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "#fafafa",
+                    border: "1px solid #DEDFE3",
+                    borderRight: "none",
+                    borderRadius: "6px 0 0 6px",
+                    boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
+                    cursor: "pointer",
+                    color: "#656a76",
+                    zIndex: 20,
+                    transition: "right 0.3s cubic-bezier(0.25,0.8,0.25,1)",
+                  }}
+                >
+                  {agentOpen ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+                </button>
+
+                {/* Resize handle — only active when panel is open */}
+                {agentOpen && (
                   <div
                     onMouseDown={startPanelDrag}
                     style={{
@@ -174,8 +202,11 @@ export default function App() {
                       onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
                     />
                   </div>
-                  {/* Panel content */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                )}
+
+                {/* Panel content */}
+                {agentOpen && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <ControlCenter
                       initialQuery={pendingQuery}
                       onQueryHandled={() => setPendingQuery(undefined)}
@@ -186,73 +217,10 @@ export default function App() {
                       dockMode={dockMode}
                       onDockChange={setDockMode}
                       onStepActiveChange={setStepActive}
-                      onClose={() => setAgentOpen(false)}
                     />
                   </div>
-                </div>
-              ) : (
-                /* Collapsed tab strip — shown when agent drawer is closed */
-                <div
-                  style={{
-                    width: 36,
-                    flexShrink: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    backgroundColor: "white",
-                    borderLeft: "1px solid #e5e7eb",
-                  }}
-                >
-                  <button
-                    onClick={() => setAgentOpen(true)}
-                    title="Open Terraform Agent"
-                    style={{
-                      width: 36,
-                      height: 40,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      border: "none",
-                      borderBottom: "1px solid #e5e7eb",
-                      backgroundColor: "transparent",
-                      cursor: "pointer",
-                      color: "#777777",
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "#f0f6ff")}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
-                  >
-                    {/* Panel-open icon — mirror of the session panel expand icon */}
-                    <svg width="18" height="15" viewBox="0 0 14 12" fill="none">
-                      <path d="M13 0H1C0.45 0 0 0.45 0 1V11C0 11.55 0.45 12 1 12H13C13.55 12 14 11.55 14 11V1C14 0.45 13.55 0 13 0ZM13 5.5H7.9L9.7 3.7L9 3L6 6L9 9L9.7 8.3L7.9 6.5H13V11H5V1H13V5.5Z" fill="currentColor" />
-                    </svg>
-                  </button>
-                  <div
-                    style={{
-                      flex: 1,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#777777",
-                        fontSize: "11px",
-                        fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
-                        fontWeight: 500,
-                        letterSpacing: "0.06em",
-                        writingMode: "vertical-rl",
-                        textOrientation: "mixed",
-                        transform: "rotate(180deg)",
-                        userSelect: "none",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Terraform Agent
-                    </span>
-                  </div>
-                </div>
-              )
+                )}
+              </div>
             )}
           </div>
 
