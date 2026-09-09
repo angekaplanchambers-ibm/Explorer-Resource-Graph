@@ -3450,10 +3450,7 @@ function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
             <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: nodeColor }}>
               <NodeIcon size={10} />
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
-              <span className="block truncate text-[10px]" style={{ color: glassMuted }}>{node.description}</span>
-            </span>
+            <span className="min-w-0 flex-1 truncate text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
           </div>
         ))}
       </div>
