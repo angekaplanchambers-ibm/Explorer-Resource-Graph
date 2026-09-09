@@ -3390,6 +3390,65 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
   );
 }
 
+type ExplorerNodeListItem = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
+  type: string;
+  title: string | null;
+  themeMode: "light" | "dark";
+  glassText: string;
+  glassMuted: string;
+}) {
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const nodes: ExplorerNodeListItem[] = type === "Workspaces"
+    ? getWorkspaceRowsForTitle(title).map(row => ({ id: row.id, label: row.name, description: String(row.project) }))
+    : type === "Policy Sets"
+      ? getPolicySetRowsForTitle(title).map(row => ({ id: row.id, label: row.name, description: row.framework }))
+      : type === "Modules"
+        ? moduleRows.map(([name, version, source], index) => ({ id: `module-${index}`, label: name, description: `${version} - ${source}` }))
+        : type === "Providers"
+          ? providerRows.map(([name, version, source], index) => ({ id: `provider-${index}`, label: name, description: `${version} - ${source}` }))
+          : type === "Resources"
+            ? resourceRows.map(row => ({ id: row.id, label: row.address, description: row.workspace }))
+            : terraformVersionRows.map(([version, workspaceCount, workspaces], index) => ({ id: `terraform-version-${index}`, label: version, description: `${workspaceCount} workspace${workspaceCount === "1" ? "" : "s"} - ${workspaces}` }));
+  const pageCount = Math.max(1, Math.ceil(nodes.length / pageSize));
+  const pageNodes = nodes.slice((page - 1) * pageSize, page * pageSize);
+
+  useEffect(() => setPage(1), [type, title]);
+
+  return (
+    <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+          Returned nodes
+        </p>
+        <span className="text-[11px]" style={{ color: glassMuted }}>{nodes.length}</span>
+      </div>
+      <div className="max-h-[220px] overflow-y-auto rounded-[6px] border p-1" style={{ borderColor: "rgba(59,61,69,0.2)", scrollbarWidth: "thin" }}>
+        {pageNodes.map(node => (
+          <div key={node.id} className="rounded-[4px] px-2.5 py-2">
+            <p className="truncate text-[12px] font-medium" style={{ color: glassText }}>{node.label}</p>
+            <p className="mt-0.5 truncate text-[11px]" style={{ color: glassMuted }}>{node.description}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: glassMuted }}>
+        <span>{nodes.length === 0 ? "0 nodes" : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, nodes.length)} of ${nodes.length}`}</span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous node page"><ChevronLeft size={14} /></button>
+          <span>{page} / {pageCount}</span>
+          <button type="button" onClick={() => setPage(current => Math.min(pageCount, current + 1))} disabled={page === pageCount} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next node page"><ChevronRight size={14} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExplorerSplashView({
   onSelectType,
   onSelectUseCase,
@@ -4457,12 +4516,22 @@ useEffect(() => {
           );
         })()}
 
-        <SuggestedQueriesList
-          themeMode={themeMode}
-          glassText={glassText}
-          glassMuted={glassMuted}
-          onSelect={openGraph}
-        />
+        {selectedGraphType ? (
+          <ExplorerNodeList
+            type={selectedGraphType}
+            title={selectedGraphTitle}
+            themeMode={themeMode}
+            glassText={glassText}
+            glassMuted={glassMuted}
+          />
+        ) : (
+          <SuggestedQueriesList
+            themeMode={themeMode}
+            glassText={glassText}
+            glassMuted={glassMuted}
+            onSelect={openGraph}
+          />
+        )}
         </div>
         </div>
       </div>
