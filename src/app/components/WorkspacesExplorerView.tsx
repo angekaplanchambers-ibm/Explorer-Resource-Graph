@@ -3418,6 +3418,14 @@ function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
             : terraformVersionRows.map(([version, workspaceCount, workspaces], index) => ({ id: `terraform-version-${index}`, label: version, description: `${workspaceCount} workspace${workspaceCount === "1" ? "" : "s"} - ${workspaces}` }));
   const pageCount = Math.max(1, Math.ceil(nodes.length / pageSize));
   const pageNodes = nodes.slice((page - 1) * pageSize, page * pageSize);
+  const nodeType = type === "Workspaces" ? "workspace"
+    : type === "Policy Sets" ? "policy-set"
+    : type === "Modules" ? "module"
+    : type === "Providers" ? "provider"
+    : type === "Resources" ? "resource"
+    : "terraform-version";
+  const NodeIcon = NODE_ICONS[nodeType] ?? DEFAULT_NODE_ICON;
+  const nodeColor = NODE_COLORS[nodeType] ?? "#9b8ff5";
 
   useEffect(() => setPage(1), [type, title]);
 
@@ -3429,11 +3437,23 @@ function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
         </p>
         <span className="text-[11px]" style={{ color: glassMuted }}>{nodes.length}</span>
       </div>
-      <div className="max-h-[220px] overflow-y-auto rounded-[6px] border p-1" style={{ borderColor: "rgba(59,61,69,0.2)", scrollbarWidth: "thin" }}>
+      <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
         {pageNodes.map(node => (
-          <div key={node.id} className="rounded-[4px] px-2.5 py-2">
-            <p className="truncate text-[12px] font-medium" style={{ color: glassText }}>{node.label}</p>
-            <p className="mt-0.5 truncate text-[11px]" style={{ color: glassMuted }}>{node.description}</p>
+          <div
+            key={node.id}
+            className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
+            style={{
+              background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+              borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+            }}
+          >
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: nodeColor }}>
+              <NodeIcon size={10} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
+              <span className="block truncate text-[10px]" style={{ color: glassMuted }}>{node.description}</span>
+            </span>
           </div>
         ))}
       </div>
