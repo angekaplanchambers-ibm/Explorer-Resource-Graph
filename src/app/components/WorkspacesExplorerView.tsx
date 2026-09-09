@@ -1670,7 +1670,7 @@ type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
   | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1709,6 +1709,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   useEffect(() => { if (initialWorkspace !== undefined) setSelectedWorkspace(initialWorkspace ?? null); }, [initialWorkspace]);
 
   const { nodes: rawNodes, edges: rawEdges } = useMemo(() => buildTopoGraph(activeType, conditions, graphTitle ?? null), [activeType, conditions, graphTitle]);
+  useEffect(() => {
+    if (selectedNodeId !== undefined) setSelectedId(selectedNodeId);
+  }, [selectedNodeId]);
 
   // Workspace grouping: inject hub nodes and rewire edges when wsGroupMode is active
   const { nodes, edges } = useMemo(() => {
@@ -3390,44 +3393,21 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
   );
 }
 
-type ExplorerNodeListItem = {
-  id: string;
-  label: string;
-  description: string;
-};
-
-function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
-  type: string;
-  title: string | null;
+function ExplorerNodeList({ nodes, themeMode, glassText, glassMuted, onSelectNode }: {
+  nodes: TopoNode[];
   themeMode: "light" | "dark";
   glassText: string;
   glassMuted: string;
+  onSelectNode: (id: string) => void;
 }) {
   const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
   const pageSize = 10;
-  const nodes: ExplorerNodeListItem[] = type === "Workspaces"
-    ? getWorkspaceRowsForTitle(title).map(row => ({ id: row.id, label: row.name, description: String(row.project) }))
-    : type === "Policy Sets"
-      ? getPolicySetRowsForTitle(title).map(row => ({ id: row.id, label: row.name, description: row.framework }))
-      : type === "Modules"
-        ? moduleRows.map(([name, version, source], index) => ({ id: `module-${index}`, label: name, description: `${version} - ${source}` }))
-        : type === "Providers"
-          ? providerRows.map(([name, version, source], index) => ({ id: `provider-${index}`, label: name, description: `${version} - ${source}` }))
-          : type === "Resources"
-            ? resourceRows.map(row => ({ id: row.id, label: row.address, description: row.workspace }))
-            : terraformVersionRows.map(([version, workspaceCount, workspaces], index) => ({ id: `terraform-version-${index}`, label: version, description: `${workspaceCount} workspace${workspaceCount === "1" ? "" : "s"} - ${workspaces}` }));
-  const pageCount = Math.max(1, Math.ceil(nodes.length / pageSize));
-  const pageNodes = nodes.slice((page - 1) * pageSize, page * pageSize);
-  const nodeType = type === "Workspaces" ? "workspace"
-    : type === "Policy Sets" ? "policy-set"
-    : type === "Modules" ? "module"
-    : type === "Providers" ? "provider"
-    : type === "Resources" ? "resource"
-    : "terraform-version";
-  const NodeIcon = NODE_ICONS[nodeType] ?? DEFAULT_NODE_ICON;
-  const nodeColor = NODE_COLORS[nodeType] ?? "#9b8ff5";
+  const filteredNodes = nodes.filter(node => node.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const pageCount = Math.max(1, Math.ceil(filteredNodes.length / pageSize));
+  const pageNodes = filteredNodes.slice((page - 1) * pageSize, page * pageSize);
 
-  useEffect(() => setPage(1), [type, title]);
+  useEffect(() => setPage(1), [nodes, query]);
 
   return (
     <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
@@ -3435,27 +3415,45 @@ function ExplorerNodeList({ type, title, themeMode, glassText, glassMuted }: {
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
           Returned nodes
         </p>
-        <span className="text-[11px]" style={{ color: glassMuted }}>{nodes.length}</span>
+        <span className="text-[11px]" style={{ color: glassMuted }}>{filteredNodes.length}</span>
       </div>
+      <label className="mb-2 flex h-8 items-center gap-2 rounded-[4px] border px-2 text-[#656a76]" style={{ borderColor: "rgba(59,61,69,0.4)" }}>
+        <Search size={14} strokeWidth={1.7} />
+        <input
+          type="search"
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          placeholder="Search nodes"
+          className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#656a76]"
+          style={{ color: glassText }}
+          aria-label="Search returned nodes"
+        />
+      </label>
       <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
         {pageNodes.map(node => (
-          <div
+          <button
             key={node.id}
+            type="button"
+            onClick={() => onSelectNode(node.id)}
             className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
             style={{
               background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
               borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
             }}
           >
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: nodeColor }}>
-              <NodeIcon size={10} />
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
+              {(() => {
+                const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                return <NodeIcon size={10} />;
+              })()}
             </span>
             <span className="min-w-0 flex-1 truncate text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
-          </div>
+          </button>
         ))}
+        {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: glassMuted }}>
-        <span>{nodes.length === 0 ? "0 nodes" : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, nodes.length)} of ${nodes.length}`}</span>
+        <span>{filteredNodes.length === 0 ? "0 nodes" : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, filteredNodes.length)} of ${filteredNodes.length}`}</span>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous node page"><ChevronLeft size={14} /></button>
           <span>{page} / {pageCount}</span>
@@ -3509,6 +3507,7 @@ function ExplorerSplashView({
   const [blastRadiusActive, setBlastRadiusActive] = useState(false);
   const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
+  const [selectedHudNodeId, setSelectedHudNodeId] = useState<string | null>(null);
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
@@ -3539,6 +3538,16 @@ function ExplorerSplashView({
     tableColumns;
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
   useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hudConditions = useMemo(
+    () => conditionFields
+      .map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" }))
+      .filter(condition => condition.fieldId && condition.operator && condition.value),
+    [conditionFields, conditionOperators, conditionValues],
+  );
+  const hudNodes = useMemo(
+    () => selectedGraphType ? buildTopoGraph(selectedGraphType, hudConditions, selectedGraphTitle).nodes : [],
+    [selectedGraphType, hudConditions, selectedGraphTitle],
+  );
 
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
@@ -3550,6 +3559,7 @@ function ExplorerSplashView({
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
     setSelectedResourceId(null);
+    setSelectedHudNodeId(null);
     setSavedViewsModalOpen(false);
     setUseCaseMenuOpen(false);
     // First-ever selection: shrink HUD to nothing, teleport to corner, then expand back out
@@ -3674,7 +3684,8 @@ useEffect(() => {
           <TopologyGraph
             activeType={selectedGraphType}
             graphTitle={selectedGraphTitle}
-            conditions={conditionFields.map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" })).filter(condition => condition.fieldId && condition.operator && condition.value)}
+            conditions={hudConditions}
+            selectedNodeId={selectedHudNodeId}
             themeMode={themeMode} setThemeMode={setThemeMode}
             tableViewOpen={tableViewOpen}
             onTableViewToggle={selectedGraphTitle && (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:")) ? () => {
@@ -4535,11 +4546,11 @@ useEffect(() => {
 
         {selectedGraphType ? (
           <ExplorerNodeList
-            type={selectedGraphType}
-            title={selectedGraphTitle}
+            nodes={hudNodes}
             themeMode={themeMode}
             glassText={glassText}
             glassMuted={glassMuted}
+            onSelectNode={setSelectedHudNodeId}
           />
         ) : (
           <SuggestedQueriesList
