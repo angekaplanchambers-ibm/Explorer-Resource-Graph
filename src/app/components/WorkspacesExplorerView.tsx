@@ -3435,7 +3435,7 @@ function ExplorerNodeList({ nodes, themeMode, glassText, glassMuted, onSelectNod
             key={node.id}
             type="button"
             onClick={() => onSelectNode(node.id)}
-            className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
+            className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
             style={{
               background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
               borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
@@ -3447,7 +3447,7 @@ function ExplorerNodeList({ nodes, themeMode, glassText, glassMuted, onSelectNod
                 return <NodeIcon size={10} />;
               })()}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
+            <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
           </button>
         ))}
         {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
