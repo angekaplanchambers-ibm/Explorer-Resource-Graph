@@ -3952,11 +3952,10 @@ useEffect(() => {
                       <table className="w-full table-fixed border-collapse text-left text-[12px]">
                         <thead className="bg-[#f1f2f3] text-[#17171a]">
                           <tr>
-                            <th className="w-[31%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
-                            <th className="w-[19%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
-                            <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
-                            <th className="w-[18%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Last Updated</th>
-                            <th className="w-[12%] px-4 py-3 text-right font-semibold">Options</th>
+                            <th className="w-[36%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
+                            <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
+                            <th className="w-[24%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
+                            <th className="w-[20%] px-4 py-3 font-semibold">Last Updated</th>
                           </tr>
                         </thead>
                         <tbody className="text-[#555964]">
@@ -3965,12 +3964,11 @@ useEffect(() => {
                               <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
                               <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
                               <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
-                              <td className="border-r border-[#e0e1e5] px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
-                              <td className="px-4 py-3.5 text-right"><button type="button" className="inline-flex size-8 items-center justify-center rounded-[6px] border border-[#c9ccd2] bg-white text-[#535862] hover:bg-[#f2f3f5]" aria-label={`Options for ${view.name}`}><MoreHorizontal size={17} /></button></td>
+                              <td className="px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
                             </tr>
                           ))}
                           {filteredSavedViews.length === 0 && (
-                            <tr><td colSpan={5} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
+                            <tr><td colSpan={4} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
                           )}
                         </tbody>
                       </table>
