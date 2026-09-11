@@ -2452,7 +2452,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
-                  View resources <span>→</span>
+                  View Resources <span>→</span>
                 </button>
                 <button
                   onClick={() => {
@@ -2469,7 +2469,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
-                  View modules ({Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0)}) <span>→</span>
+                  View Modules ({Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0)}) <span>→</span>
                 </button>
                 <button
                   onClick={() => {
@@ -2486,13 +2486,13 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   }}
                   style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
-                  View providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
+                  View Providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
                 </button>
                 <button
                   onClick={() => { setBlastRadiusId(selectedNode.id); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
                   style={{ height: 38, borderRadius: 8, border: `1px solid ${BLAST_DOWNSTREAM_COLOR}66`, background: "transparent", color: BLAST_DOWNSTREAM_COLOR, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
-                  View blast radius <span>→</span>
+                  View Blast radius <span>→</span>
                 </button>
               </div>
             </div>
@@ -2538,7 +2538,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
                   }}
                   style={{ width: "100%", height: 34, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
                 >
-                  View resources <span>→</span>
+                  View Resources <span>→</span>
                 </button>
               </div>
             )}
@@ -4401,13 +4401,13 @@ useEffect(() => {
 
           // Sub-context label when an overlay or blast radius is active
           const subContextLabel = blastRadiusActive
-            ? "blast radius"
+            ? "Blast radius"
             : overlayInfo?.kind === "resources"
-              ? `${overlayInfo.workspaceName} resources (${overlayInfo.rows.length})`
+              ? `${overlayInfo.workspaceName} Resources (${overlayInfo.rows.length})`
               : overlayInfo?.kind === "modules"
-                ? `${overlayInfo.workspaceName} modules (${overlayInfo.rows.length})`
+                ? `${overlayInfo.workspaceName} Modules (${overlayInfo.rows.length})`
                 : overlayInfo?.kind === "providers"
-                  ? `${overlayInfo.workspaceName} providers (${overlayInfo.rows.length})`
+                  ? `${overlayInfo.workspaceName} Providers (${overlayInfo.rows.length})`
                   : null;
 
           const inSubContext = subContextLabel !== null;
