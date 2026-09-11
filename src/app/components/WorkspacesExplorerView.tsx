@@ -3393,8 +3393,9 @@ function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
   );
 }
 
-function ExplorerNodeList({ nodes, themeMode, glassText, glassMuted, onSelectNode }: {
+function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
   nodes: TopoNode[];
+  selectedNodeId: string | null;
   themeMode: "light" | "dark";
   glassText: string;
   glassMuted: string;
@@ -3430,26 +3431,35 @@ function ExplorerNodeList({ nodes, themeMode, glassText, glassMuted, onSelectNod
         />
       </label>
       <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
-        {pageNodes.map(node => (
-          <button
-            key={node.id}
-            type="button"
-            onClick={() => onSelectNode(node.id)}
-            className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
-            style={{
-              background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
-              borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-            }}
-          >
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
-              {(() => {
-                const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
-                return <NodeIcon size={10} />;
-              })()}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium" style={{ color: glassText }}>{node.label}</span>
-          </button>
-        ))}
+        {pageNodes.map(node => {
+          const isSelected = node.id === selectedNodeId;
+          return (
+            <button
+              key={node.id}
+              type="button"
+              onClick={() => onSelectNode(node.id)}
+              aria-pressed={isSelected}
+              className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
+              style={{
+                background: isSelected
+                  ? themeMode === "light" ? "#edf4ff" : "rgba(15,98,254,0.22)"
+                  : themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
+                borderColor: isSelected
+                  ? "#0f62fe"
+                  : themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
+                boxShadow: isSelected ? "0 0 0 1px rgba(15,98,254,0.35), 0 2px 8px rgba(0,0,0,0.07)" : undefined,
+              }}
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
+                {(() => {
+                  const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                  return <NodeIcon size={10} />;
+                })()}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium" style={{ color: isSelected ? "#0f62fe" : glassText }}>{node.label}</span>
+            </button>
+          );
+        })}
         {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: glassMuted }}>
@@ -4547,6 +4557,7 @@ useEffect(() => {
         {selectedGraphType ? (
           <ExplorerNodeList
             nodes={hudNodes}
+            selectedNodeId={selectedHudNodeId}
             themeMode={themeMode}
             glassText={glassText}
             glassMuted={glassMuted}
