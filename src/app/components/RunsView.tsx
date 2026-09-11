@@ -75,7 +75,7 @@ export function RunsView({ onControlCenterTrigger, onRunClick }: RunsViewProps) 
     <div className="flex-1 min-w-0 overflow-y-auto px-8 py-5 flex flex-col gap-6" style={{ backgroundColor: T.bg }}>
       {/* Breadcrumb */}
       <div className="flex items-center gap-1" style={{ fontSize: "13px" }}>
-        {["CoolCorp", "Workspaces", "my-workspace", "Runs"].map((crumb, i, arr) => (
+        {["ILM_Demo_Space", "Workspaces", "my-workspace", "Runs"].map((crumb, i, arr) => (
           <span key={crumb} className="flex items-center gap-1">
             <span style={{ color: i < arr.length - 1 ? T.blue : T.textPrimary, textDecoration: i < arr.length - 1 ? "underline" : "none", fontWeight: i === arr.length - 1 ? 500 : 400, cursor: i < arr.length - 1 ? "pointer" : "default" }}>{crumb}</span>
             {i < arr.length - 1 && <span style={{ color: T.textSecondary }}>/</span>}

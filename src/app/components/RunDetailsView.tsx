@@ -149,7 +149,7 @@ function AdvisoryIcon() {
 // ── Breadcrumb ────────────────────────────────────────────────────────────────
 
 function Breadcrumb({ runId, onBack }: { runId: string; onBack: () => void }) {
-  const crumbs = ["CoolCorp", "Workspaces", "my-workspace", "Runs"];
+  const crumbs = ["ILM_Demo_Space", "Workspaces", "my-workspace", "Runs"];
   return (
     <div className="flex items-center gap-1" style={{ fontSize: "13px" }}>
       {crumbs.map((crumb, i) => (

@@ -24,7 +24,7 @@ export function TFCTopNav() {
           className="flex items-center gap-2 px-3 py-1.5 rounded cursor-pointer"
           style={{ border: "1px solid #656a76", backgroundColor: "#0c0c0e", minWidth: "118px" }}
         >
-          <span style={{ color: "white", fontSize: "13px", fontWeight: 500 }}>CoolCorp</span>
+          <span style={{ color: "white", fontSize: "13px", fontWeight: 500 }}>ILM_Demo_Space</span>
           <ChevronDown size={13} style={{ color: "#9B9CB8", marginLeft: "auto" }} />
         </div>
       </div>

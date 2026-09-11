@@ -5,7 +5,7 @@ function Contents() {
   return (
     <div className="content-stretch flex gap-[6px] items-center px-[4px] py-[6px] relative shrink-0" data-name="Contents">
       <p className="[text-decoration-skip-ink:none] [text-underline-position:from-font] [word-break:break-word] decoration-from-font decoration-solid font-['SF_Pro:Medium',sans-serif] font-[510] leading-[16px] relative shrink-0 text-[#656a76] text-[13px] underline whitespace-nowrap" style={{ fontVariationSettings: '"wdth" 100' }}>
-        CoolCorp
+        ILM_Demo_Space
       </p>
     </div>
   );
@@ -1474,7 +1474,7 @@ function Frame17() {
     <div className="content-stretch flex items-start relative shrink-0">
       <p className="[word-break:break-word] font-['SF_Pro:Regular',sans-serif] font-normal leading-[0] relative shrink-0 text-[#656a76] text-[0px] whitespace-nowrap" style={{ fontVariationSettings: '"wdth" 100' }}>
         <span className="leading-[20px] text-[14px]">{` `}</span>
-        <span className="font-['SF_Pro_Text:Regular',sans-serif] leading-[20px] not-italic text-[#1060ff] text-[14px]">CoolCorp/aws-tf-testci</span>
+        <span className="font-['SF_Pro_Text:Regular',sans-serif] leading-[20px] not-italic text-[#1060ff] text-[14px]">ILM_Demo_Space/aws-tf-testci</span>
       </p>
     </div>
   );
@@ -2217,7 +2217,7 @@ function InnerContents() {
     <div className="content-stretch flex gap-[6px] h-[16px] items-center pr-[8px] relative shrink-0" data-name="Inner Contents">
       <LeadingIcon3 />
       <p className="[word-break:break-word] font-['SF_Pro:Medium',sans-serif] font-[510] leading-[16px] relative shrink-0 text-[14px] text-center text-white whitespace-nowrap" style={{ fontVariationSettings: '"wdth" 100' }}>
-        CoolCorp
+        ILM_Demo_Space
       </p>
     </div>
   );

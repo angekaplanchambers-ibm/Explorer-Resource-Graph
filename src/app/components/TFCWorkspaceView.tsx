@@ -233,7 +233,7 @@ function RightPanel() {
       {/* Links */}
       <div className="flex flex-col gap-1">
         {[
-          { icon: "◎", label: "CoolCorp/aws-tf-testci" },
+          { icon: "◎", label: "ILM_Demo_Space/aws-tf-testci" },
           { icon: "☰", label: "Readme" },
           { icon: "⚡", label: "Execution mode: Remote" },
           { icon: "⟳", label: "Auto-apply API, CLI, & VCS runs: On" },
@@ -345,7 +345,7 @@ function MainContent({ onControlCenterTrigger }: { onControlCenterTrigger?: (q: 
     <div className="flex-1 min-w-0 overflow-y-auto px-8 py-5 flex flex-col gap-6" style={{ backgroundColor: T.bg }}>
       {/* Breadcrumb */}
       <div className="flex items-center gap-1" style={{ fontSize: "13px" }}>
-        <span style={{ color: T.blue, textDecoration: "underline", cursor: "pointer" }}>CoolCorp</span>
+        <span style={{ color: T.blue, textDecoration: "underline", cursor: "pointer" }}>ILM_Demo_Space</span>
         <span style={{ color: T.textSecondary }}>/</span>
         <span style={{ color: T.blue, textDecoration: "underline", cursor: "pointer" }}>Workspaces</span>
         <span style={{ color: T.textSecondary }}>/</span>
@@ -476,7 +476,7 @@ function TopNav() {
           </svg>
         </div>
         <button className="flex items-center gap-2 px-3 py-1.5 rounded" style={{ border: "1px solid #656a76", backgroundColor: T.navy }}>
-          <span style={{ color: "white", fontSize: "13px", fontWeight: 500 }}>CoolCorp</span>
+          <span style={{ color: "white", fontSize: "13px", fontWeight: 500 }}>ILM_Demo_Space</span>
           <svg width="12" height="12" fill="none" viewBox="0 0 12 12">
             <path d="M2 4l4 4 4-4" stroke="#9B9CB8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>

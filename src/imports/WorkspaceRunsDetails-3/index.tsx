@@ -5,7 +5,7 @@ function Contents() {
   return (
     <div className="content-stretch flex gap-[6px] items-center px-[4px] py-[6px] relative shrink-0" data-name="Contents">
       <p className="[text-decoration-skip-ink:none] [text-underline-position:from-font] [word-break:break-word] decoration-from-font decoration-solid font-['SF_Pro:Medium',sans-serif] font-[510] leading-[16px] relative shrink-0 text-[#656a76] text-[13px] underline whitespace-nowrap" style={{ fontVariationSettings: '"wdth" 100' }}>
-        CoolCorp
+        ILM_Demo_Space
       </p>
     </div>
   );
@@ -2763,7 +2763,7 @@ function InnerContents2() {
     <div className="content-stretch flex gap-[6px] h-[16px] items-center pr-[8px] relative shrink-0" data-name="Inner Contents">
       <LeadingIcon14 />
       <p className="[word-break:break-word] font-['SF_Pro:Medium',sans-serif] font-[510] leading-[16px] relative shrink-0 text-[14px] text-center text-white whitespace-nowrap" style={{ fontVariationSettings: '"wdth" 100' }}>
-        CoolCorp
+        ILM_Demo_Space
       </p>
     </div>
   );
