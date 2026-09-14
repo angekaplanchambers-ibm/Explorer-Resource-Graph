@@ -3505,7 +3505,6 @@ function ExplorerSplashView({
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
-  const [hoveredPanel2Item, setHoveredPanel2Item] = useState<"project" | "status" | null>(null);
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
   const useCaseDropdownRef = useRef<HTMLDivElement>(null);
   const useCaseTriggerRef = useRef<HTMLButtonElement>(null);
@@ -3609,7 +3608,6 @@ function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
         useCaseDropdownRef.current && !useCaseDropdownRef.current.contains(event.target as Node)
       ) {
         setUseCaseMenuOpen(false);
-        setHoveredPanel2Item(null);
       }
     }
     window.addEventListener("mousedown", closeUseCaseMenu);
@@ -4201,18 +4199,6 @@ useEffect(() => {
               "Resources": resourceRows.length,
               "Terraform Versions": terraformVersionRows.length,
             };
-            const viewAllWorkspacesLabel = "View All Workspaces";
-            const showPanel3 = activeCategory.type === "Workspaces" && hoveredPanel2Item !== null;
-            const projectCounts = new Map<string, number>();
-            const statusCounts = new Map<string, number>();
-            for (const row of workspaceRows) {
-              const p = String(row.project ?? "Unknown");
-              const s = String(row.status ?? "Unknown");
-              projectCounts.set(p, (projectCounts.get(p) ?? 0) + 1);
-              statusCounts.set(s, (statusCounts.get(s) ?? 0) + 1);
-            }
-            const sortedProjects = Array.from(projectCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-            const sortedStatuses = Array.from(statusCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
             return (
               <div
                 ref={useCaseDropdownRef}
@@ -4224,8 +4210,8 @@ useEffect(() => {
                   borderColor: glassBorder,
                   top: "calc(100% + 4px)",
                   left: 0,
-                  width: showPanel3 ? 820 : 620,
-                  gridTemplateColumns: showPanel3 ? "240px 1fr 200px" : "240px 1fr",
+                  width: 620,
+                  gridTemplateColumns: "240px 1fr",
                 }}
               >
                 {/* Panel 1 — Types */}
@@ -4239,7 +4225,7 @@ useEffect(() => {
                         key={category.type}
                         type="button"
                         role="menuitem"
-                        onClick={() => { setHoveredUseCaseType(category.type); setHoveredPanel2Item(null); }}
+                        onClick={() => setHoveredUseCaseType(category.type)}
                         className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
                         style={!isHovered ? { color: glassText } : undefined}
                       >
@@ -4282,37 +4268,6 @@ useEffect(() => {
                         </button>
                       );
                     })()}
-                    {/* Group-by sub-views — only for Workspaces */}
-                    {activeCategory.type === "Workspaces" && (() => {
-                      const byProjectOpen     = hoveredPanel2Item === "project";
-                      const byStatusOpen      = hoveredPanel2Item === "status";
-                      const byProjectSelected = wsGroupMode === "project" && selectedGraphTitle !== null;
-                      const byStatusSelected  = wsGroupMode === "status" && selectedGraphTitle !== null;
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => setHoveredPanel2Item(byProjectOpen ? null : "project")}
-                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byProjectOpen || byProjectSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                            style={!byProjectOpen && !byProjectSelected ? { color: glassText } : undefined}
-                          >
-                            <span className="pl-4">Organized by Project</span>
-                            <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${byProjectOpen ? "rotate-90" : ""}`} />
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => setHoveredPanel2Item(byStatusOpen ? null : "status")}
-                            className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${byStatusOpen || byStatusSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                            style={!byStatusOpen && !byStatusSelected ? { color: glassText } : undefined}
-                          >
-                            <span className="pl-4">Organized by Status</span>
-                            <ChevronRight size={13} className={`shrink-0 transition-transform duration-150 ${byStatusOpen ? "rotate-90" : ""}`} />
-                          </button>
-                        </>
-                      );
-                    })()}
                     {activeCategory.items.map(view => {
                       const isSelected = selectedGraphTitle === view;
                       const viewCount = activeCategory.type === "Workspaces"
@@ -4336,36 +4291,6 @@ useEffect(() => {
                   </div>
                 </div>
 
-                {/* Panel 3 — individual project or status keys */}
-                {showPanel3 && (() => {
-                  const isProject = hoveredPanel2Item === "project";
-                  const entries = isProject ? sortedProjects : sortedStatuses;
-                  const panelTitle = isProject ? "Projects" : "Statuses";
-                  return (
-                    <div className="border-l p-3" style={{ borderColor: glassBorder }}>
-                      <p className="mb-2 px-1 pt-1 text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: glassMuted }}>{panelTitle}</p>
-                      <div className="space-y-0.5">
-                        {entries.map(([key, count]) => {
-                          const groupLabel = isProject ? `project:${key}` : `status:${key}`;
-                          const isKeySelected = selectedGraphTitle === groupLabel;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => { setWsGroupMode(hoveredPanel2Item!); openGraph("Workspaces", groupLabel); }}
-                              className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isKeySelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
-                              style={!isKeySelected ? { color: glassText } : undefined}
-                            >
-                              <span className="capitalize">{key}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
               </div>
             );
           })()}
@@ -4386,16 +4311,7 @@ useEffect(() => {
             : selectedGraphType === "Policy Sets"
               ? getPolicySetRowsForTitle(selectedGraphTitle).length
               : typeRowCounts[selectedGraphType ?? ""] ?? 0;
-          // Derive the exact label shown in the dropdown so the chip matches 1:1
-          const chipLabel = selectedGraphTitle?.startsWith("project:")
-            ? `Workspaces organized by ${selectedGraphTitle.slice(8)}`
-            : selectedGraphTitle?.startsWith("status:")
-              ? `Workspaces organized by ${selectedGraphTitle.slice(7)}`
-              : selectedGraphType === "Workspaces" && wsGroupMode === "project"
-                ? "Organized by Project"
-                : selectedGraphType === "Workspaces" && wsGroupMode === "status"
-                  ? "Organized by Status"
-                  : selectedGraphTitle;
+          const chipLabel = selectedGraphTitle;
 
           // Sub-context label when an overlay or blast radius is active
           const subContextLabel = blastRadiusActive
