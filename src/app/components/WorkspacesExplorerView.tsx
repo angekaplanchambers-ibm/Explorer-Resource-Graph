@@ -1670,7 +1670,236 @@ type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
   | { kind: "modules"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> }
   | { kind: "providers"; workspaceName: string; rows: ReadonlyArray<readonly [string, string, string, string, string]> };
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+
+// ── Node detail panel (formerly the on-canvas "Node Popover") ────────────────
+// This used to render inline inside TopologyGraph as a fixed, top-right card. It now
+// lives in the Agent Drawer instead, so it's exported as a standalone presentational
+// component. All underlying state (selection, blast radius, overlay actions) still
+// lives in TopologyGraph — this component only renders data handed to it via props,
+// and reports user actions back up via callbacks instead of touching state directly.
+export type SelectedNodeInfo = {
+  node: TopoNode;
+  activeType: string;
+  themeMode: "light" | "dark";
+  blastRadiusActive: boolean;
+  downstreamNodes: TopoNode[];
+  upstreamNodes: TopoNode[];
+};
+
+export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResources, onViewModules, onViewProviders, onViewBlastRadius }: {
+  info: SelectedNodeInfo;
+  onClose: () => void;
+  onExitBlastRadius: () => void;
+  onViewResources: () => void;
+  onViewModules: () => void;
+  onViewProviders: () => void;
+  onViewBlastRadius: () => void;
+}) {
+  const { node, activeType, themeMode, blastRadiusActive, downstreamNodes, upstreamNodes } = info;
+  const isWorkspace = node.type === "workspace";
+  const d = node.data as Record<string, unknown>;
+
+  const cardBase: React.CSSProperties = {
+    width: "100%",
+    boxSizing: "border-box",
+    background: themeMode === "light" ? "#ffffff" : "#161820",
+    borderRadius: 12,
+    border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)",
+    boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+  };
+
+  const nodeRow = (n: TopoNode, accent: string) => (
+    <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+      <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</div>
+      </div>
+    </div>
+  );
+
+  // Blast radius view — exit button + downstream/upstream lists
+  if (isWorkspace && activeType === "Workspaces" && blastRadiusActive) {
+    return (
+      <div style={{ ...cardBase, padding: "16px 18px" }}>
+        <button
+          onClick={onExitBlastRadius}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+        >
+          ← exit blast view
+        </button>
+        <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{node.label}</div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_DOWNSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_DOWNSTREAM_COLOR} /></svg>
+            <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_DOWNSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
+          </div>
+          {downstreamNodes.length > 0
+            ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, BLAST_DOWNSTREAM_COLOR))}</div>
+            : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+          }
+        </div>
+
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+            <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_UPSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_UPSTREAM_COLOR} /></svg>
+            <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_UPSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
+          </div>
+          {upstreamNodes.length > 0
+            ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, BLAST_UPSTREAM_COLOR))}</div>
+            : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
+          }
+        </div>
+      </div>
+    );
+  }
+
+  // Workspace-specific view — close button + fields + action buttons
+  if (isWorkspace && activeType === "Workspaces") {
+    return (
+      <div style={{ ...cardBase, position: "relative", padding: "18px 20px 16px" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 12, right: 14, color: themeMode === "light" ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}>✕</button>
+
+        <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{node.label}</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, maxHeight: 340, overflowY: "auto" }}>
+          {getNodeFields(node, activeType).map(({ label, value }) => (
+            <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
+              <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={onViewResources}
+            style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            View Resources <span>→</span>
+          </button>
+          <button
+            onClick={onViewModules}
+            style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            View Modules ({Number(d.moduleCount ?? 0)}) <span>→</span>
+          </button>
+          <button
+            onClick={onViewProviders}
+            style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            View Providers ({Number(d.providerCount ?? 0)}) <span>→</span>
+          </button>
+          <button
+            onClick={onViewBlastRadius}
+            style={{ height: 38, borderRadius: 8, border: `1px solid ${BLAST_DOWNSTREAM_COLOR}66`, background: "transparent", color: BLAST_DOWNSTREAM_COLOR, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            View Blast radius <span>→</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Generic view for all other node types — column-label key-value pairs
+  const fields = getNodeFields(node, activeType);
+  return (
+    <div style={{ ...cardBase, padding: "14px 16px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.35, wordBreak: "break-word" }}>{node.label}</div>
+          <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: NODE_COLORS[node.type] ?? "#9b8ff5", flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99", textTransform: "capitalize" }}>{node.type.replace(/-/g, " ")}</span>
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#c2c5cb" : "#4b4f66", marginLeft: 2 }}>·</span>
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99" }}>{node.secondary}</span>
+          </div>
+        </div>
+        <button onClick={onClose} style={{ color: themeMode === "light" ? "#656a76" : "#4b4f66", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>✕</button>
+      </div>
+      <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
+        {fields.map(({ label, value }) => (
+          <div key={label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, lineHeight: 1.5, flexShrink: 0 }}>{label}</span>
+            <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
+          </div>
+        ))}
+      </div>
+      {isWorkspace && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
+          <button
+            onClick={onViewResources}
+            style={{ width: "100%", height: 34, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
+          >
+            View Resources <span>→</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Node overlay panel (formerly the on-canvas Resources/Modules/Providers views) ──
+// Same idea as NodeDetailPanel: this used to render inline in TopologyGraph as a
+// fixed, top-right card whenever a workspace's "View Resources/Modules/Providers"
+// was triggered. It now lives in the Agent Drawer too, driven by data reported up
+// from TopologyGraph's existing resourceOverlay/moduleOverlay/providerOverlay state.
+export type NodeOverlayInfo = {
+  kind: "resources" | "modules" | "providers";
+  workspaceName: string;
+  themeMode: "light" | "dark";
+  nodes: TopoNode[];
+};
+
+export function NodeOverlayPanel({ info, onExit }: { info: NodeOverlayInfo; onExit: () => void }) {
+  const { kind, workspaceName, themeMode, nodes } = info;
+  const exitLabel = kind === "resources" ? "exit resource view" : kind === "modules" ? "exit module view" : "exit provider view";
+  const unit = kind === "resources" ? "resource" : kind === "modules" ? "module" : "provider";
+  const emptyMessage = kind === "modules" ? "No modules found for this workspace." : kind === "providers" ? "No providers found for this workspace." : null;
+  const dotColor = kind === "modules" ? NODE_COLORS["module"] : kind === "providers" ? NODE_COLORS["provider"] : undefined;
+
+  return (
+    <div style={{
+      width: "100%",
+      boxSizing: "border-box",
+      background: themeMode === "light" ? "#ffffff" : "#161820",
+      borderRadius: 12,
+      border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)",
+      boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)",
+      padding: "16px 18px",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
+    }}>
+      <button
+        onClick={onExit}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+      >
+        ← {exitLabel}
+      </button>
+      <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{workspaceName}</div>
+      <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+        {nodes.length} {unit}{nodes.length !== 1 ? "s" : ""}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+        {nodes.length === 0 && emptyMessage
+          ? <div style={{ fontSize: 12, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)" }}>{emptyMessage}</div>
+          : nodes.map(n => (
+            <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: dotColor ?? NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
+                <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: kind === "resources" ? "capitalize" : "none" }}>{n.secondary}</div>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1835,6 +2064,71 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
   const activeNodes = resourceOverlay ? resourceOverlay.nodes : moduleOverlay ? moduleOverlay.nodes : providerOverlay ? providerOverlay.nodes : nodes;
   const activeEdges = resourceOverlay ? resourceOverlay.edges : moduleOverlay ? moduleOverlay.edges : providerOverlay ? providerOverlay.edges : edges;
+  useEffect(() => {
+    if (!explorerNodeAction) return;
+    // "close" clears selection for any node type (workspace or otherwise) — handled
+    // before the workspace-only guard below, and independent of the selectedNodeId
+    // prop, since local selection can originate from a canvas click or the HUD's own
+    // node list, neither of which round-trips through that prop.
+    if (explorerNodeAction.action === "close") {
+      setSelectedId(null);
+      setBlastRadiusId(null);
+      return;
+    }
+    // "exit-overlay" clears whichever Resources/Modules/Providers view is active —
+    // also handled early since it doesn't depend on the workspace-only guard below.
+    if (explorerNodeAction.action === "exit-overlay") {
+      if (viewResourcesWsName) { setViewResourcesWsName(null); setViewResourcesCount(0); }
+      if (viewModulesWsName) { setViewModulesWsName(null); setViewModulesCount(0); }
+      if (viewProvidersWsName) { setViewProvidersWsName(null); setViewProvidersCount(0); }
+      onOverlayWorkspaceChange?.(null);
+      return;
+    }
+    const node = nodes.find(item => item.id === explorerNodeAction.nodeId)
+      ?? nodes.find(item => item.label === explorerNodeAction.nodeLabel)
+      ?? activeNodes.find(item => item.id === explorerNodeAction.nodeId)
+      ?? (selectedNodeId ? nodes.find(item => item.id === selectedNodeId) : undefined);
+    if (!node || node.type !== "workspace") return;
+    setSelectedId(node.id);
+    const wsName = node.label;
+    const data = node.data as Record<string, unknown>;
+    if (explorerNodeAction.action === "resources") {
+      const count = Number(data.resources ?? 0);
+      const baseRows = resourceRows.filter(row => row.workspace === wsName);
+      const rows = Array.from({ length: count }, (_, i) => {
+        const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
+        return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
+      });
+      setViewResourcesWsName(wsName);
+      setViewResourcesCount(count);
+      onOverlayWorkspaceChange?.({ kind: "resources", workspaceName: wsName, rows });
+    } else if (explorerNodeAction.action === "modules") {
+      const count = Number(data.moduleCount ?? 0);
+      const rows = Array.from({ length: count }, (_, i) => {
+        const base = moduleRows[i % moduleRows.length];
+        const name = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
+        return [name, base[1], base[2], base[3], wsName] as const;
+      });
+      setViewModulesWsName(wsName);
+      setViewModulesCount(count);
+      onOverlayWorkspaceChange?.({ kind: "modules", workspaceName: wsName, rows });
+    } else if (explorerNodeAction.action === "providers") {
+      const count = Number(data.providerCount ?? 0);
+      const rows = Array.from({ length: count }, (_, i) => {
+        const base = providerRows[i % providerRows.length];
+        const name = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
+        return [name, base[1], base[2], base[3], wsName] as const;
+      });
+      setViewProvidersWsName(wsName);
+      setViewProvidersCount(count);
+      onOverlayWorkspaceChange?.({ kind: "providers", workspaceName: wsName, rows });
+    } else if (explorerNodeAction.action === "exit-blast-radius") {
+      setBlastRadiusId(null);
+    } else {
+      setBlastRadiusId(node.id);
+      setZoom({ tx: 0, ty: 0, scale: 1 });
+    }
+  }, [explorerNodeAction]); // eslint-disable-line react-hooks/exhaustive-deps
   const forcePositions = useMemo(() => runForceLayout(activeNodes, activeEdges), [activeNodes, activeEdges, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const stackedPositions = useMemo(() => runStackedLayout(activeNodes), [activeNodes]);
   const radialPositions = useMemo(() => runRadialLayout(activeNodes), [activeNodes]);
@@ -1930,6 +2224,51 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
 
   const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
+
+  // Report the currently selected node (plus blast-radius data, when active) up to the
+  // Agent Drawer, which now renders the node detail panel that used to live inline here.
+  // Mirrors the original popover's own visibility guard: hidden while a Resources/
+  // Modules/Providers overlay is on-screen for this workspace.
+  useEffect(() => {
+    if (!onSelectedNodeInfoChange) return;
+    if (!selectedNode || viewResourcesWsName || viewModulesWsName || viewProvidersWsName) {
+      onSelectedNodeInfoChange(null);
+      return;
+    }
+    const isWorkspace = selectedNode.type === "workspace";
+    const blastRadiusActive = isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id;
+    let downstreamNodes: TopoNode[] = [];
+    let upstreamNodes: TopoNode[] = [];
+    if (blastRadiusActive) {
+      const downstreamIds = new Set<string>();
+      const upstreamIds = new Set<string>();
+      for (const e of activeEdges) {
+        if (e.source === blastRadiusId && blastRadiusSet.has(e.target)) downstreamIds.add(e.target);
+        if (e.target === blastRadiusId && blastRadiusSet.has(e.source)) upstreamIds.add(e.source);
+      }
+      const nodeById = new Map(activeNodes.map(n => [n.id, n]));
+      downstreamNodes = [...downstreamIds].map(id => nodeById.get(id)).filter(Boolean) as TopoNode[];
+      upstreamNodes = [...upstreamIds].map(id => nodeById.get(id)).filter(Boolean) as TopoNode[];
+    }
+    onSelectedNodeInfoChange({ node: selectedNode, activeType, themeMode, blastRadiusActive, downstreamNodes, upstreamNodes });
+  }, [selectedNode, activeType, themeMode, blastRadiusId, blastRadiusSet, activeEdges, activeNodes, viewResourcesWsName, viewModulesWsName, viewProvidersWsName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Report the active Resources/Modules/Providers overlay (if any) up to the Agent
+  // Drawer too, which now renders it in place of the on-canvas panel that used to
+  // live here — reusing the same resourceOverlay/moduleOverlay/providerOverlay data
+  // TopologyGraph already computes for the graph itself.
+  useEffect(() => {
+    if (!onNodeOverlayChange) return;
+    if (viewResourcesWsName) {
+      onNodeOverlayChange({ kind: "resources", workspaceName: viewResourcesWsName, themeMode, nodes: resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [] });
+    } else if (viewModulesWsName) {
+      onNodeOverlayChange({ kind: "modules", workspaceName: viewModulesWsName, themeMode, nodes: moduleOverlay?.nodes.filter(n => n.type !== "workspace") ?? [] });
+    } else if (viewProvidersWsName) {
+      onNodeOverlayChange({ kind: "providers", workspaceName: viewProvidersWsName, themeMode, nodes: providerOverlay?.nodes.filter(n => n.type !== "workspace") ?? [] });
+    } else {
+      onNodeOverlayChange(null);
+    }
+  }, [viewResourcesWsName, viewModulesWsName, viewProvidersWsName, resourceOverlay, moduleOverlay, providerOverlay, themeMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function getSVGPoint(clientX: number, clientY: number) {
     const el = svgRef.current;
@@ -2251,300 +2590,6 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         </g>
         {/* End zoomable content */}
       </svg>
-
-      {/* Resource-view popover — independent of selectedNode, shown whenever overlay is active */}
-      {viewResourcesWsName && (() => {
-        const resNodes = resourceOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
-        return (
-          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-            <button
-              onClick={() => { setViewResourcesWsName(null); setViewResourcesCount(0); onOverlayWorkspaceChange?.(null); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              ← exit resource view
-            </button>
-            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewResourcesWsName}</div>
-            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-              {resNodes.length} resource{resNodes.length !== 1 ? "s" : ""}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-              {resNodes.map(n => (
-                <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS[n.type] ?? "#9b8ff5", flexShrink: 0 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
-                    <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1, textTransform: "capitalize" }}>{n.secondary}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Modules overlay panel */}
-      {viewModulesWsName && (() => {
-        const modNodes = moduleOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
-        return (
-          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-            <button
-              onClick={() => { setViewModulesWsName(null); setViewModulesCount(0); onOverlayWorkspaceChange?.(null); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              ← exit module view
-            </button>
-            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewModulesWsName}</div>
-            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-              {modNodes.length} module{modNodes.length !== 1 ? "s" : ""}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-              {modNodes.length === 0
-                ? <div style={{ fontSize: 12, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)" }}>No modules found for this workspace.</div>
-                : modNodes.map(n => (
-                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS["module"] ?? "#9b8ff5", flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
-                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1 }}>{n.secondary}</div>
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Providers overlay panel */}
-      {viewProvidersWsName && (() => {
-        const provNodes = providerOverlay?.nodes.filter(n => n.type !== "workspace") ?? [];
-        return (
-          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-            <button
-              onClick={() => { setViewProvidersWsName(null); setViewProvidersCount(0); onOverlayWorkspaceChange?.(null); }}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-            >
-              ← exit provider view
-            </button>
-            <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 4 }}>{viewProvidersWsName}</div>
-            <div style={{ fontSize: 12, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginBottom: 14 }}>
-              {provNodes.length} provider{provNodes.length !== 1 ? "s" : ""}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-              {provNodes.length === 0
-                ? <div style={{ fontSize: 12, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)" }}>No providers found for this workspace.</div>
-                : provNodes.map(n => (
-                  <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.05)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.08)" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: NODE_COLORS["provider"] ?? "#9b8ff5", flexShrink: 0 }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.9)", wordBreak: "break-all", lineHeight: 1.4 }}>{n.label}</div>
-                      <div style={{ fontSize: 10, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", marginTop: 1 }}>{n.secondary}</div>
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Popover — top right, fixed position, for selected nodes */}
-      {selectedNode && !viewResourcesWsName && !viewModulesWsName && !viewProvidersWsName && (() => {
-        const isWorkspace = selectedNode.type === "workspace";
-        const d = selectedNode.data as Record<string, unknown>;
-
-        // Workspace blast radius popover
-        if (isWorkspace && activeType === "Workspaces" && blastRadiusId === selectedNode.id) {
-          // Split immediate neighbours into downstream (edge: origin→node) and upstream (edge: node→origin)
-          const downstreamIds = new Set<string>();
-          const upstreamIds = new Set<string>();
-          for (const e of activeEdges) {
-            if (e.source === blastRadiusId && blastRadiusSet.has(e.target)) downstreamIds.add(e.target);
-            if (e.target === blastRadiusId && blastRadiusSet.has(e.source)) upstreamIds.add(e.source);
-          }
-          const nodeById = new Map(activeNodes.map(n => [n.id, n]));
-          const downstreamNodes = [...downstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
-          const upstreamNodes = [...upstreamIds].map(id => nodeById.get(id)).filter(Boolean) as typeof activeNodes;
-
-          const nodeRow = (n: typeof activeNodes[number], accent: string) => (
-            <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 6, background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.04)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0 }} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: themeMode === "light" ? "#1f2328" : "rgba(255,255,255,0.88)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</div>
-              </div>
-            </div>
-          );
-
-          return (
-            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "16px 18px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-              {/* Exit button */}
-              <button
-                onClick={() => setBlastRadiusId(null)}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-              >
-                ← exit blast view
-              </button>
-              {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{selectedNode.label}</div>
-
-              {/* Downstream section */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_DOWNSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_DOWNSTREAM_COLOR} /></svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_DOWNSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Downstream ({downstreamNodes.length})</span>
-                </div>
-                {downstreamNodes.length > 0
-                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{downstreamNodes.map(n => nodeRow(n, BLAST_DOWNSTREAM_COLOR))}</div>
-                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
-                }
-              </div>
-
-              {/* Upstream section */}
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_UPSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_UPSTREAM_COLOR} /></svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: BLAST_UPSTREAM_COLOR, textTransform: "uppercase", letterSpacing: "0.04em" }}>Upstream ({upstreamNodes.length})</span>
-                </div>
-                {upstreamNodes.length > 0
-                  ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>{upstreamNodes.map(n => nodeRow(n, BLAST_UPSTREAM_COLOR))}</div>
-                  : <div style={{ fontSize: 11, color: themeMode === "light" ? "#9ca3af" : "rgba(255,255,255,0.3)", paddingLeft: 4 }}>none</div>
-                }
-              </div>
-            </div>
-          );
-        }
-
-        // Workspace-specific layout matching screenshot
-        if (isWorkspace && activeType === "Workspaces") {
-          const providers = String(d.providers ?? "").split(",").map(p => p.trim()).filter(Boolean);
-          return (
-            <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 300, background: themeMode === "light" ? "#ffffff" : "#161820", borderRadius: 12, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "18px 20px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-              {/* Close */}
-              <button onClick={() => { setSelectedId(null); setBlastRadiusId(null); }} style={{ position: "absolute", top: 12, right: 14, color: themeMode === "light" ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}>✕</button>
-
-              {/* Title */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{selectedNode.label}</div>
-
-              {/* Key-value rows — all table columns */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, maxHeight: 340, overflowY: "auto" }}>
-                {getNodeFields(selectedNode, activeType).map(({ label, value }) => (
-                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
-                    <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Action buttons */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    const count = Number((selectedNode.data as Record<string, unknown>).resources ?? 0);
-                    const wsName = selectedNode.label;
-                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
-                    const synRows = Array.from({ length: count }, (_, i) => {
-                      const base = baseRows.length > 0 ? baseRows[i % baseRows.length] : resourceRows[i % resourceRows.length];
-                      return { ...base, id: `syn-${i}`, workspace: wsName, address: i < baseRows.length ? base.address : `${base.type}.res_${i}` };
-                    });
-                    setViewResourcesWsName(wsName);
-                    onOverlayWorkspaceChange?.({ kind: "resources", workspaceName: wsName, rows: synRows });
-                    setViewResourcesCount(count);
-                  }}
-                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
-                >
-                  View Resources <span>→</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const modCount = Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0);
-                    const wsName = selectedNode.label;
-                    const modRows: readonly (readonly [string, string, string, string, string])[] = Array.from({ length: modCount }, (_, i) => {
-                      const base = moduleRows[i % moduleRows.length];
-                      const name = i < moduleRows.length ? base[0] : `${base[0].split("/")[0]}/module-${i}/${base[0].split("/")[2] ?? "null"}`;
-                      return [name, base[1], base[2], base[3], wsName] as const;
-                    });
-                    setViewModulesWsName(wsName);
-                    setViewModulesCount(modCount);
-                    onOverlayWorkspaceChange?.({ kind: "modules", workspaceName: wsName, rows: modRows });
-                  }}
-                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
-                >
-                  View Modules ({Number((selectedNode.data as Record<string, unknown>).moduleCount ?? 0)}) <span>→</span>
-                </button>
-                <button
-                  onClick={() => {
-                    const provCount = Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0);
-                    const wsName = selectedNode.label;
-                    const provRows: readonly (readonly [string, string, string, string, string])[] = Array.from({ length: provCount }, (_, i) => {
-                      const base = providerRows[i % providerRows.length];
-                      const name = i < providerRows.length ? base[0] : `${base[0].split("/")[0]}/provider-${i}`;
-                      return [name, base[1], base[2], base[3], wsName] as const;
-                    });
-                    setViewProvidersWsName(wsName);
-                    setViewProvidersCount(provCount);
-                    onOverlayWorkspaceChange?.({ kind: "providers", workspaceName: wsName, rows: provRows });
-                  }}
-                  style={{ height: 38, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
-                >
-                  View Providers ({Number((selectedNode.data as Record<string, unknown>).providerCount ?? 0)}) <span>→</span>
-                </button>
-                <button
-                  onClick={() => { setBlastRadiusId(selectedNode.id); setZoom({ tx: 0, ty: 0, scale: 1 }); }}
-                  style={{ height: 38, borderRadius: 8, border: `1px solid ${BLAST_DOWNSTREAM_COLOR}66`, background: "transparent", color: BLAST_DOWNSTREAM_COLOR, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
-                >
-                  View Blast radius <span>→</span>
-                </button>
-              </div>
-            </div>
-          );
-        }
-
-        // Generic popover for all other node types — uses column-label key-value pairs
-        const fields = getNodeFields(selectedNode, activeType);
-        return (
-          <div style={{ position: "absolute", top: 14, right: 50, zIndex: 20, width: 272, background: themeMode === "light" ? "#ffffff" : "#1c1e2b", borderRadius: 10, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", padding: "14px 16px", boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 12px 40px rgba(0,0,0,0.65)", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.35, wordBreak: "break-word" }}>{selectedNode.label}</div>
-                <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: NODE_COLORS[selectedNode.type] ?? "#9b8ff5", flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99", textTransform: "capitalize" }}>{selectedNode.type.replace(/-/g, " ")}</span>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#c2c5cb" : "#4b4f66", marginLeft: 2 }}>·</span>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99" }}>{selectedNode.secondary}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelectedId(null)} style={{ color: themeMode === "light" ? "#656a76" : "#4b4f66", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>✕</button>
-            </div>
-            <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
-              {fields.map(({ label, value }) => (
-                <div key={label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#4b4f66", minWidth: 80, lineHeight: 1.5, flexShrink: 0 }}>{label}</span>
-                  <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.72)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
-                </div>
-              ))}
-            </div>
-            {isWorkspace && (
-              <div style={{ marginTop: 12, paddingTop: 12, borderTop: themeMode === "light" ? "1px solid rgba(0,0,0,0.07)" : "1px solid rgba(255,255,255,0.07)" }}>
-                <button
-                  onClick={() => {
-                    const wsName = selectedNode.label;
-                    const baseRows = resourceRows.filter(r => r.workspace === wsName);
-                    setViewResourcesWsName(wsName);
-                    onOverlayWorkspaceChange?.({ workspaceName: wsName, rows: baseRows });
-                    setViewResourcesCount(0);
-                    setSelectedId(null);
-                    setZoom({ tx: 0, ty: 0, scale: 1 });
-                  }}
-                  style={{ width: "100%", height: 34, borderRadius: 8, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.08)", color: themeMode === "light" ? "#0c0c0e" : "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
-                >
-                  View Resources <span>→</span>
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Layout & Theme switcher — bottom right */}
       <div style={{ position: "absolute", bottom: 16, right: 16, background: themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.88)", backdropFilter: "blur(6px)", border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "6px 8px", display: "flex", alignItems: "center", gap: 4 }}>
@@ -3302,97 +3347,6 @@ const PREDEFINED_VIEW_TITLES = new Set<string>([
   ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
 ]);
 
-type SuggestedQuery = {
-  type: string;
-  label: string;
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
-  color: string;
-};
-
-const SUGGESTED_QUERIES: SuggestedQuery[] = [
-  { type: "Workspaces",        label: "Workspaces with failed checks", Icon: WorkspaceIcon,  color: "#9b8ff5" },
-  { type: "Policy Sets",       label: "Policy sets with failures",     Icon: Shield,          color: "#fbbf24" },
-  { type: "Modules",           label: "Top module versions",           Icon: ModuleIcon,      color: "#2dd4bf" },
-  { type: "Providers",         label: "Providers by workspace count",  Icon: Globe,           color: "#34d399" },
-  { type: "Resources",         label: "Resources by type",             Icon: ResourcesIcon,   color: "#f472b6" },
-  { type: "Terraform Versions", label: "Top Terraform versions",       Icon: TerraformIcon,   color: "#38bdf8" },
-];
-
-function SuggestedQueriesList({ themeMode, glassText, glassMuted, onSelect }: {
-  themeMode: "light" | "dark";
-  glassText: string;
-  glassMuted: string;
-  onSelect: (type: string, label: string) => void;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [hasMore, setHasMore] = useState(true);
-
-  const checkScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setHasMore(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
-  };
-
-  useEffect(() => { checkScroll(); }, []);
-
-  return (
-    <div className="mt-3">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
-        Try the following queries based on your usage.
-      </p>
-      <div className="relative">
-        <div
-          ref={scrollRef}
-          onScroll={checkScroll}
-          className="flex flex-col gap-1 overflow-y-auto max-h-[98px]"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {SUGGESTED_QUERIES.map(query => {
-            const Icon = query.Icon;
-            const queryCount = query.type === "Workspaces"
-              ? getWorkspaceRowsForTitle(query.label).length
-              : query.type === "Policy Sets"
-                ? getPolicySetRowsForTitle(query.label).length
-                : query.type === "Modules" ? moduleRows.length
-                : query.type === "Providers" ? providerRows.length
-                : query.type === "Resources" ? resourceRows.length
-                : query.type === "Terraform Versions" ? terraformVersionRows.length
-                : 0;
-            return (
-              <button
-                key={`${query.type}::${query.label}`}
-                type="button"
-                onClick={() => onSelect(query.type, query.label)}
-                className="group flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)] backdrop-blur-xl transition-all hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.10)] active:translate-y-0 active:scale-[0.99]"
-                style={{
-                  background: themeMode === "light" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.08)",
-                  borderColor: themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                }}
-              >
-                <span
-                  className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5"
-                  style={{ background: query.color }}
-                >
-                  <Icon size={10} />
-                </span>
-                <span className="flex-1 text-[11px] font-medium" style={{ color: glassText }}>
-                  {query.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {hasMore && (
-          <div
-            className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 transition-opacity duration-200"
-            style={{ background: themeMode === "light" ? "linear-gradient(to bottom, transparent, rgba(255,255,255,0.88))" : "linear-gradient(to bottom, transparent, rgba(19,20,26,0.9))" }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
@@ -3477,6 +3431,7 @@ function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMu
 function ExplorerSplashView({
   onSelectType,
   onSelectUseCase,
+  onExplorerQuery, onExplorerNodeSelect,
   conditionsExpanded, setConditionsExpanded,
   conditionCount, setConditionCount,
   openFieldIndex, setOpenFieldIndex,
@@ -3487,9 +3442,15 @@ function ExplorerSplashView({
   queryColumns,
   themeMode, setThemeMode,
   navOpen,
+  selectedExplorerNodeId,
+  explorerNodeAction,
+  onSelectedNodeInfoChange,
+  onNodeOverlayChange,
 }: {
   onSelectType: (type: string) => void;
   onSelectUseCase: (type: string, title: string) => void;
+  onExplorerQuery?: (query: string, nodes: TopoNode[]) => void;
+  onExplorerNodeSelect?: (id: string) => void;
   conditionsExpanded: boolean; setConditionsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   conditionCount: number; setConditionCount: React.Dispatch<React.SetStateAction<number>>;
   openFieldIndex: number | null; setOpenFieldIndex: React.Dispatch<React.SetStateAction<number | null>>;
@@ -3500,6 +3461,10 @@ function ExplorerSplashView({
   queryColumns: readonly any[];
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
   navOpen: boolean;
+  selectedExplorerNodeId?: string | null;
+  explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null;
+  onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void;
+  onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void;
 }) {
   const [viewMode, setViewMode] = useState<"graph" | "classic">("graph");
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
@@ -3517,7 +3482,14 @@ function ExplorerSplashView({
   const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [selectedHudNodeId, setSelectedHudNodeId] = useState<string | null>(null);
+  const [naturalLanguageQuery, setNaturalLanguageQuery] = useState("");
   const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
+  useEffect(() => {
+    // Sync in both directions: a truthy id selects that node, and an explicit null
+    // (e.g. from the Agent Drawer's node detail panel close button) clears the
+    // selection here too. Only `undefined` (prop not provided) is ignored.
+    if (selectedExplorerNodeId !== undefined) setSelectedHudNodeId(selectedExplorerNodeId);
+  }, [selectedExplorerNodeId]);
   useEffect(() => {
     if (tableViewOpen) { setConditionsExpanded(false); }
   }, [tableViewOpen, setConditionsExpanded]);
@@ -3580,6 +3552,40 @@ function ExplorerSplashView({
         setTimeout(() => setHudScale(1), 30);
       }, 280);
     }
+
+  }
+
+  function submitNaturalLanguageQuery() {
+    const query = naturalLanguageQuery.trim();
+    if (!query) return;
+    const normalizedQuery = query.toLowerCase();
+    const matchedUseCase = USE_CASE_CATEGORIES
+      .flatMap(category => category.items.map(title => ({ type: category.type, title })))
+      .sort((a, b) => b.title.length - a.title.length)
+      .find(item => normalizedQuery.includes(item.title.toLowerCase()));
+    const matchedType = USE_CASE_CATEGORIES
+      .find(category => normalizedQuery.includes(category.type.toLowerCase()));
+    const type = matchedUseCase?.type ?? matchedType?.type;
+    if (!type) return;
+    // No specific pre-defined view matched — fall back to the same "View All {type}" entry the
+    // Browse dropdown selects by default for a bare type, including its wsGroupMode reset, so the
+    // HUD chip, Table View eligibility, and Browse dropdown highlighting all stay in sync.
+    const title = matchedUseCase?.title ?? `View All ${type}`;
+    if (!matchedUseCase) setWsGroupMode("none");
+    openGraph(type, title);
+    const resultNodes = buildTopoGraph(type, [], title).nodes;
+    onExplorerQuery?.(query, resultNodes);
+  }
+
+  // Shared reset used by both the HUD chip's dismiss (×) button and the natural language
+  // query's clear (×) button, so clearing either one fully resets the active view the same way.
+  function dismissAll() {
+    setSelectedGraphType(null);
+    setSelectedGraphTitle(null);
+    setWsGroupMode("none");
+    setOverlayInfo(null);
+    setTableViewOpen(false);
+    setNaturalLanguageQuery("");
   }
 
 function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
@@ -3694,6 +3700,9 @@ useEffect(() => {
             graphTitle={selectedGraphTitle}
             conditions={hudConditions}
             selectedNodeId={selectedHudNodeId}
+            explorerNodeAction={explorerNodeAction}
+            onSelectedNodeInfoChange={onSelectedNodeInfoChange}
+            onNodeOverlayChange={onNodeOverlayChange}
             themeMode={themeMode} setThemeMode={setThemeMode}
             tableViewOpen={tableViewOpen}
             onTableViewToggle={selectedGraphTitle && (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:")) ? () => {
@@ -4260,7 +4269,11 @@ useEffect(() => {
                         <button
                           type="button"
                           role="menuitem"
-                          onClick={() => { setWsGroupMode("none"); openGraph(activeCategory.type, viewAllLabel); }}
+                          onClick={() => {
+                            setWsGroupMode("none");
+                            openGraph(activeCategory.type, viewAllLabel);
+                            onExplorerQuery?.(viewAllLabel, buildTopoGraph(activeCategory.type, [], viewAllLabel).nodes);
+                          }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                           style={!isViewAllSelected ? { color: glassText } : undefined}
                         >
@@ -4280,7 +4293,10 @@ useEffect(() => {
                           key={view}
                           type="button"
                           role="menuitem"
-                          onClick={() => openGraph(activeCategory.type, view)}
+                          onClick={() => {
+                            openGraph(activeCategory.type, view);
+                            onExplorerQuery?.(view, buildTopoGraph(activeCategory.type, [], view).nodes);
+                          }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
                           style={!isSelected ? { color: glassText } : undefined}
                         >
@@ -4329,14 +4345,6 @@ useEffect(() => {
           // Table toggle is available for predefined views regardless of sub-context state
           const tableToggleAvailable = selectedGraphTitle !== null &&
             (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:"));
-
-          function dismissAll() {
-            setSelectedGraphType(null);
-            setSelectedGraphTitle(null);
-            setWsGroupMode("none");
-            setOverlayInfo(null);
-            setTableViewOpen(false);
-          }
 
           function exitSubContext() {
             setOverlayInfo(null);
@@ -4468,6 +4476,39 @@ useEffect(() => {
           );
         })()}
 
+        <div className="mt-3">
+          <label htmlFor="natural-language-query" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
+            Enter a natural language query
+          </label>
+          <label className="flex h-9 items-center gap-2 rounded-[4px] border bg-white px-2.5 text-[#656a76]" style={{ borderColor: "rgba(59,61,69,0.4)" }}>
+            <Search size={14} strokeWidth={1.7} />
+            <input
+              id="natural-language-query"
+              type="search"
+              value={naturalLanguageQuery}
+              onChange={event => {
+                const nextValue = event.target.value;
+                // Clearing the query (via the native clear "×" button, or backspacing it out)
+                // should reset the active view exactly like the HUD chip's dismiss (×) button.
+                if (nextValue === "" && naturalLanguageQuery !== "") {
+                  dismissAll();
+                } else {
+                  setNaturalLanguageQuery(nextValue);
+                }
+              }}
+              onKeyDown={event => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitNaturalLanguageQuery();
+                }
+              }}
+              placeholder="e.g. production workspaces using AWS 5.x"
+              className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#656a76]"
+              style={{ color: glassText }}
+              aria-label="Enter a natural language query"
+            />
+          </label>
+        </div>
         {selectedGraphType ? (
           <ExplorerNodeList
             nodes={hudNodes}
@@ -4477,14 +4518,7 @@ useEffect(() => {
             glassMuted={glassMuted}
             onSelectNode={setSelectedHudNodeId}
           />
-        ) : (
-          <SuggestedQueriesList
-            themeMode={themeMode}
-            glassText={glassText}
-            glassMuted={glassMuted}
-            onSelect={openGraph}
-          />
-        )}
+        ) : null}
         </div>
         </div>
       </div>
@@ -4495,7 +4529,7 @@ useEffect(() => {
 
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
-export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean }) {
+export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
   const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
@@ -4510,6 +4544,9 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
   const [itemsMenuOpen, setItemsMenuOpen] = useState(false);
   const [activeType, setActiveType] = useState("Workspaces");
   const [activeView, setActiveView] = useState<"table" | "graph">("table");
+  useEffect(() => {
+    if (explorerNodeAction) setActiveView("graph");
+  }, [explorerNodeAction]);
   const [graphInitialWorkspace, setGraphInitialWorkspace] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [selectedDetailResourceId, setSelectedDetailResourceId] = useState<string | null>(null);
@@ -4665,8 +4702,20 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
     return (
       <div className="h-full min-w-[1200px] bg-white font-sans text-[#0c0c0e]">
         <ExplorerSplashView
-          onSelectType={navigateToType}
-          onSelectUseCase={navigateToUseCase}
+          onSelectType={(type) => {
+            navigateToType(type);
+            onExplorerQuery?.(type, buildTopoGraph(type, [], null).nodes);
+          }}
+          onSelectUseCase={(type, title) => {
+            navigateToUseCase(type, title);
+            onExplorerQuery?.(title, buildTopoGraph(type, [], title).nodes);
+          }}
+          onExplorerQuery={onExplorerQuery}
+          onExplorerNodeSelect={(id) => { setSelectedHudNodeId(id); onExplorerNodeSelect?.(id); }}
+          selectedExplorerNodeId={selectedExplorerNodeId}
+          explorerNodeAction={explorerNodeAction}
+          onSelectedNodeInfoChange={onSelectedNodeInfoChange}
+          onNodeOverlayChange={onNodeOverlayChange}
           conditionsExpanded={conditionsExpanded} setConditionsExpanded={setConditionsExpanded}
           conditionCount={conditionCount} setConditionCount={setConditionCount}
           openFieldIndex={openFieldIndex} setOpenFieldIndex={setOpenFieldIndex}
@@ -4923,11 +4972,15 @@ export function WorkspacesExplorerView({ navOpen = false }: { navOpen?: boolean 
           {activeView === "graph" ? (
             <div className="flex-1 min-h-0 pb-6" style={{ display: "flex", flexDirection: "column" }}>
               <TopologyGraph
+                key={explorerNodeAction?.nonce ?? "explorer-graph"}
                 activeType={activeType}
                 initialWorkspace={graphInitialWorkspace}
                 conditions={draftConditions}
                 themeMode={themeMode}
                 setThemeMode={setThemeMode}
+                explorerNodeAction={explorerNodeAction}
+                onOverlayWorkspaceChange={(info) => { setOverlayInfo(info); if (!info) setTableViewOpen(false); }}
+                onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
                 onViewResources={(workspaceName) => {
                   setGraphInitialWorkspace(workspaceName);
                   setActiveType("Resources");

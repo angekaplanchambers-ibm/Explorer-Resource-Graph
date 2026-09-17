@@ -6,6 +6,7 @@ import svgPaths from "@/imports/WorkspaceOverview-1/svg-l5nyzsu1t3";
 import imgUser from "@/imports/WorkspaceOverview-1/9ebc1ce39d50aa79cb3431fd2f56d7e4c9c0ad57.png";
 import { ImageWithFallback } from "@/app/components/figma/ImageWithFallback";
 import { WorkspacesExplorerView } from "./WorkspacesExplorerView";
+import type { SelectedNodeInfo, NodeOverlayInfo } from "./WorkspacesExplorerView";
 
 // ── Design tokens from Figma ──────────────────────────────────────────────────
 const T = {
@@ -510,6 +511,13 @@ function TopNav() {
 
 interface TFCWorkspaceViewProps {
   onControlCenterTrigger?: (query: string) => void;
+  onExplorerQuery?: (query: string, nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }>) => void;
+  onExplorerNodeSelect?: (id: string) => void;
+  onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
+  selectedExplorerNodeId?: string | null;
+  explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null;
+  onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void;
+  onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void;
   onOpenOpTriage?: (opId: string) => void;
   page: PageContext;
   onPageChange: (p: PageContext) => void;
@@ -518,7 +526,7 @@ interface TFCWorkspaceViewProps {
   navOpen?: boolean;
 }
 
-export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page, onPageChange, rightInset = 0, hideTopNav = false, navOpen = false }: TFCWorkspaceViewProps) {
+export function TFCWorkspaceView({ onControlCenterTrigger, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeAction, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, onOpenOpTriage, page, onPageChange, rightInset = 0, hideTopNav = false, navOpen = false }: TFCWorkspaceViewProps) {
   const [selectedRun, setSelectedRun] = useState<{ id: string; runId: string } | null>(null);
 
   // This imported Figma frame replaces the single-workspace overview with the
@@ -531,7 +539,7 @@ export function TFCWorkspaceView({ onControlCenterTrigger, onOpenOpTriage, page,
           className="min-h-0 flex-1 overflow-auto bg-white"
           style={{ paddingRight: rightInset, transition: "padding-right 0.4s cubic-bezier(0.25,0.8,0.25,1)" }}
         >
-          <WorkspacesExplorerView navOpen={navOpen} />
+          <WorkspacesExplorerView navOpen={navOpen} onExplorerQuery={onExplorerQuery} onExplorerNodeSelect={onExplorerNodeSelect} onExplorerNodeAction={onExplorerNodeAction} selectedExplorerNodeId={selectedExplorerNodeId} explorerNodeAction={explorerNodeAction} onSelectedNodeInfoChange={onSelectedNodeInfoChange} onNodeOverlayChange={onNodeOverlayChange} />
         </div>
       </div>
     );

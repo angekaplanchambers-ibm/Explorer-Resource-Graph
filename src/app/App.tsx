@@ -1,24 +1,133 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ArrowRight, ArrowUp, ChevronDown, ChevronsLeft, ChevronsRight, History, Plus, Sparkles } from "lucide-react";
 import { TFCWorkspaceView } from "./components/TFCWorkspaceView";
 import { ControlCenter } from "./components/ControlCenter";
 import { Workbench } from "./components/Workbench";
 import NavTfcSideNav from "@/imports/NavTfcSideNav";
 import { TFCTopNav } from "./components/TFCTopNav";
+import type { SelectedNodeInfo, NodeOverlayInfo } from "./components/WorkspacesExplorerView";
 
 /* MARKER-MAKE-KIT-INVOKED */
 
 export type PageContext = "overview" | "runs" | "runDetail";
-export type DockMode = "bottom" | "right";
+export type DockMode = "left" | "right";
 const SIDE_PANEL_MIN = 280;
 const SIDE_PANEL_MAX = 720;
 const SIDE_PANEL_DEFAULT = 420;
+
+function AgentCollapsedTrigger({ width, onToggle, hiddenBehindDrawer }: {
+  width: number;
+  onToggle: () => void;
+  hiddenBehindDrawer: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label="Toggle Advisor drawer"
+      aria-hidden={hiddenBehindDrawer}
+      tabIndex={hiddenBehindDrawer ? -1 : 0}
+      style={{
+        position: "fixed",
+        right: hiddenBehindDrawer ? 0 : 12,
+        bottom: 12,
+        zIndex: 10,
+        width: `min(${width}px, calc(100vw - 24px))`,
+        padding: "12px",
+        border: "1px solid #c8b5ff",
+        borderTopColor: "#78a8ff",
+        borderRadius: 7,
+        background: "#f1f2f3",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+        color: "#0c0c0e",
+        fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
+        fontSize: 12,
+        textAlign: "left",
+        cursor: "pointer",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Sparkles size={18} color="#5f55f5" fill="#5f55f5" />
+        <strong style={{ fontSize: 12, lineHeight: 1.2 }}>Advisor</strong>
+      </div>
+
+      <div style={{
+        height: 32,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 12px",
+        marginBottom: 8,
+        border: "1px solid #a21caf",
+        borderRadius: 4,
+        background: "#fff",
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#9218e8", flexShrink: 0 }} />
+        <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>
+          Production workspaces <span style={{ color: "#656a76" }}>2s ago</span>
+        </span>
+        <ArrowRight size={14} />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
+        <div style={{
+          minWidth: 0,
+          flex: 1,
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "0 8px 0 10px",
+          border: "1px solid rgba(59,61,69,0.4)",
+          borderRadius: 4,
+          background: "#fff",
+          color: "#656a76",
+        }}>
+          <Plus size={14} />
+          <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>
+            Ask about your infrastructure · ⌘K
+          </span>
+          <span style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "#1060ff", color: "#fff", flexShrink: 0 }}>
+            <ArrowUp size={16} />
+          </span>
+        </div>
+        <div style={{
+          width: 52,
+          height: 36,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+          border: "1px solid rgba(59,61,69,0.4)",
+          borderRadius: 4,
+          background: "#fff",
+          color: "#3b3d45",
+          flexShrink: 0,
+        }}>
+          <History size={14} />
+          <ChevronDown size={14} />
+        </div>
+      </div>
+    </button>
+  );
+}
 
 export default function App() {
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchVisible, setWorkbenchVisible] = useState(false);
   const [workbenchQuery, setWorkbenchQuery] = useState<string | undefined>(undefined);
   const [pendingQuery, setPendingQuery] = useState<string | undefined>(undefined);
+  const [explorerQuery, setExplorerQuery] = useState<{ query: string; nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }> } | undefined>(undefined);
+  const [selectedExplorerNodeId, setSelectedExplorerNodeId] = useState<string | null>(null);
+  const [explorerNodeAction, setExplorerNodeAction] = useState<{ action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null>(null);
+  // Node detail panel — the graph's former on-canvas "Node Popover" now reports its
+  // selected node (and blast-radius data) up here so it can render inside the Agent
+  // Drawer instead. This state lives in App so it survives the drawer opening,
+  // closing, docking, or resizing.
+  const [selectedNodeInfo, setSelectedNodeInfo] = useState<SelectedNodeInfo | null>(null);
+  // Same idea for the on-canvas Resources/Modules/Providers overlay panel — it also
+  // now renders inside the Agent Drawer instead of floating over the graph.
+  const [nodeOverlayInfo, setNodeOverlayInfo] = useState<NodeOverlayInfo | null>(null);
   const [pendingOpTriage, setPendingOpTriage] = useState<string | undefined>(undefined);
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
@@ -123,16 +232,53 @@ export default function App() {
               display: "flex", flexDirection: "row", overflow: "hidden",
             }}
           >
-            {/* Workspace content — shrinks to make room for right-dock panel */}
+            {/* Left-dock panel — in-flow flex column, shown only when dockMode=left */}
+            {dockMode === "left" && !workbenchOpen && (
+              <div style={{ position: "relative", order: -1, zIndex: 20, flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
+                {agentOpen && (
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                    <ControlCenter
+                      initialQuery={pendingQuery}
+                      explorerQuery={explorerQuery}
+                      selectedExplorerNodeId={selectedExplorerNodeId}
+                      selectedNodeInfo={selectedNodeInfo}
+                      nodeOverlayInfo={nodeOverlayInfo}
+                      onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
+                      onExplorerNodeSelect={setSelectedExplorerNodeId}
+                      onExplorerNodeClose={() => setSelectedExplorerNodeId(null)}
+                      onQueryHandled={() => setPendingQuery(undefined)}
+                      openOpTriage={pendingOpTriage}
+                      onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
+                      onOpenWorkbench={openWorkbench}
+                      pageContext={page}
+                      dockMode={dockMode}
+                      onDockChange={setDockMode}
+                      onStepActiveChange={setStepActive}
+                      onClose={() => setAgentOpen(false)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Workspace content — shrinks to make room for docked panel */}
             <div style={{
               flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden",
-              paddingBottom: dockMode === "bottom" ? "72px" : 0,
+              paddingBottom: 0,
               transition: "padding-bottom 0.4s cubic-bezier(0.25,0.8,0.25,1)",
             }}>
               <TFCWorkspaceView
                 page={page}
                 onPageChange={setPage}
                 onControlCenterTrigger={(q) => setPendingQuery(q)}
+                onExplorerQuery={(query, nodes) => setExplorerQuery({ query, nodes })}
+                onExplorerNodeSelect={setSelectedExplorerNodeId}
+                onExplorerNodeClose={() => setSelectedExplorerNodeId(null)}
+                selectedExplorerNodeId={selectedExplorerNodeId}
+                explorerNodeAction={explorerNodeAction}
+                onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
+                onSelectedNodeInfoChange={setSelectedNodeInfo}
+                onNodeOverlayChange={setNodeOverlayInfo}
                 onOpenOpTriage={(opId) => setPendingOpTriage(opId)}
                 rightInset={0}
                 hideTopNav
@@ -142,35 +288,7 @@ export default function App() {
 
             {/* Right-dock panel — in-flow flex column, shown only when dockMode=right */}
             {dockMode === "right" && !workbenchOpen && (
-              <div style={{ position: "relative", flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
-                {/* Toggle tab — floats over content at the panel's left edge, mirrors the left nav tab exactly */}
-                <button
-                  type="button"
-                  onClick={() => setAgentOpen(o => !o)}
-                  aria-label={agentOpen ? "Collapse agent panel" : "Expand agent panel"}
-                  style={{
-                    position: "absolute",
-                    right: agentOpen ? panelW : 0,
-                    top: 16,
-                    width: 36,
-                    height: 40,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "#fafafa",
-                    border: "1px solid #DEDFE3",
-                    borderRight: "none",
-                    borderRadius: "6px 0 0 6px",
-                    boxShadow: "-3px 0 8px rgba(0,0,0,0.08)",
-                    cursor: "pointer",
-                    color: "#656a76",
-                    zIndex: 20,
-                    transition: "right 0.3s cubic-bezier(0.25,0.8,0.25,1)",
-                  }}
-                >
-                  {agentOpen ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-                </button>
-
+              <div style={{ position: "relative", zIndex: 20, flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
                 {/* Resize handle — only active when panel is open */}
                 {agentOpen && (
                   <div
@@ -209,6 +327,13 @@ export default function App() {
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <ControlCenter
                       initialQuery={pendingQuery}
+                      explorerQuery={explorerQuery}
+                      selectedExplorerNodeId={selectedExplorerNodeId}
+                      selectedNodeInfo={selectedNodeInfo}
+                      nodeOverlayInfo={nodeOverlayInfo}
+                      onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
+                      onExplorerNodeSelect={setSelectedExplorerNodeId}
+                      onExplorerNodeClose={() => setSelectedExplorerNodeId(null)}
                       onQueryHandled={() => setPendingQuery(undefined)}
                       openOpTriage={pendingOpTriage}
                       onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
@@ -217,6 +342,7 @@ export default function App() {
                       dockMode={dockMode}
                       onDockChange={setDockMode}
                       onStepActiveChange={setStepActive}
+                      onClose={() => setAgentOpen(false)}
                     />
                   </div>
                 )}
@@ -224,22 +350,16 @@ export default function App() {
             )}
           </div>
 
-          {/* Bottom-dock panel */}
-          {dockMode === "bottom" && !workbenchOpen && (
-            <ControlCenter
-              initialQuery={pendingQuery}
-              onQueryHandled={() => setPendingQuery(undefined)}
-              openOpTriage={pendingOpTriage}
-              onOpenOpTriageHandled={() => setPendingOpTriage(undefined)}
-              onOpenWorkbench={openWorkbench}
-              pageContext={page}
-              dockMode={dockMode}
-              onDockChange={setDockMode}
-              onStepActiveChange={setStepActive}
-            />
-          )}
         </div>
       </div>
+
+      {!workbenchOpen && (
+        <AgentCollapsedTrigger
+          width={panelW}
+          onToggle={() => setAgentOpen(open => !open)}
+          hiddenBehindDrawer={agentOpen && dockMode === "right"}
+        />
+      )}
 
       {workbenchOpen && (
         <div
