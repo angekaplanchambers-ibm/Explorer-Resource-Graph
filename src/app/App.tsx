@@ -131,7 +131,7 @@ export default function App() {
   const [pendingOpTriage, setPendingOpTriage] = useState<string | undefined>(undefined);
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
-  const [agentOpen, setAgentOpen] = useState(true);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [stepActive, setStepActive] = useState(false); // mirrors whether a step is open in ControlCenter
   const [navOpen, setNavOpen] = useState(false);
   const [panelW, setPanelW] = useState(SIDE_PANEL_DEFAULT);
