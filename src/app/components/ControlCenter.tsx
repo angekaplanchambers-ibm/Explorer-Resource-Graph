@@ -4,7 +4,7 @@ import {
   RefreshCw, Plus, ExternalLink, Sparkles, Send, ThumbsUp, ThumbsDown, History, ArrowUp,
 } from "lucide-react";
 import { TFSignalChat } from "./TFSignalChat";
-import { NodeDetailPanel, type SelectedNodeInfo, NodeOverlayPanel, type NodeOverlayInfo } from "./WorkspacesExplorerView";
+import { ExplorerNodeList, NodeDetailPanel, type SelectedNodeInfo, NodeOverlayPanel, type NodeOverlayInfo, type TopoNode } from "./WorkspacesExplorerView";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const M = {
@@ -1139,6 +1139,8 @@ interface ControlCenterProps {
   selectedExplorerNodeId?: string | null;
   selectedNodeInfo?: SelectedNodeInfo | null;
   nodeOverlayInfo?: NodeOverlayInfo | null;
+  returnedNodes?: TopoNode[];
+  returnedNodesTheme?: "light" | "dark";
   onExplorerNodeSelect?: (id: string) => void;
   onExplorerNodeClose?: () => void;
   onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
@@ -1157,9 +1159,11 @@ type ExplorerNode = { id: string; label: string; type: string; secondary?: strin
 type ExplorerQueryResult = { query: string; nodes: ExplorerNode[] };
 
 
-function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, onCloseNode, onNodeAction }: {
+function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes = [], returnedNodesTheme = "light", selectedNodeId, onSelectNode, onCloseNode, onNodeAction }: {
   selectedNodeInfo?: SelectedNodeInfo | null;
   nodeOverlayInfo?: NodeOverlayInfo | null;
+  selectedNodeId?: string | null;
+  onSelectNode?: (id: string) => void;
   onCloseNode?: () => void;
   onNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
 }) {
@@ -1171,6 +1175,16 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, onCloseNode, 
           I can help you analyze your infrastructure data. Ask about workspaces, resources, drift, providers, or dependencies, and I will show simulated results.
         </p>
       </div>
+      {returnedNodes.length > 0 && (
+        <ExplorerNodeList
+          nodes={returnedNodes}
+          selectedNodeId={selectedNodeId ?? null}
+          themeMode={returnedNodesTheme}
+          glassText={M.text}
+          glassMuted={M.textMuted}
+          onSelectNode={id => onSelectNode?.(id)}
+        />
+      )}
       {nodeOverlayInfo ? (
         <div style={{ marginTop: 20, paddingBottom: 24 }}>
           <NodeOverlayPanel
@@ -1255,7 +1269,7 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false }: {
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
+export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
   const [signalTab, setSignalTab] = useState<"ops" | "chat">("ops");
@@ -1419,7 +1433,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} />
           </div>
           <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, minHeight: 0, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
-            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
+            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
           </div>
         </div>
 
@@ -1471,7 +1485,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             </div>
             {/* Ops tab — CLI interface */}
               <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0, flexDirection: "column", backgroundColor: M.dark }}>
-                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
+                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
               </div>
           </div>
         </div>

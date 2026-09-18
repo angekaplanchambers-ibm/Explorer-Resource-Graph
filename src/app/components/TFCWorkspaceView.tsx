@@ -513,6 +513,7 @@ interface TFCWorkspaceViewProps {
   onControlCenterTrigger?: (query: string) => void;
   onExplorerQuery?: (query: string, nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }>) => void;
   onExplorerNodeSelect?: (id: string) => void;
+  onReturnedNodesChange?: (nodes: Array<{ id: string; label: string; type: string; secondary: string; data: Record<string, string | number | boolean> }>, themeMode: "light" | "dark") => void;
   onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
   selectedExplorerNodeId?: string | null;
   explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null;
@@ -526,7 +527,7 @@ interface TFCWorkspaceViewProps {
   navOpen?: boolean;
 }
 
-export function TFCWorkspaceView({ onControlCenterTrigger, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeAction, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, onOpenOpTriage, page, onPageChange, rightInset = 0, hideTopNav = false, navOpen = false }: TFCWorkspaceViewProps) {
+export function TFCWorkspaceView({ onControlCenterTrigger, onExplorerQuery, onExplorerNodeSelect, onReturnedNodesChange, onExplorerNodeAction, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, onOpenOpTriage, page, onPageChange, rightInset = 0, hideTopNav = false, navOpen = false }: TFCWorkspaceViewProps) {
   const [selectedRun, setSelectedRun] = useState<{ id: string; runId: string } | null>(null);
 
   // This imported Figma frame replaces the single-workspace overview with the
@@ -539,7 +540,7 @@ export function TFCWorkspaceView({ onControlCenterTrigger, onExplorerQuery, onEx
           className="min-h-0 flex-1 overflow-auto bg-white"
           style={{ paddingRight: rightInset, transition: "padding-right 0.4s cubic-bezier(0.25,0.8,0.25,1)" }}
         >
-          <WorkspacesExplorerView navOpen={navOpen} onExplorerQuery={onExplorerQuery} onExplorerNodeSelect={onExplorerNodeSelect} onExplorerNodeAction={onExplorerNodeAction} selectedExplorerNodeId={selectedExplorerNodeId} explorerNodeAction={explorerNodeAction} onSelectedNodeInfoChange={onSelectedNodeInfoChange} onNodeOverlayChange={onNodeOverlayChange} />
+          <WorkspacesExplorerView navOpen={navOpen} onExplorerQuery={onExplorerQuery} onExplorerNodeSelect={onExplorerNodeSelect} onReturnedNodesChange={onReturnedNodesChange} onExplorerNodeAction={onExplorerNodeAction} selectedExplorerNodeId={selectedExplorerNodeId} explorerNodeAction={explorerNodeAction} onSelectedNodeInfoChange={onSelectedNodeInfoChange} onNodeOverlayChange={onNodeOverlayChange} />
         </div>
       </div>
     );

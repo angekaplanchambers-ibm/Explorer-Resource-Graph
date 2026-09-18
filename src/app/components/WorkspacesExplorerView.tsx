@@ -1112,7 +1112,7 @@ const NODE_SIZE = 28;
 const NODE_RADIUS = 14;
 const NODE_R = NODE_SIZE / 2;
 
-type TopoNode = {
+export type TopoNode = {
   id: string;
   label: string;
   type: string;
@@ -1705,7 +1705,7 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
     background: themeMode === "light" ? "#ffffff" : "#161820",
     borderRadius: 12,
     border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)",
-    boxShadow: themeMode === "light" ? "0 12px 32px rgba(0,0,0,0.15)" : "0 16px 48px rgba(0,0,0,0.7)",
+    boxShadow: "none",
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
   };
 
@@ -1763,7 +1763,7 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
 
         <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{node.label}</div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16, maxHeight: 340, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
           {getNodeFields(node, activeType).map(({ label, value }) => (
             <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
@@ -3347,7 +3347,7 @@ const PREDEFINED_VIEW_TITLES = new Set<string>([
   ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
 ]);
 
-function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
+export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
   themeMode: "light" | "dark";
@@ -3384,7 +3384,7 @@ function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMu
           aria-label="Search returned nodes"
         />
       </label>
-      <div className="flex max-h-[220px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+      <div className="flex max-h-[350px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
         {pageNodes.map(node => {
           const isSelected = node.id === selectedNodeId;
           return (
@@ -3431,7 +3431,7 @@ function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMu
 function ExplorerSplashView({
   onSelectType,
   onSelectUseCase,
-  onExplorerQuery, onExplorerNodeSelect,
+  onExplorerQuery, onExplorerNodeSelect, onReturnedNodesChange,
   conditionsExpanded, setConditionsExpanded,
   conditionCount, setConditionCount,
   openFieldIndex, setOpenFieldIndex,
@@ -3451,6 +3451,7 @@ function ExplorerSplashView({
   onSelectUseCase: (type: string, title: string) => void;
   onExplorerQuery?: (query: string, nodes: TopoNode[]) => void;
   onExplorerNodeSelect?: (id: string) => void;
+  onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark") => void;
   conditionsExpanded: boolean; setConditionsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
   conditionCount: number; setConditionCount: React.Dispatch<React.SetStateAction<number>>;
   openFieldIndex: number | null; setOpenFieldIndex: React.Dispatch<React.SetStateAction<number | null>>;
@@ -3529,6 +3530,9 @@ function ExplorerSplashView({
     () => selectedGraphType ? buildTopoGraph(selectedGraphType, hudConditions, selectedGraphTitle).nodes : [],
     [selectedGraphType, hudConditions, selectedGraphTitle],
   );
+  useEffect(() => {
+    onReturnedNodesChange?.(selectedGraphType ? hudNodes : [], themeMode);
+  }, [selectedGraphType, hudNodes, themeMode, onReturnedNodesChange]);
 
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
@@ -4509,7 +4513,7 @@ useEffect(() => {
             />
           </label>
         </div>
-        {selectedGraphType ? (
+        {selectedGraphType && !onReturnedNodesChange ? (
           <ExplorerNodeList
             nodes={hudNodes}
             selectedNodeId={selectedHudNodeId}
@@ -4529,7 +4533,7 @@ useEffect(() => {
 
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
-export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
+export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark") => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
   const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
@@ -4712,6 +4716,7 @@ export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExp
           }}
           onExplorerQuery={onExplorerQuery}
           onExplorerNodeSelect={(id) => { setSelectedHudNodeId(id); onExplorerNodeSelect?.(id); }}
+          onReturnedNodesChange={onReturnedNodesChange}
           selectedExplorerNodeId={selectedExplorerNodeId}
           explorerNodeAction={explorerNodeAction}
           onSelectedNodeInfoChange={onSelectedNodeInfoChange}

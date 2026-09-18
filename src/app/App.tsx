@@ -5,7 +5,7 @@ import { ControlCenter } from "./components/ControlCenter";
 import { Workbench } from "./components/Workbench";
 import NavTfcSideNav from "@/imports/NavTfcSideNav";
 import { TFCTopNav } from "./components/TFCTopNav";
-import type { SelectedNodeInfo, NodeOverlayInfo } from "./components/WorkspacesExplorerView";
+import type { SelectedNodeInfo, NodeOverlayInfo, TopoNode } from "./components/WorkspacesExplorerView";
 
 /* MARKER-MAKE-KIT-INVOKED */
 
@@ -119,6 +119,12 @@ export default function App() {
   const [pendingQuery, setPendingQuery] = useState<string | undefined>(undefined);
   const [explorerQuery, setExplorerQuery] = useState<{ query: string; nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }> } | undefined>(undefined);
   const [selectedExplorerNodeId, setSelectedExplorerNodeId] = useState<string | null>(null);
+  const [returnedNodes, setReturnedNodes] = useState<TopoNode[]>([]);
+  const [returnedNodesTheme, setReturnedNodesTheme] = useState<"light" | "dark">("light");
+  const handleReturnedNodesChange = useCallback((nodes: TopoNode[], themeMode: "light" | "dark") => {
+    setReturnedNodes(nodes);
+    setReturnedNodesTheme(themeMode);
+  }, []);
   const [explorerNodeAction, setExplorerNodeAction] = useState<{ action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null>(null);
   // Node detail panel — the graph's former on-canvas "Node Popover" now reports its
   // selected node (and blast-radius data) up here so it can render inside the Agent
@@ -250,6 +256,8 @@ export default function App() {
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
+                      returnedNodes={returnedNodes}
+                      returnedNodesTheme={returnedNodesTheme}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
@@ -280,8 +288,15 @@ export default function App() {
                 page={page}
                 onPageChange={setPage}
                 onControlCenterTrigger={(q) => setPendingQuery(q)}
-                onExplorerQuery={(query, nodes) => setExplorerQuery({ query, nodes })}
-                onExplorerNodeSelect={setSelectedExplorerNodeId}
+                onExplorerQuery={(query, nodes) => {
+                  setExplorerQuery({ query, nodes });
+                  setAgentOpen(true);
+                }}
+                onExplorerNodeSelect={(nodeId) => {
+                  setSelectedExplorerNodeId(nodeId);
+                  setAgentOpen(true);
+                }}
+                onReturnedNodesChange={handleReturnedNodesChange}
                 onExplorerNodeClose={() => setSelectedExplorerNodeId(null)}
                 selectedExplorerNodeId={selectedExplorerNodeId}
                 explorerNodeAction={explorerNodeAction}
@@ -338,6 +353,8 @@ export default function App() {
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
+                      returnedNodes={returnedNodes}
+                      returnedNodesTheme={returnedNodesTheme}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
