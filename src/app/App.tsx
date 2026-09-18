@@ -132,6 +132,15 @@ export default function App() {
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
   const [agentOpen, setAgentOpen] = useState(false);
+  // Auto-open the Agent Drawer whenever a node popover/overlay is triggered (canvas
+  // click, HUD "Returned Nodes" list, or an explorerNodeAction like View Blast Radius/
+  // Resources/Modules/Providers) so its content isn't hidden behind the collapsed
+  // trigger. Closing/collapsing remains a manual action — this effect only opens.
+  useEffect(() => {
+    if (selectedNodeInfo || nodeOverlayInfo) {
+      setAgentOpen(true);
+    }
+  }, [selectedNodeInfo, nodeOverlayInfo]);
   const [stepActive, setStepActive] = useState(false); // mirrors whether a step is open in ControlCenter
   const [navOpen, setNavOpen] = useState(false);
   const [panelW, setPanelW] = useState(SIDE_PANEL_DEFAULT);
