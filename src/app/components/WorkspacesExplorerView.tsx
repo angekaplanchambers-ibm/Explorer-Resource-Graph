@@ -3498,9 +3498,8 @@ function ExplorerSplashView({
     setModalConditions([]);
     if (selectedGraphType !== "Workspaces") setWsGroupMode("none");
   }, [selectedGraphType]);
-  const [hudPosition, setHudPosition] = useState({ x: 56, y: 20 });
+  const [hudPosition, setHudPosition] = useState({ x: 8, y: 75 });
   const [hudCollapsed, setHudCollapsed] = useState(false);
-  const [hudCollapsedTabTop, setHudCollapsedTabTop] = useState<number | null>(null);
   const hudTabRef = useRef<HTMLButtonElement>(null);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
@@ -3998,37 +3997,14 @@ useEffect(() => {
         type="button"
         onClick={e => {
           e.stopPropagation();
-          if (!hudCollapsed && hudTabRef.current) {
-            setHudCollapsedTabTop(hudTabRef.current.getBoundingClientRect().top);
-          }
           setHudCollapsed(c => !c);
         }}
         onMouseDown={e => e.stopPropagation()}
         aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
-        style={hudCollapsed ? {
-          position: "fixed",
-          left: navOpen ? 280 : 0,
-          top: 130,
-          width: 44,
-          height: 52,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          background: "#fafafa",
-          border: "1px solid #DEDFE3",
-          borderLeft: "none",
-          borderRadius: "0 6px 6px 0",
-          boxShadow: "3px 0 8px rgba(0,0,0,0.08)",
-          cursor: "pointer",
-          color: "#656a76",
-          zIndex: 35,
-          transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
-        } : {
+        style={{
           position: "absolute",
           top: hudPosition.y + 50,
-          left: hudPosition.x + hudCardWidth,
+          left: hudCollapsed ? 0 : hudPosition.x + hudCardWidth,
           width: 44,
           height: 52,
           display: hudPhase === "intro" ? "none" : "flex",
@@ -4044,6 +4020,7 @@ useEffect(() => {
           cursor: "pointer",
           color: "#656a76",
           zIndex: 31,
+          transition: "left 0.3s cubic-bezier(0.25,0.8,0.25,1)",
         }}
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
