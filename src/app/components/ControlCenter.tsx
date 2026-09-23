@@ -4,7 +4,7 @@ import {
   RefreshCw, Plus, ExternalLink, Sparkles, Send, ThumbsUp, ThumbsDown, History, ArrowUp,
 } from "lucide-react";
 import { TFSignalChat } from "./TFSignalChat";
-import { ExplorerNodeList, NodeDetailPanel, type SelectedNodeInfo, NodeOverlayPanel, type NodeOverlayInfo, type TopoNode } from "./WorkspacesExplorerView";
+import { ExplorerNodeList, type SelectedNodeInfo, type NodeOverlayInfo, type TopoNode } from "./WorkspacesExplorerView";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const M = {
@@ -1167,6 +1167,15 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes
   onCloseNode?: () => void;
   onNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
 }) {
+  const handleNodeSelect = (id: string) => {
+    if (id === selectedNodeId) {
+      onNodeAction?.("close", id);
+      onCloseNode?.();
+      return;
+    }
+    onSelectNode?.(id);
+  };
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 24px 0", color: M.text, fontFamily: M.font }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -1182,35 +1191,12 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes
           themeMode={returnedNodesTheme}
           glassText={M.text}
           glassMuted={M.textMuted}
-          onSelectNode={id => onSelectNode?.(id)}
+          onSelectNode={handleNodeSelect}
+          expandedNodeInfo={selectedNodeInfo}
+          nodeOverlayInfo={nodeOverlayInfo}
+          onCloseNode={onCloseNode}
+          onNodeAction={onNodeAction}
         />
-      )}
-      {nodeOverlayInfo ? (
-        <div style={{ marginTop: 20, paddingBottom: 24 }}>
-          <NodeOverlayPanel
-            info={nodeOverlayInfo}
-            onExit={() => onNodeAction?.("exit-overlay", nodeOverlayInfo.workspaceName)}
-          />
-        </div>
-      ) : selectedNodeInfo && (
-        <div style={{ marginTop: 20, paddingBottom: 24 }}>
-          <NodeDetailPanel
-            info={selectedNodeInfo}
-            onClose={() => {
-              // Routed through the same action bridge as the other buttons — the local
-              // selection state (canvas click or HUD node list) doesn't always round-trip
-              // through selectedExplorerNodeId, so clearing it directly here is the
-              // reliable way to close regardless of how the node was selected.
-              onNodeAction?.("close", selectedNodeInfo.node.id);
-              onCloseNode?.();
-            }}
-            onExitBlastRadius={() => onNodeAction?.("exit-blast-radius", selectedNodeInfo.node.id)}
-            onViewResources={() => onNodeAction?.("resources", selectedNodeInfo.node.id)}
-            onViewModules={() => onNodeAction?.("modules", selectedNodeInfo.node.id)}
-            onViewProviders={() => onNodeAction?.("providers", selectedNodeInfo.node.id)}
-            onViewBlastRadius={() => onNodeAction?.("blast-radius", selectedNodeInfo.node.id)}
-          />
-        </div>
       )}
       <div style={{ minHeight: 250 }} />
     </div>

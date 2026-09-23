@@ -3637,13 +3637,17 @@ const PREDEFINED_VIEW_TITLES = new Set<string>([
   ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
 ]);
 
-export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
+export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onCloseNode, onNodeAction }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
   themeMode: "light" | "dark";
   glassText: string;
   glassMuted: string;
   onSelectNode: (id: string) => void;
+  expandedNodeInfo?: SelectedNodeInfo | null;
+  nodeOverlayInfo?: NodeOverlayInfo | null;
+  onCloseNode?: () => void;
+  onNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
 }) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
@@ -3674,16 +3678,18 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
           aria-label="Search returned nodes"
         />
       </label>
-      <div className="flex max-h-[350px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+      <div className="flex flex-col gap-1">
         {pageNodes.map(node => {
           const isSelected = node.id === selectedNodeId;
+          // Resources/Modules/Providers overlays key off the workspace's label (the
+          // action bridge in TopologyGraph dispatches them by name, not id — see the
+          // "resources"/"modules"/"providers" branches above), so match on label here.
+          const overlayForNode = isSelected && nodeOverlayInfo?.workspaceName === node.label ? nodeOverlayInfo : null;
+          const detailForNode = isSelected && !overlayForNode && expandedNodeInfo?.node.id === node.id ? expandedNodeInfo : null;
           return (
-            <button
+            <div
               key={node.id}
-              type="button"
-              onClick={() => onSelectNode(node.id)}
-              aria-pressed={isSelected}
-              className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
+              className="shrink-0 overflow-hidden rounded-lg border shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
               style={{
                 background: isSelected
                   ? themeMode === "light" ? "#edf4ff" : "rgba(15,98,254,0.22)"
@@ -3691,17 +3697,52 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
                 borderColor: isSelected
                   ? "#0f62fe"
                   : themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                boxShadow: isSelected ? "0 0 0 1px rgba(15,98,254,0.35), 0 2px 8px rgba(0,0,0,0.07)" : undefined,
               }}
             >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
-                {(() => {
-                  const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
-                  return <NodeIcon size={10} />;
-                })()}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium" style={{ color: isSelected ? "#0f62fe" : glassText }}>{node.label}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onSelectNode(node.id)}
+                aria-expanded={isSelected}
+                className="flex w-full items-center gap-2 py-2 pl-2 pr-2.5 text-left"
+                style={{ color: isSelected ? "#0f62fe" : glassText }}
+              >
+                <ChevronRight
+                  size={14}
+                  className="shrink-0 transition-transform duration-150"
+                  style={{ transform: isSelected ? "rotate(90deg)" : undefined }}
+                />
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
+                  {(() => {
+                    const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                    return <NodeIcon size={10} />;
+                  })()}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{node.label}</span>
+              </button>
+              {(detailForNode || overlayForNode) && (
+                <div className="border-t px-2 pb-2 pt-2" style={{ borderColor: themeMode === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)" }}>
+                  {overlayForNode ? (
+                    <NodeOverlayPanel
+                      info={overlayForNode}
+                      onExit={() => onNodeAction?.("exit-overlay", node.id)}
+                    />
+                  ) : detailForNode ? (
+                    <NodeDetailPanel
+                      info={detailForNode}
+                      onClose={() => {
+                        onNodeAction?.("close", detailForNode.node.id);
+                        onCloseNode?.();
+                      }}
+                      onExitBlastRadius={() => onNodeAction?.("exit-blast-radius", detailForNode.node.id)}
+                      onViewResources={() => onNodeAction?.("resources", detailForNode.node.id)}
+                      onViewModules={() => onNodeAction?.("modules", detailForNode.node.id)}
+                      onViewProviders={() => onNodeAction?.("providers", detailForNode.node.id)}
+                      onViewBlastRadius={() => onNodeAction?.("blast-radius", detailForNode.node.id)}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </div>
           );
         })}
         {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
