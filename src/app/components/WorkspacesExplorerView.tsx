@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import * as d3 from "d3";
+import { TopologyForceEngine, breathingSeed, type EngineNode, type EngineLink } from "./topologyForceEngine";
 import DotBackgroundGraph from "../../imports/DotBackgroundGraph";
 import {
   CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsUpDown, Clipboard, Compass,
@@ -1519,9 +1521,14 @@ function runGridLayout(nodes: TopoNode[]): Map<string, { x: number; y: number }>
   return pos;
 }
 
-function curvePath(x1: number, y1: number, x2: number, y2: number): string {
+function curvePath(x1: number, y1: number, x2: number, y2: number, sag: number = 0): string {
   const mx = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
+  // `sag` (0..~0.25) is the "Artistic Link Morphing" hook for Stacked / Arc
+  // ("Wave"): it nudges both control points downward proportional to the span,
+  // turning the same straight-line topology into a graceful, drapery-like curve
+  // without touching how endpoints (node positions) are computed.
+  const droop = Math.abs(x2 - x1) * sag;
+  return `M ${x1} ${y1} C ${mx} ${y1 + droop} ${mx} ${y2 + droop} ${x2} ${y2}`;
 }
 
 // Arc layout — places origin at center of horizontal axis with upstream left, downstream right.
@@ -1665,6 +1672,36 @@ function getNodeFields(node: TopoNode, activeType: string): { label: string; val
 
 const BLAST_DOWNSTREAM_COLOR = "#3b82f6";
 const BLAST_UPSTREAM_COLOR = "#a855f7";
+
+// Vibrancy glow filters — one <filter> per distinct palette color (defined
+// once in <defs>, referenced by id), so "making colors pop" is a real SVG
+// feGaussianBlur/feMerge halo rather than the flat translucent-circle + CSS
+// drop-shadow approximation the static version used.
+const GLOW_COLORS: string[] = Array.from(new Set([
+  ...Object.values(NODE_COLORS),
+  SELECTED_COLOR,
+  NEIGHBOR_COLOR,
+  BLAST_DOWNSTREAM_COLOR,
+  BLAST_UPSTREAM_COLOR,
+]));
+function glowFilterId(color: string): string {
+  return `topo-glow-${color.replace("#", "")}`;
+}
+
+// Per-layout anchor strength — how firmly a node is pulled toward its analytic
+// target each tick. "Force" stays low so charge/link physics dominate (organic
+// spread); the deterministic layouts pull harder so their shape reads clearly
+// while still swaying gently via the engine's ambient breathing force.
+function layoutAnchorStrength(layout: TopoLayout): number {
+  switch (layout) {
+    case "force": return 0.022;
+    case "stacked": return 0.55;
+    case "radial": return 0.55;
+    case "grid": return 0.6;
+    case "arc": return 0.62;
+    default: return 0.35;
+  }
+}
 
 type OverlayInfo =
   | { kind: "resources"; workspaceName: string; rows: { id: string; address: string; type: string; name: string; workspace: string; project: string; moduleName: string; provider: string; terraformVersion: string; billableRum: boolean; sourceType: string; sourceId: string; sourceUpdatedAt: string }[] }
@@ -1917,6 +1954,20 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const [zoom, setZoom] = useState({ tx: 0, ty: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // --- Living-ecosystem engine (D3 force simulation, zoom, drag) ------------
+  // The engine owns a perpetually-ticking d3.forceSimulation (ambient breathing
+  // + cursor "wake" + drag + layout easing) and mutates a live position Map in
+  // place; frameTick is bumped once per animation frame so React re-renders
+  // pick up the latest positions without allocating a new Map every tick.
+  const engineRef = useRef<TopologyForceEngine | null>(null);
+  const [, setFrameTick] = useState(0);
+  const [engineReady, setEngineReady] = useState(false);
+  const zoomGroupRef = useRef<SVGGElement | null>(null);
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const dragBehaviorRef = useRef<ReturnType<TopologyForceEngine["makeDragBehavior"]> | null>(null);
+  const nodeElRefs = useRef(new Map<string, SVGGElement>());
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
 
   // Derived — no state, no effect, no delay.
   const topoLayout: TopoLayout = blastRadiusId ? "arc" : manualLayout;
@@ -2185,6 +2236,31 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     return s;
   }, [hoveredId, edges]);
 
+  // --- Sympathetic link resonance ---------------------------------------------
+  // BFS hop-distance from whichever node is currently hovered or being dragged,
+  // capped at 3 hops. Edges read this to drive a color/vibrancy pulse (stroke
+  // width stays constant) that travels outward — see resonanceStartRef + the
+  // edge rendering below.
+  const resonanceOriginId = hoveredId ?? draggingNodeId;
+  const resonanceHopMap = useMemo(() => {
+    const dist = new Map<string, number>();
+    if (!resonanceOriginId) return dist;
+    dist.set(resonanceOriginId, 0);
+    const queue: string[] = [resonanceOriginId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      const curDepth = dist.get(cur)!;
+      if (curDepth >= 3) continue;
+      for (const e of activeEdges) {
+        const neighbor = e.source === cur ? e.target : e.target === cur ? e.source : null;
+        if (neighbor && !dist.has(neighbor)) { dist.set(neighbor, curDepth + 1); queue.push(neighbor); }
+      }
+    }
+    return dist;
+  }, [resonanceOriginId, edges]);
+  const resonanceStartRef = useRef(0);
+  useEffect(() => { if (resonanceOriginId) resonanceStartRef.current = performance.now(); }, [resonanceOriginId]);
+
   // Blast radius: BFS depth map for all reachable nodes + visible set limited to 1 hop
   const { blastRadiusSet, blastDepthMap, arcPositions } = useMemo(() => {
     if (!blastRadiusId) return { blastRadiusSet: new Set<string>(), blastDepthMap: new Map<string, number>(), arcPositions: new Map<string, { x: number; y: number }>() };
@@ -2220,7 +2296,91 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     return { blastRadiusSet: visibleSet, blastDepthMap: depthMap, arcPositions: arcPos };
   }, [blastRadiusId, activeEdges]);
 
-  const positions = topoLayout === "arc" && blastRadiusId ? arcPositions : positions_base;
+  // Analytic layout target for whichever topoLayout is active — this is the
+  // *target* nodes ease toward now, not their literal render position (see the
+  // engine effects below). The pure layout functions above are untouched.
+  const analyticTargets = topoLayout === "arc" && blastRadiusId ? arcPositions : positions_base;
+
+  // --- Living-ecosystem engine: construction (once) --------------------------
+  useEffect(() => {
+    const engine = new TopologyForceEngine({
+      width: VW,
+      height: VH,
+      onFrame: () => setFrameTick(t => (t + 1) % 1_000_000),
+    });
+    engineRef.current = engine;
+    dragBehaviorRef.current = engine.makeDragBehavior((id, isDragging) => {
+      setDraggingNodeId(isDragging ? id : null);
+    });
+    setEngineReady(true);
+    return () => { engine.destroy(); engineRef.current = null; setEngineReady(false); };
+  }, []);
+
+  // --- Attach d3.drag to each rendered node <g> -------------------------------
+  // Node elements are still fully owned/rendered by React (structure, icons,
+  // labels, click/hover handlers); this effect only binds the drag gesture
+  // onto whichever <g> elements currently exist, re-running whenever the
+  // engine becomes ready or the rendered node set changes. Re-calling .call()
+  // on an already-bound element is idempotent (d3 just re-applies the same
+  // namespaced listeners), so this is safe to run more often than strictly necessary.
+  useEffect(() => {
+    const behavior = dragBehaviorRef.current;
+    if (!behavior) return;
+    for (const [id, el] of nodeElRefs.current) {
+      d3.select(el).datum(id).call(behavior);
+    }
+  }, [engineReady, visibleNodes]);
+
+  // --- Engine data binding: node/edge SET changes (entry/update/exit) -------
+  // Rebinds the simulation whenever the actual topology changes. Existing
+  // nodes keep their live x/y/vx/vy (matched by id) so the graph never
+  // teleports; only brand-new nodes seed from their analytic target.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const anchorK = layoutAnchorStrength(topoLayout);
+    const engineNodes: EngineNode[] = activeNodes.map(n => {
+      const isHub = n.type === "ws-group-project" || n.type === "ws-group-status";
+      const isArcOrigin = topoLayout === "arc" && n.id === blastRadiusId;
+      const r = isArcOrigin ? Math.round(NODE_R * 1.6) : isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+      const seed = breathingSeed(n.id);
+      const t = analyticTargets.get(n.id);
+      return { id: n.id, tx: t?.x ?? VW / 2, ty: t?.y ?? VH / 2, anchorK, r, phase: seed.phase, freq: seed.freq };
+    });
+    const engineLinks: EngineLink[] = activeEdges.map(e => ({ source: e.source, target: e.target }));
+    engine.setData(engineNodes, engineLinks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNodes, activeEdges, refreshKey]);
+
+  // --- Engine retargeting: layout / blast-radius switches --------------------
+  // Wraps the existing Force/Stacked/Radial/Grid/Arc position math (unchanged)
+  // in a fluid migration: nodes ease toward the new analytic target with a
+  // cubic in/out blend, staggered outward from the center for Radial and for
+  // the Arc ("Wave") blast-radius view so the new shape blooms into place
+  // rather than snapping.
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const anchorK = layoutAnchorStrength(topoLayout);
+    const cx = VW / 2, cy = VH / 2;
+    const targets = new Map<string, { x: number; y: number; depth?: number; r?: number }>();
+    for (const n of activeNodes) {
+      const t = analyticTargets.get(n.id);
+      if (!t) continue;
+      const isHub = n.type === "ws-group-project" || n.type === "ws-group-status";
+      const isArcOrigin = topoLayout === "arc" && n.id === blastRadiusId;
+      const r = isArcOrigin ? Math.round(NODE_R * 1.6) : isHub ? Math.round(NODE_R * 1.8) : NODE_R;
+      const depth = Math.round(Math.hypot(t.x - cx, t.y - cy) / 40);
+      targets.set(n.id, { x: t.x, y: t.y, r, depth });
+    }
+    const stagger = topoLayout === "radial" || topoLayout === "arc";
+    engine.retarget(targets, { anchorK, stagger });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoLayout, blastRadiusId, positions_base, arcPositions]);
+
+  // Render-facing "positions" — reads the live simulation, falling back to the
+  // analytic target for the first paint (before the engine effect above runs).
+  const positions = { get: (id: string) => engineRef.current?.positions.get(id) ?? analyticTargets.get(id) };
 
   const selectedNode = activeNodes.find(n => n.id === selectedId) ?? null;
   const selectedPos = selectedId ? positions.get(selectedId) : null;
@@ -2280,51 +2440,94 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     };
   }
 
-  function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-    const { x: cx, y: cy } = getSVGPoint(e.clientX, e.clientY);
-    setZoom(prev => {
-      const newScale = Math.max(0.25, Math.min(6, prev.scale * factor));
-      const newTx = cx - (cx - prev.tx) * (newScale / prev.scale);
-      const newTy = cy - (cy - prev.ty) * (newScale / prev.scale);
-      return { tx: newTx, ty: newTy, scale: newScale };
+  // --- d3.zoom: fluid pan/zoom, replacing the old manual wheel/drag state ---
+  // The transform is written straight to zoomGroupRef on every zoom event so
+  // panning/zooming never waits on a React commit; `zoom` state is refreshed
+  // at most once per animation frame purely so the rest of the JSX (which
+  // reads `scale` for stroke-width / counter-scale compensation) stays correct.
+  const zoomSyncScheduledRef = useRef(false);
+  const pendingZoomRef = useRef(zoom);
+  function scheduleZoomStateSync(next: { tx: number; ty: number; scale: number }) {
+    pendingZoomRef.current = next;
+    if (zoomSyncScheduledRef.current) return;
+    zoomSyncScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      zoomSyncScheduledRef.current = false;
+      setZoom(pendingZoomRef.current);
     });
   }
 
-  function handleMouseDown(e: React.MouseEvent<SVGRectElement>) {
-    if (e.button !== 0) return;
-    dragRef.current = { x: e.clientX, y: e.clientY, tx: zoom.tx, ty: zoom.ty };
-    setDragging(true);
-  }
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const behavior = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.25, 6])
+      .filter((event: Event) => {
+        // Wheel always zooms; drag-to-pan only owns the empty canvas — nodes
+        // get their own d3.drag behavior (see node rendering below), and
+        // d3-drag's own event handling stops this from ever double-firing.
+        if (event.type === "wheel") return true;
+        const target = event.target as Element | null;
+        return !target?.closest?.(".topo-node");
+      })
+      .on("start", () => setDragging(true))
+      .on("end", () => setDragging(false))
+      .on("zoom", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+        const t = event.transform;
+        if (zoomGroupRef.current) {
+          zoomGroupRef.current.setAttribute("transform", `translate(${t.x},${t.y}) scale(${t.k})`);
+        }
+        scheduleZoomStateSync({ tx: t.x, ty: t.y, scale: t.k });
+      });
+    zoomBehaviorRef.current = behavior;
+    const sel = d3.select(svgEl);
+    sel.call(behavior).on("dblclick.zoom", null);
+    sel.call(behavior.transform, d3.zoomIdentity.translate(pendingZoomRef.current.tx, pendingZoomRef.current.ty).scale(pendingZoomRef.current.scale));
+    return () => { sel.on(".zoom", null); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (!dragging) return;
-    const el = svgRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const dx = (e.clientX - dragRef.current.x) * (VW / rect.width);
-    const dy = (e.clientY - dragRef.current.y) * (VH / rect.height);
-    const { tx: ox, ty: oy } = dragRef.current;
-    setZoom(prev => ({ ...prev, tx: ox + dx, ty: oy + dy }));
-  }
-
-  function handleMouseUp() { setDragging(false); }
-
+  // Animated zoom helpers used by the +/- and Fit buttons — smooth cubic ease
+  // instead of an instant snap.
   function zoomBy(factor: number) {
-    setZoom(prev => {
-      const newScale = Math.max(0.25, Math.min(6, prev.scale * factor));
-      const cx = VW / 2; const cy = VH / 2;
-      return {
-        scale: newScale,
-        tx: cx - (cx - prev.tx) * (newScale / prev.scale),
-        ty: cy - (cy - prev.ty) * (newScale / prev.scale),
-      };
-    });
+    const svgEl = svgRef.current; const behavior = zoomBehaviorRef.current;
+    if (!svgEl || !behavior) return;
+    d3.select(svgEl).transition().duration(200).ease(d3.easeCubicOut).call(behavior.scaleBy, factor);
+  }
+  function resetZoom() {
+    const svgEl = svgRef.current; const behavior = zoomBehaviorRef.current;
+    if (!svgEl || !behavior) { setZoom({ tx: 0, ty: 0, scale: 1 }); return; }
+    d3.select(svgEl).transition().duration(260).ease(d3.easeCubicInOut).call(behavior.transform, d3.zoomIdentity);
+  }
+
+  // --- Pointer tracking for the kinetic "wake" + proximity breathing --------
+  // Mouse position is converted from client space into the same untransformed
+  // (VW × VH) coordinate space the simulation's node positions live in, by
+  // inverting the live zoom transform.
+  function handlePointerMove(e: React.MouseEvent<SVGSVGElement>) {
+    const svgPoint = getSVGPoint(e.clientX, e.clientY);
+    const t = zoom;
+    const worldX = (svgPoint.x - t.tx) / t.scale;
+    const worldY = (svgPoint.y - t.ty) / t.scale;
+    engineRef.current?.updatePointer(worldX, worldY);
+  }
+  function handlePointerLeave() {
+    engineRef.current?.clearPointer();
+    setDragging(false);
   }
 
   const { tx, ty, scale } = zoom;
   const groupTransform = `translate(${tx},${ty}) scale(${scale})`;
+
+  // --- Layout-transition choreography for edges -------------------------------
+  // curvatureBoost: "Artistic Link Morphing" — Stacked and Arc ("Wave") ease
+  // their straight/curve links into a more pronounced drapery sag as the layout
+  // settles in (engine.getBlend() is the same cubic in/out 0→1 the nodes ease
+  // in with, so links and nodes read as one coordinated migration).
+  // scatterFade: "Atmospheric Dissolve" — Grid eases connectors toward near
+  // invisibility so isolated nodes read as stars hanging in the air.
+  const layoutBlend = engineRef.current?.getBlend() ?? 1;
+  const curvatureBoost = (topoLayout === "stacked" || topoLayout === "arc") ? layoutBlend * 0.16 : 0;
+  const scatterFade = topoLayout === "grid" ? layoutBlend : 0;
 
   return (
     <div style={{
@@ -2355,10 +2558,8 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
         style={{ display: "block", cursor: dragging ? "grabbing" : "grab" }}
-        onWheel={handleWheel}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseMove={handlePointerMove}
+        onMouseLeave={handlePointerLeave}
       >
         <defs>
           <style>{`
@@ -2386,14 +2587,33 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
           <marker id="arc-arrow-upstream" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,5 L7,2.5 z" fill={BLAST_UPSTREAM_COLOR} />
           </marker>
+          {/* Vibrancy glow filters — one per palette color, reused across nodes/edges
+              instead of the flat translucent-circle trick. feMerge stacks a soft
+              blurred halo underneath the crisp original shape. */}
+          {GLOW_COLORS.map(color => (
+            <filter key={color} id={glowFilterId(color)} x="-160%" y="-160%" width="420%" height="420%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur1" />
+              <feFlood floodColor={color} floodOpacity="0.9" result="flood1" />
+              <feComposite in="flood1" in2="blur1" operator="in" result="glow1" />
+              <feGaussianBlur in="SourceGraphic" stdDeviation="14" result="blur2" />
+              <feFlood floodColor={color} floodOpacity="0.55" result="flood2" />
+              <feComposite in="flood2" in2="blur2" operator="in" result="glow2" />
+              <feMerge>
+                <feMergeNode in="glow2" />
+                <feMergeNode in="glow1" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          ))}
         </defs>
 
-        {/* Drag + deselect backdrop — outside zoom group so it covers full canvas */}
+        {/* Drag + deselect backdrop — outside zoom group so it covers full canvas.
+            Panning now lives entirely in the d3.zoom behavior bound to the <svg>
+            above; this rect only needs to keep handling deselect-on-click. */}
         <rect
           width={VW}
           height={VH}
           fill="transparent"
-          onMouseDown={handleMouseDown}
           onClick={e => { if (!dragging) { e.stopPropagation(); setSelectedId(null); setBlastRadiusId(null); } }}
         />
 
@@ -2421,19 +2641,37 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const subViewOpen = !!(viewResourcesWsName || viewModulesWsName || viewProvidersWsName);
             const activeId = hoveredId ?? (subViewOpen ? null : selectedId);
             const isLit = !activeId || edge.source === activeId || edge.target === activeId;
-            const opacity = blastRadiusId
+            let opacity = blastRadiusId
               ? (isBlastEdge ? 0 : 0.06)
               : (activeId ? (isLit ? 1 : (themeMode === "light" ? 0.08 : 0.06)) : 1);
+            // Atmospheric Dissolve — Grid eases connectors toward near-invisible
+            // threads so its nodes read as stars hanging in the air.
+            opacity *= (1 - scatterFade * 0.9);
+            // Sympathetic link resonance — a pulse travels outward from
+            // whichever node is hovered/dragged, sequentially illuminating the
+            // topology along BFS hop distance.
+            const hop = Math.min(
+              resonanceHopMap.get(edge.source) ?? Infinity,
+              resonanceHopMap.get(edge.target) ?? Infinity,
+            );
+            let pulse = 0;
+            if (Number.isFinite(hop)) {
+              const elapsed = performance.now() - resonanceStartRef.current - hop * 110;
+              if (elapsed >= 0 && elapsed < 520) pulse = Math.sin((elapsed / 520) * Math.PI);
+            }
+            const baseWidth = 1 / scale;
             return (
               <path
                 key={i}
-                d={curvePath(ps.x, ps.y, pt.x, pt.y)}
+                d={curvePath(ps.x, ps.y, pt.x, pt.y, curvatureBoost)}
                 fill="none"
-                stroke={themeMode === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.28)"}
-                strokeWidth={1 / scale}
+                stroke={pulse > 0.05
+                  ? d3.interpolateRgb(themeMode === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.28)", NEIGHBOR_COLOR)(pulse)
+                  : (themeMode === "light" ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.28)")}
+                strokeWidth={baseWidth}
                 strokeDasharray={`${5 / scale} ${4 / scale}`}
                 strokeLinecap="round"
-                opacity={opacity}
+                opacity={Math.max(opacity, pulse)}
                 style={{ transition: "opacity 0.2s ease" }}
               />
             );
@@ -2456,7 +2694,9 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const mx = (fromPos.x + toPos.x) / 2;
             const dist = Math.abs(toPos.x - fromPos.x);
             // Arc height scales with horizontal distance so far nodes bow higher/lower.
-            const arcH = Math.max(60, dist * 0.55);
+            // Eased in via layoutBlend so the bow grows into place as the Arc/
+            // "Wave" view activates, rather than snapping to full height instantly.
+            const arcH = Math.max(60, dist * 0.55) * (0.4 + 0.6 * layoutBlend);
             const bowY = isDownstream ? fromPos.y + arcH : fromPos.y - arcH;
             // Pull the arrowhead tip back to the node boundary
             const edx = toPos.x - fromPos.x;
@@ -2526,6 +2766,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const isHoverNeighbor = hoverNeighborSet.has(node.id);
             const inBlastRadius = blastRadiusId ? blastRadiusSet.has(node.id) : false;
             const isBlastOrigin = node.id === blastRadiusId;
+            const isDragged = node.id === draggingNodeId;
             const isDimmed = blastRadiusId
               ? !inBlastRadius
               : hoveredId
@@ -2540,48 +2781,97 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
             const nSize = nR * 2;
             const nameLabel = node.label.length > 20 ? node.label.slice(0, 19) + "…" : node.label;
             const delay = Math.min(i * 28, 600);
-            const hasNodeGlow = isHovered || isSelected || Boolean(blastRadiusId && inBlastRadius);
+            const hasNodeGlow = isHovered || isSelected || isDragged || Boolean(blastRadiusId && inBlastRadius);
             const nodeOutlineColor = themeMode === "light" ? "#0c0c0e" : "#ffffff";
+            // Bioluminescent flare — brief flash decaying back to baseline vibrancy
+            // after a click/hold (engine.flareNode), read fresh every frame.
+            const flareIntensity = engineRef.current?.getFlareIntensity(node.id) ?? 0;
+            // Elastic-bounce hover pop (d3.easeElasticOut-style overshoot via CSS
+            // cubic-bezier) — kept as a separate CSS-transitioned scale wrapper so
+            // it never fights the per-frame position transform on the outer <g>.
+            const hoverBounce = isHovered || isDragged ? 1.14 : 1;
+            // Contextual Dreamscape — the rest of the canvas eases into a soft
+            // blurred/desaturated background while the active neighborhood gets
+            // heightened saturation + glow.
+            const dreamscapeFilter = isDimmed
+              ? "blur(1.5px) saturate(0.35)"
+              : (hasNodeGlow ? "saturate(1.4)" : undefined);
 
             return (
               <g
                 key={node.id}
-                transform={`translate(${pos.x},${pos.y}) scale(${1 / scale})`}
-                style={{ cursor: "pointer", opacity: isDimmed ? 0.08 : 1, transition: "opacity 0.2s ease" }}
+                ref={el => { if (el) nodeElRefs.current.set(node.id, el); else nodeElRefs.current.delete(node.id); }}
+                className="topo-node"
+                transform={`translate(${pos.x},${pos.y})`}
+                style={{ cursor: "pointer", opacity: isDimmed ? 0.08 : 1, filter: dreamscapeFilter, transition: "opacity 0.35s ease, filter 0.35s ease" }}
                 onClick={e => { e.stopPropagation(); setSelectedId(isSelected ? null : node.id); }}
+                onMouseDown={() => engineRef.current?.flareNode(node.id)}
                 onMouseEnter={() => setHoveredId(node.id)}
                 onMouseLeave={() => setHoveredId(null)}
               >
-                <g
-                  key={`${node.id}-${activeType}-${refreshKey}`}
-                  style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
-                >
-                  {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} />}
-                  {/* Arc origin: outer white glow ring */}
-                  {isArcOrigin && <circle r={nR + 7} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5} />}
-                  <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow || isArcOrigin ? { filter: `drop-shadow(0 0 ${isArcOrigin ? 60 : 40}px ${color})` } : undefined} />
-                  {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
-                  <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
-                    {(() => {
-                      const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                {/* Light trail — fading path left behind a dragged node. */}
+                {isDragged && (() => {
+                  const trail = engineRef.current?.getTrail(node.id) ?? [];
+                  if (trail.length < 2) return null;
+                  const now = performance.now();
+                  return (
+                    <g pointerEvents="none">
+                      {trail.slice(1).map((p, idx) => {
+                        const prev = trail[idx];
+                        const age = now - p.t;
+                        const life = Math.max(0, 1 - age / 520);
+                        if (life <= 0) return null;
+                        return (
+                          <line
+                            key={idx}
+                            x1={prev.x - pos.x} y1={prev.y - pos.y}
+                            x2={p.x - pos.x} y2={p.y - pos.y}
+                            stroke={color}
+                            strokeWidth={(3 * life) / scale}
+                            strokeLinecap="round"
+                            opacity={life * 0.55}
+                          />
+                        );
+                      })}
+                    </g>
+                  );
+                })()}
+                <g style={{ transform: `scale(${(1 / scale) * hoverBounce})`, transformOrigin: "0 0", transition: "transform 0.5s cubic-bezier(0.34,1.56,0.64,1)" }}>
+                  <g
+                    key={`${node.id}-${activeType}-${refreshKey}`}
+                    style={{ animation: `topoNodeIn 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both` }}
+                  >
+                    {hasNodeGlow && <circle r={nR + 14} fill={color} opacity={(isSelected || (blastRadiusId && inBlastRadius)) ? 0.22 : 0.08} filter={`url(#${glowFilterId(color)})`} />}
+                    {/* Arc origin: outer white glow ring */}
+                    {isArcOrigin && <circle r={nR + 7} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={2.5} />}
+                    <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill={color} opacity={1} style={hasNodeGlow || isArcOrigin ? { filter: `url(#${glowFilterId(color)})` } : undefined} />
+                    {/* Bioluminescent flare flash — decays back to baseline via engine.getFlareIntensity */}
+                    {flareIntensity > 0.02 && (
+                      <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="#ffffff" opacity={flareIntensity * 0.6} />
+                    )}
+                    {(isHovered || isSelected) && <rect x={-nR} y={-nR} width={nSize} height={nSize} rx={isHub ? nR * 0.3 : NODE_RADIUS} fill="none" stroke={nodeOutlineColor} strokeWidth={2} />}
+                    <foreignObject x={-nR} y={-nR} width={nSize} height={nSize}>
+                      {(() => {
+                        const Icon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                        return (
+                          <div style={{ width: nSize, height: nSize, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Icon size={nR} color="white" strokeWidth={1.75} />
+                          </div>
+                        );
+                      })()}
+                    </foreignObject>
+                    <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isArcOrigin ? 12 : isHub ? 12 : 10} fontWeight={isArcOrigin ? "700" : isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
+                    <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
+                    {/* Arc layout: "↑ upstream" / "downstream ↓" labels under neighbour nodes */}
+                    {topoLayout === "arc" && !isArcOrigin && inBlastRadius && (() => {
+                      const isUp = blastRadiusId ? activeEdges.some(e => e.target === blastRadiusId && e.source === node.id) : false;
                       return (
-                        <div style={{ width: nSize, height: nSize, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <Icon size={nR} color="white" strokeWidth={1.75} />
-                        </div>
+                        <text y={nR + 43} textAnchor="middle" fill={isUp ? BLAST_UPSTREAM_COLOR : BLAST_DOWNSTREAM_COLOR} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
+                          {isUp ? "↑ upstream" : "downstream ↓"}
+                        </text>
                       );
                     })()}
-                  </foreignObject>
-                  <text y={nR + 16} textAnchor="middle" fill={themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.92)"} fontSize={isArcOrigin ? 12 : isHub ? 12 : 10} fontWeight={isArcOrigin ? "700" : isHub ? "700" : "600"} fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{nameLabel}</text>
-                  <text y={nR + 30} textAnchor="middle" fill={themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.38)"} fontSize={10} fontWeight="400" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" letterSpacing="0">{node.secondary}</text>
-                  {/* Arc layout: "↑ upstream" / "downstream ↓" labels under neighbour nodes */}
-                  {topoLayout === "arc" && !isArcOrigin && inBlastRadius && (() => {
-                    const isUp = blastRadiusId ? activeEdges.some(e => e.target === blastRadiusId && e.source === node.id) : false;
-                    return (
-                      <text y={nR + 43} textAnchor="middle" fill={isUp ? BLAST_UPSTREAM_COLOR : BLAST_DOWNSTREAM_COLOR} fontSize={9} fontWeight="500" fontFamily="'SF UI Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif" opacity={0.8}>
-                        {isUp ? "↑ upstream" : "downstream ↓"}
-                      </text>
-                    );
-                  })()}
+                  </g>
                 </g>
               </g>
             );
@@ -3347,13 +3637,17 @@ const PREDEFINED_VIEW_TITLES = new Set<string>([
   ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
 ]);
 
-export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode }: {
+export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onCloseNode, onNodeAction }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
   themeMode: "light" | "dark";
   glassText: string;
   glassMuted: string;
   onSelectNode: (id: string) => void;
+  expandedNodeInfo?: SelectedNodeInfo | null;
+  nodeOverlayInfo?: NodeOverlayInfo | null;
+  onCloseNode?: () => void;
+  onNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
 }) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
@@ -3384,16 +3678,18 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
           aria-label="Search returned nodes"
         />
       </label>
-      <div className="flex max-h-[350px] flex-col gap-1 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+      <div className="flex flex-col gap-1">
         {pageNodes.map(node => {
           const isSelected = node.id === selectedNodeId;
+          // Resources/Modules/Providers overlays key off the workspace's label (the
+          // action bridge in TopologyGraph dispatches them by name, not id — see the
+          // "resources"/"modules"/"providers" branches above), so match on label here.
+          const overlayForNode = isSelected && nodeOverlayInfo?.workspaceName === node.label ? nodeOverlayInfo : null;
+          const detailForNode = isSelected && !overlayForNode && expandedNodeInfo?.node.id === node.id ? expandedNodeInfo : null;
           return (
-            <button
+            <div
               key={node.id}
-              type="button"
-              onClick={() => onSelectNode(node.id)}
-              aria-pressed={isSelected}
-              className="flex w-full items-center gap-2 rounded-full border py-1 pl-1 pr-2.5 text-left shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
+              className="shrink-0 overflow-hidden rounded-lg border shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
               style={{
                 background: isSelected
                   ? themeMode === "light" ? "#edf4ff" : "rgba(15,98,254,0.22)"
@@ -3401,17 +3697,52 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
                 borderColor: isSelected
                   ? "#0f62fe"
                   : themeMode === "light" ? "rgba(209,213,219,0.60)" : "rgba(255,255,255,0.10)",
-                boxShadow: isSelected ? "0 0 0 1px rgba(15,98,254,0.35), 0 2px 8px rgba(0,0,0,0.07)" : undefined,
               }}
             >
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
-                {(() => {
-                  const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
-                  return <NodeIcon size={10} />;
-                })()}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium" style={{ color: isSelected ? "#0f62fe" : glassText }}>{node.label}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onSelectNode(node.id)}
+                aria-expanded={isSelected}
+                className="flex w-full items-center gap-2 py-2 pl-2 pr-2.5 text-left"
+                style={{ color: isSelected ? "#0f62fe" : glassText }}
+              >
+                <ChevronRight
+                  size={14}
+                  className="shrink-0 transition-transform duration-150"
+                  style={{ transform: isSelected ? "rotate(90deg)" : undefined }}
+                />
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-white/20 text-white ring-1 ring-black/5" style={{ background: NODE_COLORS[node.type] ?? "#9b8ff5" }}>
+                  {(() => {
+                    const NodeIcon = NODE_ICONS[node.type] ?? DEFAULT_NODE_ICON;
+                    return <NodeIcon size={10} />;
+                  })()}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{node.label}</span>
+              </button>
+              {(detailForNode || overlayForNode) && (
+                <div className="border-t px-2 pb-2 pt-2" style={{ borderColor: themeMode === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)" }}>
+                  {overlayForNode ? (
+                    <NodeOverlayPanel
+                      info={overlayForNode}
+                      onExit={() => onNodeAction?.("exit-overlay", node.id)}
+                    />
+                  ) : detailForNode ? (
+                    <NodeDetailPanel
+                      info={detailForNode}
+                      onClose={() => {
+                        onNodeAction?.("close", detailForNode.node.id);
+                        onCloseNode?.();
+                      }}
+                      onExitBlastRadius={() => onNodeAction?.("exit-blast-radius", detailForNode.node.id)}
+                      onViewResources={() => onNodeAction?.("resources", detailForNode.node.id)}
+                      onViewModules={() => onNodeAction?.("modules", detailForNode.node.id)}
+                      onViewProviders={() => onNodeAction?.("providers", detailForNode.node.id)}
+                      onViewBlastRadius={() => onNodeAction?.("blast-radius", detailForNode.node.id)}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </div>
           );
         })}
         {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
