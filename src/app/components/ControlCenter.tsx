@@ -1159,13 +1159,19 @@ type ExplorerNode = { id: string; label: string; type: string; secondary?: strin
 type ExplorerQueryResult = { query: string; nodes: ExplorerNode[] };
 
 
-function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes = [], returnedNodesTheme = "light", selectedNodeId, onSelectNode, onCloseNode, onNodeAction }: {
+const DEFAULT_SCREEN_PROMPTS = ["View all Modules", "View all Providers", "View all Resources", "Drifted Workspaces"];
+
+function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes = [], returnedNodesTheme = "light", selectedNodeId, onSelectNode, onCloseNode, onNodeAction, isDefaultEmptyState = false, onSelectPrompt }: {
   selectedNodeInfo?: SelectedNodeInfo | null;
   nodeOverlayInfo?: NodeOverlayInfo | null;
+  returnedNodes?: TopoNode[];
+  returnedNodesTheme?: "light" | "dark";
   selectedNodeId?: string | null;
   onSelectNode?: (id: string) => void;
   onCloseNode?: () => void;
   onNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
+  isDefaultEmptyState?: boolean;
+  onSelectPrompt?: (prompt: string) => void;
 }) {
   const handleNodeSelect = (id: string) => {
     if (id === selectedNodeId) {
@@ -1177,7 +1183,7 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 24px 0", color: M.text, fontFamily: M.font }}>
+    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 24px 0", color: M.text, fontFamily: M.font, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         <Sparkles size={19} color="#6d4aff" style={{ flexShrink: 0, marginTop: 3 }} />
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55 }}>
@@ -1198,32 +1204,53 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes
           onNodeAction={onNodeAction}
         />
       )}
-      <div style={{ minHeight: 250 }} />
+      {isDefaultEmptyState ? (
+        <div style={{ flex: 1, minHeight: 250, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "24px 0" }}>
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: M.textMuted, textAlign: "center" }}>
+            Each operation opens a new session with your current context loaded.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, width: "100%", maxWidth: 320 }}>
+            {DEFAULT_SCREEN_PROMPTS.map(prompt => (
+              <button key={prompt} type="button" onClick={() => onSelectPrompt?.(prompt)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "7px 12px", border: `1px solid ${M.blue}`, borderRadius: 22, background: "transparent", color: M.blue, textAlign: "left", fontSize: 12, fontFamily: M.font, cursor: "pointer" }}>
+                <span>{prompt}</span>
+                <span>↵</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{ minHeight: 250 }} />
+      )}
     </div>
   );
 }
 
-function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false }: {
+function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showInspectFurther = true }: {
   query: string;
   setQuery: (value: string) => void;
   onFocus: () => void;
   onSend: () => void;
   bottom?: boolean;
+  showInspectFurther?: boolean;
 }) {
   return (
     <div style={{ borderTop: `1px solid ${M.darkBorder}`, padding: bottom ? "14px 16px 16px" : "16px 20px 18px", flexShrink: 0, backgroundColor: M.dark }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-        <strong style={{ color: M.textMuted, fontSize: 12, letterSpacing: "0.04em" }}>Inspect further</strong>
-        <ChevronUp size={18} color={M.text} />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 16 }}>
-        {["What modules are no longer being used?", "When was the last time the module was used?"].map(prompt => (
-          <button key={prompt} type="button" onClick={() => { setQuery(prompt); onFocus(); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "7px 12px", border: `1px solid ${M.blue}`, borderRadius: 22, background: "transparent", color: M.blue, textAlign: "left", fontSize: 12, fontFamily: M.font, cursor: "pointer" }}>
-            <span>{prompt}</span>
-            <span>↵</span>
-          </button>
-        ))}
-      </div>
+      {showInspectFurther && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+            <strong style={{ color: M.textMuted, fontSize: 12, letterSpacing: "0.04em" }}>Inspect further</strong>
+            <ChevronUp size={18} color={M.text} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 16 }}>
+            {["What modules are no longer being used?", "When was the last time the module was used?"].map(prompt => (
+              <button key={prompt} type="button" onClick={() => { setQuery(prompt); onFocus(); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "7px 12px", border: `1px solid ${M.blue}`, borderRadius: 22, background: "transparent", color: M.blue, textAlign: "left", fontSize: 12, fontFamily: M.font, cursor: "pointer" }}>
+                <span>{prompt}</span>
+                <span>↵</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 8, backgroundColor: "#fff", border: `1px solid ${M.darkBorder}` }}>
           <Plus size={19} color={M.textMuted} style={{ flexShrink: 0 }} />
@@ -1374,6 +1401,15 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
   const isRightDock = dockMode === "right";
   const isSideDock = dockMode === "left" || isRightDock;
 
+  // Only the default (overview) screen gets the centered "new session" prompt —
+  // and only while there's no contextual data (selection/overlay/returned nodes) to show.
+  const isDefaultEmptyState = pageContext === "overview" && !selectedNodeInfo && !nodeOverlayInfo && (returnedNodes?.length ?? 0) === 0;
+
+  function selectDefaultScreenPrompt(prompt: string) {
+    setQuery(prompt);
+    setSignalTab("chat");
+  }
+
   // Step-detail side panel — only when a step is active in right-dock mode
   if (isRightDock && activeOp && activeStep) {
     return (
@@ -1419,11 +1455,11 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} />
           </div>
           <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, minHeight: 0, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
-            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
+            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
           </div>
         </div>
 
-        <AgentComposer query={query} setQuery={setQuery} onFocus={() => setSignalTab("chat")} onSend={() => { setSignalTab("chat"); chatSendRef.current?.(query); setQuery(""); }} />
+        <AgentComposer query={query} setQuery={setQuery} onFocus={() => setSignalTab("chat")} onSend={() => { setSignalTab("chat"); chatSendRef.current?.(query); setQuery(""); }} showInspectFurther={!isDefaultEmptyState} />
       </div>
     );
   }
@@ -1471,7 +1507,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             </div>
             {/* Ops tab — CLI interface */}
               <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0, flexDirection: "column", backgroundColor: M.dark }}>
-                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} />
+                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
               </div>
           </div>
         </div>
@@ -1494,7 +1530,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             </button>
           )}
 
-          <AgentComposer query={query} setQuery={setQuery} onFocus={openChat} onSend={() => { setSignalTab("chat"); setPanel("expanded"); chatSendRef.current?.(query); setQuery(""); }} bottom />
+          <AgentComposer query={query} setQuery={setQuery} onFocus={openChat} onSend={() => { setSignalTab("chat"); setPanel("expanded"); chatSendRef.current?.(query); setQuery(""); }} bottom showInspectFurther={!isDefaultEmptyState} />
 
         </div>
       </div>
