@@ -257,6 +257,85 @@ function matchValue(actual: unknown, valueType: string, operator: string, condit
   return true;
 }
 
+const VALUELESS_OPERATORS: readonly string[] = ["is empty", "is not empty"];
+
+// Some column sets (e.g. Policy Sets) do not declare a valueType and are matched as text.
+function conditionValueType(column: { valueType?: string } | undefined): keyof typeof operatorsByValueType {
+  return (column?.valueType ?? "text") as keyof typeof operatorsByValueType;
+}
+
+function createDefaultCondition(columns: readonly { id: string; valueType?: string }[]): ConditionFilter {
+  const first = columns[0];
+  return { fieldId: first?.id ?? "name", operator: operatorsByValueType[conditionValueType(first)][0], value: "" };
+}
+
+function isDefaultCondition(condition: ConditionFilter, columns: readonly { id: string; valueType?: string }[]): boolean {
+  const defaults = createDefaultCondition(columns);
+  return condition.fieldId === defaults.fieldId && condition.operator === defaults.operator && condition.value.trim() === "";
+}
+
+function isConditionApplicable(condition: ConditionFilter): boolean {
+  return Boolean(condition.fieldId && condition.operator && (VALUELESS_OPERATORS.includes(condition.operator) || condition.value.trim()));
+}
+
+function getWorkspaceFieldValue(row: WsRow, fieldId: string): string | number | boolean {
+  const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
+  return ({
+    name: row.name, project: row.project, run: row.run, runStatus: row.runStatus, currentRunApplied, repository,
+    noCodeModule: row.noCodeModule, moduleCount, modules, providerCount, providers, terraformVersion,
+    drifted: row.drifted, healthChecksSucceeded: row.healthChecksSucceeded, healthChecksPassed: row.healthChecksPassed,
+    healthChecksFailed: row.healthChecksFailed, healthChecksErrored: row.healthChecksErrored,
+    resourcesDrifted: row.resourcesDrifted, resourcesUndrifted: row.resourcesUndrifted,
+    stateTerraformVersion: row.stateTerraformVersion, currentRumCount: row.currentRumCount,
+    resources: row.count, tags: row.tags, created: row.created, updated: row.updated,
+  } as Record<string, string | number | boolean>)[fieldId] ?? "";
+}
+
+// Single source of truth for condition filtering, shared by the graph, node list, tables, and result counts.
+function filterWorkspaceRows(rows: readonly WsRow[], conditions: ConditionFilter[]): WsRow[] {
+  if (!conditions.length) return [...rows];
+  return rows.filter(row => conditions.every(c => matchValue(
+    getWorkspaceFieldValue(row, c.fieldId), conditionValueType(tableColumns.find(col => col.id === c.fieldId)), c.operator, c.value,
+  )));
+}
+
+function filterPolicySetRows(rows: readonly PolicySetRow[], conditions: ConditionFilter[]): PolicySetRow[] {
+  if (!conditions.length) return [...rows];
+  return rows.filter(row => conditions.every(c => matchValue((row as Record<string, unknown>)[c.fieldId] ?? "", "text", c.operator, c.value)));
+}
+
+function filterRegistryRows<T extends readonly [string, string, string, string, string]>(rows: readonly T[], conditions: ConditionFilter[]): T[] {
+  if (!conditions.length) return [...rows];
+  return rows.filter(([name, version, source, workspaceCount, workspaces]) => conditions.every(c => {
+    const value = ({ name, version, source, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
+    return matchValue(value, conditionValueType(moduleTableColumns.find(col => col.id === c.fieldId)), c.operator, c.value);
+  }));
+}
+
+function filterTerraformVersionRows<T extends readonly [string, string, string]>(rows: readonly T[], conditions: ConditionFilter[]): T[] {
+  if (!conditions.length) return [...rows];
+  return rows.filter(([version, workspaceCount, workspaces]) => conditions.every(c => {
+    const value = ({ version, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
+    return matchValue(value, conditionValueType(terraformVersionTableColumns.find(col => col.id === c.fieldId)), c.operator, c.value);
+  }));
+}
+
+function filterResourceRows(rows: typeof resourceRows, conditions: ConditionFilter[]): typeof resourceRows {
+  if (!conditions.length) return rows;
+  return rows.filter(row => conditions.every(c => matchValue(
+    (row as Record<string, unknown>)[c.fieldId] ?? "", conditionValueType(resourceTableColumns.find(col => col.id === c.fieldId)), c.operator, c.value,
+  )));
+}
+
+function getResultCount(type: string | null, title: string | null, conditions: ConditionFilter[]): number {
+  if (type === "Policy Sets") return filterPolicySetRows(getPolicySetRowsForTitle(title), conditions).length;
+  if (type === "Modules") return filterRegistryRows(moduleRows, conditions).length;
+  if (type === "Providers") return filterRegistryRows(providerRows, conditions).length;
+  if (type === "Resources") return filterResourceRows(resourceRows, conditions).length;
+  if (type === "Terraform Versions") return filterTerraformVersionRows(terraformVersionRows, conditions).length;
+  return filterWorkspaceRows(getWorkspaceRowsForTitle(title), conditions).length;
+}
+
 function SortControl() {
   return <ChevronsUpDown size={14} className="text-[#656a76] shrink-0" />;
 }
@@ -424,6 +503,8 @@ const providerRows = [
 function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { rows: ReadonlyArray<readonly [string, string, string, string, string]>; visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const conditionsKey = JSON.stringify(conditions);
+  useEffect(() => { setPage(1); }, [conditionsKey]);
   const columns = moduleTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const filteredRows = conditions.length
     ? rows.filter(([name, version, source, workspaceCount, workspaces]) =>
@@ -501,6 +582,8 @@ const terraformVersionRows = [
 function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const conditionsKey = JSON.stringify(conditions);
+  useEffect(() => { setPage(1); }, [conditionsKey]);
   const columns = terraformVersionTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const filteredRows = conditions.length
     ? terraformVersionRows.filter(([version, workspaceCount, workspaces]) =>
@@ -739,6 +822,8 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
 function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const conditionsKey = JSON.stringify(conditions);
+  useEffect(() => { setPage(1); }, [conditionsKey]);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const allRows = sourceRowsProp ?? resourceRows;
@@ -971,6 +1056,8 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
   const toggle = (id: string) => setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const conditionsKey = JSON.stringify(conditions);
+  useEffect(() => { setPage(1); }, [conditionsKey]);
   const baseRows = rowsOverride ?? policySetRows;
   const filteredRows = conditions.length
     ? baseRows.filter(row =>
@@ -1136,26 +1223,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
 
   if (activeType === "Workspaces") {
     const titleRows = getWorkspaceRowsForTitle(graphTitle);
-    const filteredWs = conditions.length
-      ? titleRows.filter(row => {
-          const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
-          return conditions.every(c => {
-            const col = tableColumns.find(col => col.id === c.fieldId);
-            const fieldMap: Record<string, unknown> = {
-              name: row.name, project: row.project, run: row.run, runStatus: row.runStatus,
-              currentRunApplied, repository, noCodeModule: row.noCodeModule,
-              moduleCount, modules, providerCount, providers, terraformVersion,
-              drifted: String(row.drifted), healthChecksSucceeded: row.healthChecksSucceeded,
-              healthChecksPassed: row.healthChecksPassed, healthChecksFailed: row.healthChecksFailed,
-              healthChecksErrored: row.healthChecksErrored, resourcesDrifted: row.resourcesDrifted,
-              resourcesUndrifted: row.resourcesUndrifted, stateTerraformVersion: row.stateTerraformVersion,
-              currentRumCount: row.currentRumCount, resources: row.count, tags: row.tags,
-              created: row.created, updated: row.updated,
-            };
-            return matchValue(fieldMap[c.fieldId] ?? "", col?.valueType ?? "text", c.operator, c.value);
-          });
-        })
-      : titleRows;
+    const filteredWs = filterWorkspaceRows(titleRows, conditions);
     const subset = filteredWs;
     for (const ws of subset) {
       const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = ws.metadata;
@@ -1212,15 +1280,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
   }
 
   else if (activeType === "Modules") {
-    const filteredMods = conditions.length
-      ? moduleRows.filter(([name, version, source, workspaceCount, workspaces]) =>
-          conditions.every(c => {
-            const col = moduleTableColumns.find(col => col.id === c.fieldId);
-            const val = ({ name, version, source, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
-            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-          })
-        )
-      : moduleRows;
+    const filteredMods = filterRegistryRows(moduleRows, conditions);
     // Add module nodes and connect each to its individual workspace nodes.
     // Only add a module node if it has at least one valid workspace to connect to.
     const wsNodeIds = new Map<string, string>(); // workspace name → node id
@@ -1242,15 +1302,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
   }
 
   else if (activeType === "Providers") {
-    const filteredProvs = conditions.length
-      ? providerRows.filter(([name, version, source, workspaceCount, workspaces]) =>
-          conditions.every(c => {
-            const col = moduleTableColumns.find(col => col.id === c.fieldId);
-            const val = ({ name, version, source, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
-            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-          })
-        )
-      : providerRows;
+    const filteredProvs = filterRegistryRows(providerRows, conditions);
     // Add provider nodes and connect each to its individual workspace nodes.
     // Only add a provider node if it has at least one valid workspace to connect to.
     const wsNodeIds = new Map<string, string>(); // workspace name → node id
@@ -1272,15 +1324,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
   }
 
   else if (activeType === "Terraform Versions") {
-    const filteredTFV = conditions.length
-      ? terraformVersionRows.filter(([version, workspaceCount, workspaces]) =>
-          conditions.every(c => {
-            const col = terraformVersionTableColumns.find(col => col.id === c.fieldId);
-            const val = ({ version, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
-            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-          })
-        )
-      : terraformVersionRows;
+    const filteredTFV = filterTerraformVersionRows(terraformVersionRows, conditions);
     for (const [version, wsCount, wsList] of filteredTFV) {
       const versionNodeId = `tfver-${version}`;
       nodes.push({ id: versionNodeId, label: version, type: "terraform-version", secondary: `${wsCount} ws`, data: { version, workspaces: wsList } });
@@ -1301,15 +1345,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
   }
 
   else if (activeType === "Resources") {
-    const filteredRes = conditions.length
-      ? resourceRows.filter(row =>
-          conditions.every(c => {
-            const col = resourceTableColumns.find(col => col.id === c.fieldId);
-            const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
-            return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-          })
-        )
-      : resourceRows;
+    const filteredRes = filterResourceRows(resourceRows, conditions);
     const SUBTYPES = ["compute", "identity", "networking", "security", "storage"] as const;
     const bySubtype = new Map<string, string[]>();
     for (let i = 0; i < filteredRes.length; i++) {
@@ -1344,7 +1380,7 @@ function buildTopoGraph(activeType: string, conditions: ConditionFilter[] = [], 
   }
 
   else if (activeType === "Policy Sets") {
-    const filteredPS = getPolicySetRowsForTitle(graphTitle);
+    const filteredPS = filterPolicySetRows(getPolicySetRowsForTitle(graphTitle), conditions);
     for (const row of filteredPS) {
       nodes.push({ id: `ps-${row.id}`, label: row.name, type: "policy-set", secondary: `${row.policyCount} policies`, data: {
         mode: row.enforcementLevel.toLowerCase().includes("hard") ? "enforced" : "advisory",
@@ -1936,7 +1972,7 @@ export function NodeOverlayPanel({ info, onExit }: { info: NodeOverlayInfo; onEx
   );
 }
 
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], exitOverlayNonce = 0, onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; exitOverlayNonce?: number; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -1993,6 +2029,16 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
     if (selectedNodeId !== undefined) setSelectedId(selectedNodeId);
   }, [selectedNodeId]);
 
+  // The owner bumps exitOverlayNonce when a query is run so a Resources/Modules/Providers overlay does not hide the result.
+  const lastExitOverlayNonce = useRef(exitOverlayNonce);
+  useEffect(() => {
+    if (exitOverlayNonce === lastExitOverlayNonce.current) return;
+    lastExitOverlayNonce.current = exitOverlayNonce;
+    setViewResourcesWsName(null); setViewResourcesCount(0);
+    setViewModulesWsName(null); setViewModulesCount(0);
+    setViewProvidersWsName(null); setViewProvidersCount(0);
+  }, [exitOverlayNonce]);
+
   // Workspace grouping: inject hub nodes and rewire edges when wsGroupMode is active
   const { nodes, edges } = useMemo(() => {
     if (activeType !== "Workspaces" || wsGroupMode === "none") return { nodes: rawNodes, edges: rawEdges };
@@ -2017,6 +2063,13 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       .filter(e => e.source);
     return { nodes: [...hubNodes, ...rawNodes], edges: spokeEdges };
   }, [rawNodes, rawEdges, activeType, wsGroupMode]);
+
+  // A new query can remove the selected node or the blast-radius origin from the result set.
+  useEffect(() => {
+    if (viewResourcesWsName || viewModulesWsName || viewProvidersWsName) return;
+    if (selectedId && !nodes.some(node => node.id === selectedId)) setSelectedId(null);
+    if (blastRadiusId && !nodes.some(node => node.id === blastRadiusId)) setBlastRadiusId(null);
+  }, [nodes, viewResourcesWsName, viewModulesWsName, viewProvidersWsName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resource overlay: when a workspace's "View resources" is clicked, build a mini-graph
   // of all resourceRows belonging to that workspace, plus the workspace node itself.
@@ -3037,32 +3090,251 @@ function TopoLegend({ activeType: _activeType, nodes, themeMode = "dark" }: { ac
   );
 }
 
-function InlineQueryBuilder({
-  queryColumns,
-  onApplyConditions
+type ConditionColumn = { id: string; label: string; valueType?: string };
+
+// Describes the Explorer result set reported to the Advisor so it can explain an empty result.
+export type ReturnedNodesContext = { title: string; conditionCount: number };
+
+function ConditionValueIcon({ valueType, size = 14 }: { valueType: string; size?: number }) {
+  const Icon = valueType === "date" ? CalendarDays : valueType === "number" ? Hash : valueType === "boolean" ? ToggleRight : Type;
+  return <Icon size={size} className="shrink-0" />;
+}
+
+// WHERE/AND condition rows shared by the Explorer HUD and Table View so both edit the same query.
+// In-progress edits stay in local state so typing never re-renders the graph; the owner only
+// hears about them on Run Query / Cancel. `conditions` is the owner's committed draft and resets the rows when it changes.
+function ConditionsEditor({
+  columns,
+  conditions,
+  onRun,
+  onCancel,
+  labelColor = "#656a76",
+  compact = false,
 }: {
-  queryColumns: readonly any[];
-  onApplyConditions?: (conditions: ConditionFilter[]) => void;
+  columns: readonly ConditionColumn[];
+  conditions: ConditionFilter[];
+  onRun: (conditions: ConditionFilter[]) => void;
+  onCancel: () => void;
+  labelColor?: string;
+  compact?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [conditions, setConditions] = useState<ConditionFilter[]>([
-    { fieldId: "name", operator: "contains", value: "" }
-  ]);
+  const [rows, setRows] = useState(conditions);
+  useEffect(() => { setRows(conditions); }, [conditions]);
   const [openFieldIndex, setOpenFieldIndex] = useState<number | null>(null);
   const [openOperatorIndex, setOpenOperatorIndex] = useState<number | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const firstValueInputRef = useRef<HTMLInputElement>(null);
+  const focusValueAfterClear = useRef(false);
+  const dropdownOpen = openFieldIndex !== null || openOperatorIndex !== null;
 
-  const activeCount = conditions.filter(c => c.fieldId && c.operator && (c.operator.includes("empty") || c.value.trim())).length;
+  const closeDropdowns = useCallback(() => { setOpenFieldIndex(null); setOpenOperatorIndex(null); }, []);
 
-  function runQuery(currentConds = conditions) {
-    const valid = currentConds.filter(c => c.fieldId && c.operator && (c.operator.includes("empty") || c.value.trim()));
-    onApplyConditions?.(valid);
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const onMouseDown = (event: MouseEvent) => { if (!rootRef.current?.contains(event.target as Node)) closeDropdowns(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeDropdowns(); };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [dropdownOpen, closeDropdowns]);
+
+  // The clear button unmounts once the lone row is back to default, so hand focus to the value input.
+  useEffect(() => {
+    if (focusValueAfterClear.current) {
+      focusValueAfterClear.current = false;
+      firstValueInputRef.current?.focus();
+    }
+  }, [rows]);
+
+  function update(index: number, patch: Partial<ConditionFilter>) {
+    setRows(current => current.map((condition, i) => i === index ? { ...condition, ...patch } : condition));
   }
 
-  function handleCancel() {
-    const defaultConds = [{ fieldId: "name", operator: "contains", value: "" }];
-    setConditions(defaultConds);
-    onApplyConditions?.([]);
+  function remove(index: number) {
+    closeDropdowns();
+    if (rows.length === 1) focusValueAfterClear.current = true;
+    setRows(current => current.length === 1 ? [createDefaultCondition(columns)] : current.filter((_, i) => i !== index));
   }
+
+  function add() {
+    closeDropdowns();
+    setRows(current => [...current, createDefaultCondition(columns)]);
+  }
+
+  function run() { closeDropdowns(); onRun(rows); }
+  function cancel() { closeDropdowns(); onCancel(); }
+
+  const segment = "flex h-8 items-center border border-[rgba(59,61,69,0.4)] bg-white text-[12px] text-[#3b3d45] -ml-px first:ml-0";
+  const iconButton = `${segment} w-8 shrink-0 justify-center bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3] focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]`;
+  const pickerButton = "flex h-full w-full items-center justify-between gap-1.5 px-2.5 text-left text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f62fe]";
+  const menu = "absolute left-0 top-[34px] z-40 max-h-60 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md";
+
+  return (
+    <div ref={rootRef} className="text-[12px] text-[#3b3d45]" style={{ cursor: "default" }} onMouseDown={event => event.stopPropagation()}>
+      <div className="space-y-2.5">
+        {rows.map((condition, index) => {
+          const field = columns.find(column => column.id === condition.fieldId) ?? columns[0];
+          const valueType = conditionValueType(field);
+          const operators = operatorsByValueType[valueType];
+          const valueless = VALUELESS_OPERATORS.includes(condition.operator);
+          const onlyRow = rows.length === 1;
+          // A lone default row has nothing to remove or clear, so it gets no leading control.
+          const showLeadingControl = !onlyRow || !isDefaultCondition(condition, columns);
+          const valueClass = "h-full min-w-0 flex-1 bg-white px-2.5 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#8c909c] focus:ring-2 focus:ring-inset focus:ring-[#0f62fe] disabled:bg-[#f1f2f3]";
+
+          return (
+            <div key={index}>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: labelColor }}>{index === 0 ? "WHERE" : "AND"}</p>
+              <div className="flex items-stretch">
+                {showLeadingControl && (
+                  <button type="button" onClick={() => remove(index)} aria-label={onlyRow ? "Clear condition" : "Remove condition"} className={`${iconButton} rounded-l-[4px]`}>
+                    <X size={14} />
+                  </button>
+                )}
+
+                <div className={`relative ${segment} ${compact ? "w-[108px]" : "w-[190px]"} shrink-0 ${showLeadingControl ? "" : "rounded-l-[4px]"}`}>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenOperatorIndex(null); setOpenFieldIndex(openFieldIndex === index ? null : index); }}
+                    aria-haspopup="listbox"
+                    aria-expanded={openFieldIndex === index}
+                    aria-label={`Field: ${field?.label ?? ""}`}
+                    className={pickerButton}
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5"><ConditionValueIcon valueType={valueType} /><span className="truncate">{field?.label}</span></span>
+                    <ChevronDown size={14} className="shrink-0" />
+                  </button>
+                  {openFieldIndex === index && (
+                    <div role="listbox" aria-label="Field" className={`${menu} w-60`}>
+                      {columns.map(column => (
+                        <button
+                          key={column.id}
+                          type="button"
+                          role="option"
+                          aria-selected={field?.id === column.id}
+                          onClick={() => {
+                            const nextType = conditionValueType(column);
+                            update(index, { fieldId: column.id, operator: operatorsByValueType[nextType][0], value: "" });
+                            setOpenFieldIndex(null);
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${field?.id === column.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
+                        >
+                          <ConditionValueIcon valueType={conditionValueType(column)} />{column.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className={`relative ${segment} ${compact ? "w-[104px]" : "w-[140px]"} shrink-0`}>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenFieldIndex(null); setOpenOperatorIndex(openOperatorIndex === index ? null : index); }}
+                    aria-haspopup="listbox"
+                    aria-expanded={openOperatorIndex === index}
+                    aria-label={`Operator: ${condition.operator}`}
+                    title={condition.operator}
+                    className={`${pickerButton} text-[#656a76]`}
+                  >
+                    <span className="truncate">{condition.operator}</span>
+                    <ChevronDown size={14} className="shrink-0" />
+                  </button>
+                  {openOperatorIndex === index && (
+                    <div role="listbox" aria-label="Operator" className={`${menu} w-48`}>
+                      {operators.map(operator => (
+                        <button
+                          key={operator}
+                          type="button"
+                          role="option"
+                          aria-selected={condition.operator === operator}
+                          onClick={() => { update(index, { operator }); setOpenOperatorIndex(null); }}
+                          className={`flex w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${condition.operator === operator ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
+                        >
+                          {operator}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className={`${segment} min-w-0 flex-1`}>
+                  {valueType === "date" && !valueless ? (
+                    <input
+                      type="datetime-local"
+                      step="1"
+                      value={condition.value}
+                      onChange={event => update(index, { value: event.target.value })}
+                      onKeyDown={event => { if (event.key === "Enter") run(); }}
+                      ref={index === 0 ? firstValueInputRef : undefined}
+                      aria-label="Condition date and time"
+                      className={valueClass}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={valueless ? "" : condition.value}
+                      disabled={valueless}
+                      onChange={event => update(index, { value: event.target.value })}
+                      onKeyDown={event => { if (event.key === "Enter") run(); }}
+                      placeholder={valueless ? "" : "Enter a value"}
+                      ref={index === 0 ? firstValueInputRef : undefined}
+                      aria-label="Condition value"
+                      className={valueClass}
+                    />
+                  )}
+                </div>
+
+                <button type="button" onClick={add} aria-label="Add condition" className={`${iconButton} group/add relative rounded-r-[4px]`}>
+                  <Plus size={14} />
+                  <span aria-hidden="true" className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#0c0c0e] px-3 py-1.5 text-xs font-normal text-white opacity-0 shadow-md transition-opacity group-hover/add:opacity-100 group-focus-visible/add:opacity-100">
+                    Add condition
+                    <span className="absolute left-1/2 top-full size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#0c0c0e]" />
+                  </span>
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={cancel}
+          className="h-8 rounded-[4px] border border-[rgba(59,61,69,0.4)] bg-[#fafafa] px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f1f2f3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={run}
+          className="h-8 rounded-[4px] bg-[#0f62fe] px-4 text-[12px] font-medium text-white hover:bg-[#0043ce] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe] focus-visible:ring-offset-2"
+        >
+          Run Query
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Table View query builder. Conditions are owned by the Explorer HUD so Graph and Table View stay in sync.
+function InlineQueryBuilder({
+  queryColumns,
+  draftConditions,
+  appliedCount,
+  onRun,
+  onCancel,
+}: {
+  queryColumns: readonly ConditionColumn[];
+  draftConditions: ConditionFilter[];
+  appliedCount: number;
+  onRun: (conditions: ConditionFilter[]) => void;
+  onCancel: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="mb-4 rounded-[8px] border border-[#dedfe3] bg-white p-4 shadow-sm text-[12px] text-[#3b3d45]">
@@ -3073,6 +3345,7 @@ function InlineQueryBuilder({
             onClick={() => setExpanded(e => !e)}
             className="flex size-[26px] items-center justify-center rounded-[5px] border border-[rgba(59,61,69,0.4)] text-[#3b3d45] hover:bg-[#f1f2f3]"
             aria-label={expanded ? "Collapse conditions" : "Expand conditions"}
+            aria-expanded={expanded}
           >
             {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </button>
@@ -3081,150 +3354,15 @@ function InlineQueryBuilder({
               {expanded ? "Modify conditions" : "Show conditions"}
             </span>
             <span className="text-[11px] text-[#656a76]">
-              {activeCount > 0 ? `${activeCount} condition${activeCount > 1 ? "s" : ""} applied ⓘ` : "No conditions applied ⓘ"}
+              {appliedCount > 0 ? `${appliedCount} condition${appliedCount > 1 ? "s" : ""} applied ⓘ` : "No conditions applied ⓘ"}
             </span>
           </div>
         </div>
       </div>
 
       {expanded && (
-        <div className="mt-4 space-y-3">
-          {conditions.map((cond, index) => {
-            const selectedField = queryColumns.find(c => c.id === cond.fieldId) ?? queryColumns[0];
-            const SelectedFieldIcon = selectedField?.valueType === "date" ? CalendarDays : selectedField?.valueType === "number" ? Hash : selectedField?.valueType === "boolean" ? ToggleRight : Type;
-            const availableOperators = operatorsByValueType[(selectedField?.valueType ?? "text") as keyof typeof operatorsByValueType];
-
-            return (
-              <div key={index} className="flex items-center gap-2">
-                <span className="w-[60px] text-[12px] font-medium text-[#3b3d45]">{index === 0 ? "WHERE" : "AND"}</span>
-                
-                {/* Field selector */}
-                <div className="relative min-w-[190px]">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFieldIndex(openFieldIndex === index ? null : index)}
-                    className="flex h-9 w-full items-center justify-between rounded-l-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]"
-                  >
-                    <span className="flex items-center gap-2"><SelectedFieldIcon size={14} />{selectedField?.label ?? "Name"}</span>
-                    <ChevronDown size={14} />
-                  </button>
-                  {openFieldIndex === index && (
-                    <div className="absolute left-0 top-[38px] z-40 max-h-60 w-60 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md">
-                      {queryColumns.map(col => {
-                        const Icon = col.valueType === "date" ? CalendarDays : col.valueType === "number" ? Hash : col.valueType === "boolean" ? ToggleRight : Type;
-                        return (
-                          <button
-                            key={col.id}
-                            type="button"
-                            onClick={() => {
-                              setConditions(prev => prev.map((c, i) => i === index ? { ...c, fieldId: col.id, operator: operatorsByValueType[col.valueType as keyof typeof operatorsByValueType][0] } : c));
-                              setOpenFieldIndex(null);
-                            }}
-                            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${cond.fieldId === col.id ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
-                          >
-                            <Icon size={14} /> {col.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Operator selector */}
-                <div className="relative -ml-2 min-w-[140px]">
-                  <button
-                    type="button"
-                    onClick={() => setOpenOperatorIndex(openOperatorIndex === index ? null : index)}
-                    className="flex h-9 w-full items-center justify-between border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45]"
-                  >
-                    <span>{cond.operator}</span>
-                    <ChevronDown size={14} />
-                  </button>
-                  {openOperatorIndex === index && (
-                    <div className="absolute left-0 top-[38px] z-40 max-h-60 w-48 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md">
-                      {availableOperators.map(op => (
-                        <button
-                          key={op}
-                          type="button"
-                          onClick={() => {
-                            setConditions(prev => prev.map((c, i) => i === index ? { ...c, operator: op } : c));
-                            setOpenOperatorIndex(null);
-                          }}
-                          className={`flex w-full px-3 py-1.5 text-left text-[12px] hover:bg-[#f1f2f3] ${cond.operator === op ? "bg-[#edf4ff] text-[#0f62fe]" : "text-[#3b3d45]"}`}
-                        >
-                          {op}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Value input */}
-                <input
-                  type="text"
-                  value={cond.value}
-                  onChange={e => {
-                    const val = e.target.value;
-                    const newConds = conditions.map((c, i) => i === index ? { ...c, value: val } : c);
-                    setConditions(newConds);
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") runQuery();
-                  }}
-                  placeholder="Enter a value"
-                  className="-ml-2 h-9 min-w-0 flex-1 rounded-r-[4px] border border-[rgba(59,61,69,0.4)] bg-white px-3 text-[12px] text-[#3b3d45] outline-none placeholder:text-[#8c909c] focus:border-[#0f62fe]"
-                />
-
-                {/* Trash button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    let newConds: ConditionFilter[];
-                    if (conditions.length === 1) {
-                      newConds = [{ fieldId: "name", operator: "contains", value: "" }];
-                    } else {
-                      newConds = conditions.filter((_, i) => i !== index);
-                    }
-                    setConditions(newConds);
-                    runQuery(newConds);
-                  }}
-                  className="flex size-9 items-center justify-center rounded-[4px] border border-[rgba(59,61,69,0.25)] bg-[#fafafa] text-[#3b3d45] hover:bg-[#f1f2f3]"
-                  aria-label="Remove condition"
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            );
-          })}
-
-          {/* Add condition link */}
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setConditions(prev => [...prev, { fieldId: "name", operator: "contains", value: "" }])}
-              className="flex items-center gap-1.5 text-[12px] font-medium text-[#1060ff] hover:underline"
-            >
-              Add condition <Plus size={14} />
-            </button>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex items-center gap-3 pt-3">
-            <button
-              type="button"
-              onClick={() => runQuery()}
-              className="h-9 rounded-[6px] bg-[#1060ff] px-4 text-[12px] font-medium text-white shadow-sm hover:bg-[#0c56e9]"
-            >
-              Run Query
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              className="h-9 rounded-[6px] border border-[rgba(59,61,69,0.4)] bg-white px-4 text-[12px] font-medium text-[#3b3d45] hover:bg-[#f8f9fa]"
-            >
-              Cancel
-            </button>
-          </div>
+        <div className="mt-4">
+          <ConditionsEditor columns={queryColumns} conditions={draftConditions} onRun={onRun} onCancel={onCancel} />
         </div>
       )}
     </div>
@@ -3251,16 +3389,9 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
   }
 
   const baseRows = rowsOverride ?? workspaceRows;
-  const filteredRows = useMemo(() => {
-    if (!conditions.length) return baseRows;
-    return baseRows.filter(row =>
-      conditions.every(c => {
-        const col = tableColumns.find(column => column.id === c.fieldId);
-        const val = valueForColumn(row, c.fieldId);
-        return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-      })
-    );
-  }, [conditions]);
+  const filteredRows = useMemo(() => filterWorkspaceRows(baseRows, conditions), [conditions, baseRows]);
+  const conditionsKey = JSON.stringify(conditions);
+  useEffect(() => { setPage(1); }, [conditionsKey, baseRows]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -3370,6 +3501,7 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
 }
 
 function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds, onNavigate, onSelectResource, overlayInfo, wsGroupMode = "none" }: { type: string; graphTitle?: string | null; conditions?: ConditionFilter[]; visibleColumnIds: string[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; overlayInfo?: OverlayInfo | null; wsGroupMode?: WsGroupMode }) {
+  const workspaceRowsForTitle = useMemo(() => getWorkspaceRowsForTitle(graphTitle ?? null), [graphTitle]);
   // When a workspace overlay is active, show the scoped table for that kind.
   if (overlayInfo) {
     if (overlayInfo.kind === "modules") {
@@ -3392,7 +3524,7 @@ function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds
   if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} />;
   if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
-  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={getWorkspaceRowsForTitle(graphTitle ?? null)} wsGroupMode={wsGroupMode} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={workspaceRowsForTitle} wsGroupMode={wsGroupMode} />;
 }
 
 // ── ActionsDropdown ──────────────────────────────────────────────────────────
@@ -3762,14 +3894,7 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
 function ExplorerSplashView({
   onSelectType,
   onSelectUseCase,
-  onExplorerQuery, onExplorerNodeSelect, onReturnedNodesChange,
-  conditionsExpanded, setConditionsExpanded,
-  conditionCount, setConditionCount,
-  openFieldIndex, setOpenFieldIndex,
-  conditionFields, setConditionFields,
-  openOperatorIndex, setOpenOperatorIndex,
-  conditionOperators, setConditionOperators,
-  conditionValues, setConditionValues,
+  onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange,
   queryColumns,
   themeMode, setThemeMode,
   navOpen,
@@ -3782,14 +3907,8 @@ function ExplorerSplashView({
   onSelectUseCase: (type: string, title: string) => void;
   onExplorerQuery?: (query: string, nodes: TopoNode[]) => void;
   onExplorerNodeSelect?: (id: string) => void;
-  onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark") => void;
-  conditionsExpanded: boolean; setConditionsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  conditionCount: number; setConditionCount: React.Dispatch<React.SetStateAction<number>>;
-  openFieldIndex: number | null; setOpenFieldIndex: React.Dispatch<React.SetStateAction<number | null>>;
-  conditionFields: string[]; setConditionFields: React.Dispatch<React.SetStateAction<string[]>>;
-  openOperatorIndex: number | null; setOpenOperatorIndex: React.Dispatch<React.SetStateAction<number | null>>;
-  conditionOperators: string[]; setConditionOperators: React.Dispatch<React.SetStateAction<string[]>>;
-  conditionValues: string[]; setConditionValues: React.Dispatch<React.SetStateAction<string[]>>;
+  onExplorerNodeClose?: () => void;
+  onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void;
   queryColumns: readonly any[];
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
   navOpen: boolean;
@@ -3815,7 +3934,11 @@ function ExplorerSplashView({
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [selectedHudNodeId, setSelectedHudNodeId] = useState<string | null>(null);
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState("");
-  const [modalConditions, setModalConditions] = useState<ConditionFilter[]>([]);
+  // One query shared by the HUD builder, Graph, node list, and Table View.
+  // draftConditions is the editors' committed draft (in-progress typing stays local to each editor);
+  // appliedConditions is what Run Query committed and is what filters everything.
+  const [draftConditions, setDraftConditions] = useState<ConditionFilter[]>(() => [createDefaultCondition(tableColumns)]);
+  const [appliedConditions, setAppliedConditions] = useState<ConditionFilter[]>([]);
   useEffect(() => {
     // Sync in both directions: a truthy id selects that node, and an explicit null
     // (e.g. from the Agent Drawer's node detail panel close button) clears the
@@ -3823,10 +3946,6 @@ function ExplorerSplashView({
     if (selectedExplorerNodeId !== undefined) setSelectedHudNodeId(selectedExplorerNodeId);
   }, [selectedExplorerNodeId]);
   useEffect(() => {
-    if (tableViewOpen) { setConditionsExpanded(false); }
-  }, [tableViewOpen, setConditionsExpanded]);
-  useEffect(() => {
-    setModalConditions([]);
     if (selectedGraphType !== "Workspaces") setWsGroupMode("none");
   }, [selectedGraphType]);
   const [hudPosition, setHudPosition] = useState({ x: 8, y: 75 });
@@ -3850,19 +3969,60 @@ function ExplorerSplashView({
     tableColumns;
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
   useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
-  const hudConditions = useMemo(
-    () => conditionFields
-      .map((fieldId, index) => ({ fieldId, operator: conditionOperators[index], value: conditionValues[index]?.trim() ?? "" }))
-      .filter(condition => condition.fieldId && condition.operator && condition.value),
-    [conditionFields, conditionOperators, conditionValues],
-  );
+  // Conditions are scoped to a Type (columns differ per Type), so they reset when the Type changes.
+  // Remove this effect to let conditions persist across Types.
+  useEffect(() => {
+    setDraftConditions([createDefaultCondition(modalQueryColumns)]);
+    setAppliedConditions([]);
+  }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [exitOverlayNonce, setExitOverlayNonce] = useState(0);
+  const announceRun = useRef(false);
+
+  function runConditions(rows: ConditionFilter[]) {
+    setDraftConditions(rows);
+    setAppliedConditions(rows.filter(isConditionApplicable).map(condition => ({ ...condition, value: condition.value.trim() })));
+    // The new result set replaces any open Resources/Modules/Providers overlay, whose tables and graph ignore conditions.
+    setOverlayInfo(null);
+    setExitOverlayNonce(nonce => nonce + 1);
+    announceRun.current = true;
+  }
+  function cancelConditions() {
+    setDraftConditions(appliedConditions.length ? [...appliedConditions] : [createDefaultCondition(modalQueryColumns)]);
+  }
+
   const hudNodes = useMemo(
-    () => selectedGraphType ? buildTopoGraph(selectedGraphType, hudConditions, selectedGraphTitle).nodes : [],
-    [selectedGraphType, hudConditions, selectedGraphTitle],
+    () => selectedGraphType ? buildTopoGraph(selectedGraphType, appliedConditions, selectedGraphTitle).nodes : [],
+    [selectedGraphType, appliedConditions, selectedGraphTitle],
   );
   useEffect(() => {
-    onReturnedNodesChange?.(selectedGraphType ? hudNodes : [], themeMode);
-  }, [selectedGraphType, hudNodes, themeMode, onReturnedNodesChange]);
+    onReturnedNodesChange?.(
+      selectedGraphType ? hudNodes : [],
+      themeMode,
+      selectedGraphType ? { title: selectedGraphTitle ?? selectedGraphType, conditionCount: appliedConditions.length } : null,
+    );
+  }, [selectedGraphType, selectedGraphTitle, appliedConditions, hudNodes, themeMode, onReturnedNodesChange]);
+
+  // Tell the Advisor about the filtered result, the same way picking a view does.
+  useEffect(() => {
+    if (!announceRun.current || !selectedGraphType) return;
+    announceRun.current = false;
+    const description = appliedConditions
+      .map(condition => {
+        const field = modalQueryColumns.find(column => column.id === condition.fieldId);
+        return `${field?.label ?? condition.fieldId} ${condition.operator}${VALUELESS_OPERATORS.includes(condition.operator) ? "" : ` "${condition.value}"`}`;
+      })
+      .join(" and ");
+    onExplorerQuery?.(description ? `${selectedGraphTitle ?? selectedGraphType} where ${description}` : (selectedGraphTitle ?? selectedGraphType), hudNodes);
+  }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A node selected from the list can drop out of the result set when conditions change.
+  useEffect(() => {
+    if (selectedHudNodeId && !hudNodes.some(node => node.id === selectedHudNodeId)) {
+      setSelectedHudNodeId(null);
+      onExplorerNodeClose?.();
+    }
+  }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredSavedViews = useMemo(() => savedViews.filter(view => {
     const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
@@ -3994,12 +4154,7 @@ useEffect(() => {
   }, []);
 
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
-    : selectedGraphType === "Policy Sets" ? getPolicySetRowsForTitle(selectedGraphTitle).length
-    : selectedGraphType === "Modules" ? moduleRows.length
-    : selectedGraphType === "Providers" ? providerRows.length
-    : selectedGraphType === "Resources" ? resourceRows.length
-    : selectedGraphType === "Terraform Versions" ? terraformVersionRows.length
-    : getWorkspaceRowsForTitle(selectedGraphTitle).length;
+    : getResultCount(selectedGraphType, selectedGraphTitle, appliedConditions);
 
   const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
   const hudSurface = themeMode === "light" ? "#ffffff" : "#13141a";
@@ -4032,7 +4187,8 @@ useEffect(() => {
           <TopologyGraph
             activeType={selectedGraphType}
             graphTitle={selectedGraphTitle}
-            conditions={hudConditions}
+            conditions={appliedConditions}
+            exitOverlayNonce={exitOverlayNonce}
             selectedNodeId={selectedHudNodeId}
             explorerNodeAction={explorerNodeAction}
             onSelectedNodeInfoChange={onSelectedNodeInfoChange}
@@ -4041,7 +4197,6 @@ useEffect(() => {
             tableViewOpen={tableViewOpen}
             onTableViewToggle={selectedGraphTitle && (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:")) ? () => {
               setTableViewOpen(open => !open);
-              if (!tableViewOpen) setConditionsExpanded(false);
             } : undefined}
             onOverlayWorkspaceChange={(info) => { setOverlayInfo(info); if (!info) setTableViewOpen(false); }}
             onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
@@ -4086,11 +4241,11 @@ useEffect(() => {
               })()
             ) : (
               <>
-                <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
+                <InlineQueryBuilder queryColumns={modalQueryColumns} draftConditions={draftConditions} appliedCount={appliedConditions.length} onRun={runConditions} onCancel={cancelConditions} />
                 <TopologyTableView
                   type={selectedGraphType}
                   graphTitle={selectedGraphTitle}
-                  conditions={modalConditions}
+                  conditions={appliedConditions}
                   visibleColumnIds={visibleColumnIds}
                   onNavigate={(type) => openGraph(type, type)}
                   onSelectResource={setSelectedResourceId}
@@ -4220,8 +4375,8 @@ useEffect(() => {
                     })()
                   ) : (
                     <>
-                      <InlineQueryBuilder queryColumns={modalQueryColumns} onApplyConditions={setModalConditions} />
-                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={modalConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} wsGroupMode={wsGroupMode} />
+                      <InlineQueryBuilder queryColumns={modalQueryColumns} draftConditions={draftConditions} appliedCount={appliedConditions.length} onRun={runConditions} onCancel={cancelConditions} />
+                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={appliedConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} wsGroupMode={wsGroupMode} />
                     </>
                   )}
                 </div>
@@ -4626,19 +4781,7 @@ useEffect(() => {
 
         {selectedGraphTitle && (() => {
           const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
-          const typeRowCounts: Record<string, number> = {
-            "Workspaces": workspaceRows.length,
-            "Policy Sets": policySetRows.length,
-            "Modules": moduleRows.length,
-            "Providers": providerRows.length,
-            "Resources": resourceRows.length,
-            "Terraform Versions": terraformVersionRows.length,
-          };
-          const resultCount = selectedGraphType === "Workspaces"
-            ? getWorkspaceRowsForTitle(selectedGraphTitle).length
-            : selectedGraphType === "Policy Sets"
-              ? getPolicySetRowsForTitle(selectedGraphTitle).length
-              : typeRowCounts[selectedGraphType ?? ""] ?? 0;
+          const resultCount = getResultCount(selectedGraphType, selectedGraphTitle, appliedConditions);
           const chipLabel = selectedGraphTitle;
 
           // Sub-context label when an overlay or blast radius is active
@@ -4713,7 +4856,7 @@ useEffect(() => {
                 {tableToggleAvailable && viewMode === "graph" && (
                   <button
                     type="button"
-                    onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                    onClick={() => setTableViewOpen(open => !open)}
                     style={{
                       ...segBase,
                       height: 32,
@@ -4768,7 +4911,7 @@ useEffect(() => {
                   {overlayInfo && viewMode === "graph" && (
                     <button
                       type="button"
-                      onClick={() => { if (tableViewOpen) { setTableViewOpen(false); } else { setTableViewOpen(true); setConditionsExpanded(false); } }}
+                      onClick={() => setTableViewOpen(open => !open)}
                       style={{
                         ...segBase,
                         height: 32,
@@ -4787,6 +4930,20 @@ useEffect(() => {
             </div>
           );
         })()}
+
+        {selectedGraphType && (
+          <div className="mt-3 border-t pt-3" style={{ borderColor: glassBorder }}>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>Modify conditions</p>
+            <ConditionsEditor
+              columns={modalQueryColumns}
+              conditions={draftConditions}
+              onRun={runConditions}
+              onCancel={cancelConditions}
+              labelColor={glassMuted}
+              compact
+            />
+          </div>
+        )}
 
         <div className="mt-3">
           <label htmlFor="natural-language-query" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
@@ -4841,7 +4998,7 @@ useEffect(() => {
 
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
-export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark") => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
+export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeClose?: () => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
   const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
@@ -5024,18 +5181,12 @@ export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExp
           }}
           onExplorerQuery={onExplorerQuery}
           onExplorerNodeSelect={(id) => { setSelectedHudNodeId(id); onExplorerNodeSelect?.(id); }}
+          onExplorerNodeClose={onExplorerNodeClose}
           onReturnedNodesChange={onReturnedNodesChange}
           selectedExplorerNodeId={selectedExplorerNodeId}
           explorerNodeAction={explorerNodeAction}
           onSelectedNodeInfoChange={onSelectedNodeInfoChange}
           onNodeOverlayChange={onNodeOverlayChange}
-          conditionsExpanded={conditionsExpanded} setConditionsExpanded={setConditionsExpanded}
-          conditionCount={conditionCount} setConditionCount={setConditionCount}
-          openFieldIndex={openFieldIndex} setOpenFieldIndex={setOpenFieldIndex}
-          conditionFields={conditionFields} setConditionFields={setConditionFields}
-          openOperatorIndex={openOperatorIndex} setOpenOperatorIndex={setOpenOperatorIndex}
-          conditionOperators={conditionOperators} setConditionOperators={setConditionOperators}
-          conditionValues={conditionValues} setConditionValues={setConditionValues}
           queryColumns={tableColumns}
           themeMode={themeMode} setThemeMode={setThemeMode}
           navOpen={navOpen}

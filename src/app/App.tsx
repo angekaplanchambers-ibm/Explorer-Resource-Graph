@@ -121,9 +121,11 @@ export default function App() {
   const [selectedExplorerNodeId, setSelectedExplorerNodeId] = useState<string | null>(null);
   const [returnedNodes, setReturnedNodes] = useState<TopoNode[]>([]);
   const [returnedNodesTheme, setReturnedNodesTheme] = useState<"light" | "dark">("light");
-  const handleReturnedNodesChange = useCallback((nodes: TopoNode[], themeMode: "light" | "dark") => {
+  const [returnedNodesContext, setReturnedNodesContext] = useState<{ title: string; conditionCount: number } | null>(null);
+  const handleReturnedNodesChange = useCallback((nodes: TopoNode[], themeMode: "light" | "dark", context?: { title: string; conditionCount: number } | null) => {
     setReturnedNodes(nodes);
     setReturnedNodesTheme(themeMode);
+    setReturnedNodesContext(context ?? null);
   }, []);
   const [explorerNodeAction, setExplorerNodeAction] = useState<{ action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null>(null);
   // Node detail panel — the graph's former on-canvas "Node Popover" now reports its
@@ -258,6 +260,7 @@ export default function App() {
                       selectedExplorerNodeId={selectedExplorerNodeId}
                       returnedNodes={returnedNodes}
                       returnedNodesTheme={returnedNodesTheme}
+                      returnedNodesContext={returnedNodesContext}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
@@ -355,6 +358,7 @@ export default function App() {
                       selectedExplorerNodeId={selectedExplorerNodeId}
                       returnedNodes={returnedNodes}
                       returnedNodesTheme={returnedNodesTheme}
+                      returnedNodesContext={returnedNodesContext}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
