@@ -1964,7 +1964,7 @@ export function NodeOverlayPanel({ info, onExit }: { info: NodeOverlayInfo; onEx
   );
 }
 
-function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], exitOverlayNonce = 0, onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode, tableViewOpen = false, onTableViewToggle }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; exitOverlayNonce?: number; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">>; tableViewOpen?: boolean; onTableViewToggle?: () => void }) {
+function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = [], exitOverlayNonce = 0, onViewResources, onOverlayWorkspaceChange, onBlastRadiusChange, selectedNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange, wsGroupMode = "none", setWsGroupMode, themeMode = "dark", setThemeMode }: { activeType: string; graphTitle?: string | null; initialWorkspace?: string | null; conditions?: ConditionFilter[]; exitOverlayNonce?: number; onViewResources?: (workspaceName: string) => void; onOverlayWorkspaceChange?: (info: OverlayInfo | null) => void; onBlastRadiusChange?: (id: string | null) => void; selectedNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void; wsGroupMode?: WsGroupMode; setWsGroupMode?: React.Dispatch<React.SetStateAction<WsGroupMode>>; themeMode?: "light" | "dark"; setThemeMode?: React.Dispatch<React.SetStateAction<"light" | "dark">> }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [blastRadiusId, setBlastRadiusId] = useState<string | null>(null);
   const [viewResourcesWsName, setViewResourcesWsName] = useState<string | null>(null);
@@ -3313,54 +3313,6 @@ function ConditionsEditor({
 }
 
 // Table View query builder. Conditions are owned by the Explorer HUD so Graph and Table View stay in sync.
-function InlineQueryBuilder({
-  queryColumns,
-  draftConditions,
-  appliedCount,
-  onRun,
-  onCancel,
-}: {
-  queryColumns: readonly ConditionColumn[];
-  draftConditions: ConditionFilter[];
-  appliedCount: number;
-  onRun: (conditions: ConditionFilter[]) => void;
-  onCancel: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="mb-4 rounded-[8px] border border-[#dedfe3] bg-white p-4 shadow-sm text-[12px] text-[#3b3d45]">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setExpanded(e => !e)}
-            className="flex size-[26px] items-center justify-center rounded-[5px] border border-[rgba(59,61,69,0.4)] text-[#3b3d45] hover:bg-[#f1f2f3]"
-            aria-label={expanded ? "Collapse conditions" : "Expand conditions"}
-            aria-expanded={expanded}
-          >
-            {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
-          <div>
-            <span className="block font-semibold text-[13px] text-[#17171a]">
-              {expanded ? "Modify conditions" : "Show conditions"}
-            </span>
-            <span className="text-[11px] text-[#656a76]">
-              {appliedCount > 0 ? `${appliedCount} condition${appliedCount > 1 ? "s" : ""} applied ⓘ` : "No conditions applied ⓘ"}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="mt-4">
-          <ConditionsEditor columns={queryColumns} conditions={draftConditions} onRun={onRun} onCancel={onCancel} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride, wsGroupMode = "none" }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[]; wsGroupMode?: WsGroupMode }) {
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [page, setPage] = useState(1);
@@ -3756,11 +3708,7 @@ const USE_CASE_CATEGORIES = [
   { heading: "Terraform Versions", Icon: TerraformIcon, type: "Terraform Versions", items: [] },
  ] as const;
 
-// All pre-defined view titles (items + "View All {type}") — table view is allowed only for these
-const PREDEFINED_VIEW_TITLES = new Set<string>([
-  ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
-]);
-
+// All pre-defined view titles (items + "View All {type}").
 export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onNodeAction }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
@@ -3915,7 +3863,6 @@ function ExplorerSplashView({
   const hudCardRef = useRef<HTMLDivElement>(null);
   const [selectedGraphType, setSelectedGraphType] = useState<string | null>(null);
   const [selectedGraphTitle, setSelectedGraphTitle] = useState<string | null>(null);
-  const [tableViewOpen, setTableViewOpen] = useState(false);
   const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
   const [blastRadiusActive, setBlastRadiusActive] = useState(false);
   const [wsGroupMode, setWsGroupMode] = useState<WsGroupMode>("none");
@@ -3941,26 +3888,26 @@ function ExplorerSplashView({
   const hudTabRef = useRef<HTMLButtonElement>(null);
   const [hudDragging, setHudDragging] = useState(false);
   const hudDragRef = useRef<{ element: HTMLDivElement; canvas: HTMLElement; offsetX: number; offsetY: number } | null>(null);
-  const [hudCardWidth, setHudCardWidth] = useState(425);
+  const [hudCardWidth, setHudCardWidth] = useState(475);
   // Intro animation: "intro" = centered on first load, "corner" = top-left (permanent after first selection)
   const [hudPhase, setHudPhase] = useState<"intro" | "corner">("intro");
   const [hudScale, setHudScale] = useState(1);
   const hasEverSelected = useRef(false);
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
-  const modalQueryColumns =
+  const tableQueryColumns =
     selectedGraphType === "Policy Sets" ? policySetColumns :
     selectedGraphType === "Modules" ? moduleTableColumns :
     selectedGraphType === "Providers" ? providerTableColumns :
     selectedGraphType === "Terraform Versions" ? terraformVersionTableColumns :
     selectedGraphType === "Resources" ? resourceTableColumns :
     tableColumns;
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => modalQueryColumns.map(c => c.id));
-  useEffect(() => { setVisibleColumnIds(modalQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => tableQueryColumns.map(c => c.id));
+  useEffect(() => { setVisibleColumnIds(tableQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
   // Conditions are scoped to a Type (columns differ per Type), so they reset when the Type changes.
   // Remove this effect to let conditions persist across Types.
   useEffect(() => {
-    setDraftConditions([createDefaultCondition(modalQueryColumns)]);
+    setDraftConditions([createDefaultCondition(tableQueryColumns)]);
     setAppliedConditions([]);
   }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3976,7 +3923,7 @@ function ExplorerSplashView({
     announceRun.current = true;
   }
   function cancelConditions() {
-    setDraftConditions(appliedConditions.length ? [...appliedConditions] : [createDefaultCondition(modalQueryColumns)]);
+    setDraftConditions(appliedConditions.length ? [...appliedConditions] : [createDefaultCondition(tableQueryColumns)]);
   }
 
   const hudNodes = useMemo(
@@ -3997,7 +3944,7 @@ function ExplorerSplashView({
     announceRun.current = false;
     const description = appliedConditions
       .map(condition => {
-        const field = modalQueryColumns.find(column => column.id === condition.fieldId);
+        const field = tableQueryColumns.find(column => column.id === condition.fieldId);
         return `${field?.label ?? condition.fieldId} ${condition.operator}${VALUELESS_OPERATORS.includes(condition.operator) ? "" : ` "${condition.value}"`}`;
       })
       .join(" and ");
@@ -4051,7 +3998,7 @@ function ExplorerSplashView({
     if (!type) return;
     // No specific pre-defined view matched — fall back to the same "View All {type}" entry the
     // Browse dropdown selects by default for a bare type, including its wsGroupMode reset, so the
-    // HUD chip, Table View eligibility, and Browse dropdown highlighting all stay in sync.
+    // active view and Browse dropdown highlighting stay in sync.
     const title = matchedUseCase?.title ?? `View All ${type}`;
     if (!matchedUseCase) setWsGroupMode("none");
     openGraph(type, title);
@@ -4066,7 +4013,6 @@ function ExplorerSplashView({
     setSelectedGraphTitle(null);
     setWsGroupMode("none");
     setOverlayInfo(null);
-    setTableViewOpen(false);
     setNaturalLanguageQuery("");
   }
 
@@ -4108,7 +4054,7 @@ useEffect(() => {
       if (!drag) return;
       const canvasBounds = drag.canvas.getBoundingClientRect();
       const pillBounds = drag.element.getBoundingClientRect();
-      const nextX = Math.max(0, Math.min(event.clientX - canvasBounds.left - drag.offsetX, canvasBounds.width - pillBounds.width));
+      const nextX = Math.max(0, Math.min(event.clientX - canvasBounds.left - drag.offsetX, canvasBounds.width - pillBounds.width - (hudTabRef.current?.offsetWidth ?? 44) - 8));
       const nextY = Math.max(0, Math.min(event.clientY - canvasBounds.top - drag.offsetY, canvasBounds.height - pillBounds.height));
       setHudPosition({ x: nextX, y: nextY });
     }
@@ -4137,7 +4083,7 @@ useEffect(() => {
     const observer = new ResizeObserver(() => {
       setHudCardWidth(el.offsetWidth);
       setHudPosition(position => {
-        const x = Math.max(0, Math.min(position.x, canvas.clientWidth - el.offsetWidth - 8));
+        const x = Math.max(0, Math.min(position.x, canvas.clientWidth - el.offsetWidth - (hudTabRef.current?.offsetWidth ?? 44) - 8));
         return x === position.x ? position : { ...position, x };
       });
     });
@@ -4188,11 +4134,7 @@ useEffect(() => {
             onSelectedNodeInfoChange={onSelectedNodeInfoChange}
             onNodeOverlayChange={onNodeOverlayChange}
             themeMode={themeMode} setThemeMode={setThemeMode}
-            tableViewOpen={tableViewOpen}
-            onTableViewToggle={selectedGraphTitle && (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:")) ? () => {
-              setTableViewOpen(open => !open);
-            } : undefined}
-            onOverlayWorkspaceChange={(info) => { setOverlayInfo(info); if (!info) setTableViewOpen(false); }}
+            onOverlayWorkspaceChange={setOverlayInfo}
             onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
             wsGroupMode={wsGroupMode}
             setWsGroupMode={setWsGroupMode}
@@ -4221,7 +4163,7 @@ useEffect(() => {
                   </button>
                 )}
                 <ActionsDropdown
-                  columns={modalQueryColumns}
+                  columns={tableQueryColumns}
                   visibleColumnIds={visibleColumnIds}
                   onApply={setVisibleColumnIds}
                 />
@@ -4235,7 +4177,6 @@ useEffect(() => {
               })()
             ) : (
               <>
-                <InlineQueryBuilder queryColumns={modalQueryColumns} draftConditions={draftConditions} appliedCount={appliedConditions.length} onRun={runConditions} onCancel={cancelConditions} />
                 <TopologyTableView
                   type={selectedGraphType}
                   graphTitle={selectedGraphTitle}
@@ -4262,123 +4203,6 @@ useEffect(() => {
           </div>
         )}
       </div>
-
-      {/* Graph table view — centered modal (Graph mode only) */}
-      <AnimatePresence>
-        {tableViewOpen && selectedGraphType && viewMode === "graph" && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              key="table-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }}
-              style={{
-                position: "fixed",
-                inset: 0,
-                top: 60,
-                zIndex: 40,
-                background: "rgba(0,0,0,0.35)",
-                backdropFilter: "blur(2px)",
-              }}
-            />
-            {/* Centering shell — owns position, pointer-events pass through to backdrop */}
-            <div
-              style={{
-                position: "fixed",
-                inset: 0,
-                top: 60,
-                zIndex: 41,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-              }}
-            >
-              {/* Modal — motion only animates opacity + scale, never transform-origin */}
-              <motion.div
-                key="table-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Table view"
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.22, ease: [0.25, 0.8, 0.25, 1] }}
-                style={{
-                  width: "85vw",
-                  maxWidth: 1400,
-                  height: "80vh",
-                  display: "flex",
-                  flexDirection: "column",
-                  borderRadius: 12,
-                  border: `1px solid ${glassBorder}`,
-                  boxShadow: "0 24px 64px rgba(0,0,0,0.28)",
-                  background: themeMode === "light" ? "#ffffff" : "#13141a",
-                  overflow: "hidden",
-                  pointerEvents: "auto",
-                }}
-              >
-                {/* Modal header */}
-                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
-                  <div>
-                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>
-                      {selectedResourceId ? (resourceRows.find(r => r.id === selectedResourceId)?.address ?? selectedResourceId) : (selectedGraphTitle ?? selectedGraphType)}
-                    </p>
-                    {!selectedResourceId && (
-                      <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
-                        {tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing
-                        {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
-                      </p>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {selectedResourceId && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedResourceId(null)}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 28, padding: "0 12px", borderRadius: 20, border: `1px solid ${glassBorder}`, background: "rgba(0,0,0,0.04)", color: glassMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
-                      >
-                        ← back to table
-                      </button>
-                    )}
-                    <ActionsDropdown
-                      columns={modalQueryColumns}
-                      visibleColumnIds={visibleColumnIds}
-                      onApply={setVisibleColumnIds}
-                    />
-                    <button type="button" onClick={() => { setTableViewOpen(false); setSelectedResourceId(null); }} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close table view">
-                      <X size={18} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-auto p-5">
-                  {selectedResourceId ? (
-                    (() => {
-                      const row = (overlayInfo?.rows ?? resourceRows).find(r => r.id === selectedResourceId)
-                        ?? resourceRows.find(r => r.id === selectedResourceId);
-                      return row ? (
-                        <ResourceDetailView
-                          row={row}
-                          themeMode={themeMode}
-                        />
-                      ) : null;
-                    })()
-                  ) : (
-                    <>
-                      <InlineQueryBuilder queryColumns={modalQueryColumns} draftConditions={draftConditions} appliedCount={appliedConditions.length} onRun={runConditions} onCancel={cancelConditions} />
-                      <TopologyTableView type={selectedGraphType} graphTitle={selectedGraphTitle} conditions={appliedConditions} visibleColumnIds={visibleColumnIds} onNavigate={(type) => openGraph(type, type)} onSelectResource={setSelectedResourceId} overlayInfo={overlayInfo} wsGroupMode={wsGroupMode} />
-                    </>
-                  )}
-                </div>
-              </motion.div>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Saved Views modal */}
       <AnimatePresence>
@@ -4522,7 +4346,7 @@ useEffect(() => {
           transform: `translate(-50%, -50%) scale(${hudScale})`,
           transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
           transformOrigin: "center center",
-          width: "min(50vw, 425px)",
+          width: "min(50vw, 475px)",
           maxWidth: "calc(100% - 16px)",
         } : {
           left: hudPosition.x,
@@ -4534,8 +4358,8 @@ useEffect(() => {
             : "transform 0.32s cubic-bezier(0.25,0.8,0.25,1)",
           transformOrigin: "top left",
           pointerEvents: hudCollapsed ? "none" : undefined,
-          width: "min(50vw, 425px)",
-          maxWidth: "calc(100% - 16px)",
+          width: "min(50vw, 475px)",
+          maxWidth: "calc(100% - 60px)",
         }}
       >
 
@@ -4699,7 +4523,12 @@ useEffect(() => {
                         key={category.type}
                         type="button"
                         role="menuitem"
-                        onClick={() => setHoveredUseCaseType(category.type)}
+                        onClick={() => {
+                          setHoveredUseCaseType(category.type);
+                          setWsGroupMode("none");
+                          openGraph(category.type, `View All ${category.type}`);
+                          setUseCaseMenuOpen(true);
+                        }}
                         className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
                         style={!isHovered ? { color: glassText } : undefined}
                       >
@@ -4794,18 +4623,6 @@ useEffect(() => {
                   : null;
 
           const inSubContext = subContextLabel !== null;
-
-          // Table toggle is available for predefined views regardless of sub-context state
-          const tableToggleAvailable = selectedGraphTitle !== null &&
-            (PREDEFINED_VIEW_TITLES.has(selectedGraphTitle) || selectedGraphTitle.startsWith("project:") || selectedGraphTitle.startsWith("status:"));
-
-          function exitSubContext() {
-            setOverlayInfo(null);
-            setTableViewOpen(false);
-          }
-
-          const isBlastSub = blastRadiusActive;
-
           const segBase: React.CSSProperties = {
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "#ffffff",
@@ -4817,7 +4634,7 @@ useEffect(() => {
 
           return (
             <div className="mt-2 flex flex-col gap-1.5">
-              {/* ── Base chip — [×] [icon + label (count)] [TABLE VIEW →] ── */}
+              {/* Base chip — [×] [icon + label (count)] */}
               <div
                 className="flex w-full overflow-hidden"
                 style={{ minWidth: 0, borderRadius: 4, border: "1px solid rgba(59,61,69,0.4)", boxShadow: "0 1px 0.5px rgba(101,106,118,0.05), 0 2px 1px rgba(101,106,118,0.05)" }}
@@ -4839,7 +4656,7 @@ useEffect(() => {
                   style={{
                     ...segBase,
                     flex: 1, minWidth: 0, height: 32,
-                    borderRight: tableToggleAvailable && viewMode === "graph" ? "1px solid rgba(59,61,69,0.4)" : "none",
+                    borderRight: "none",
                     justifyContent: "flex-start",
                     gap: 6, paddingLeft: 12, paddingRight: 8,
                     cursor: "default",
@@ -4850,27 +4667,9 @@ useEffect(() => {
                   <span className="shrink-0 text-[#656a76]" style={{ fontWeight: 400 }}>({resultCount})</span>
                 </div>
 
-                {/* Right segment — TABLE VIEW → / GRAPH VIEW */}
-                {tableToggleAvailable && viewMode === "graph" && (
-                  <button
-                    type="button"
-                    onClick={() => setTableViewOpen(open => !open)}
-                    style={{
-                      ...segBase,
-                      height: 32,
-                      paddingLeft: 13, paddingRight: 13, gap: 6,
-                      fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
-                      background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
-                      color: tableViewOpen ? "#0f62fe" : "#3b3d45",
-                    }}
-                    className="transition-colors hover:bg-[#f1f2f3]"
-                  >
-                    {tableViewOpen ? <>Graph View</> : <>Table View</>}
-                  </button>
-                )}
               </div>
 
-              {/* ── Sub chip — [×] [sub-context label] [TABLE VIEW?] ── */}
+              {/* Sub chip — dismiss + sub-context label */}
               {inSubContext && (
                 <div
                   className="flex w-full overflow-hidden"
@@ -4897,7 +4696,7 @@ useEffect(() => {
                       ...segBase,
                       flex: 1, minWidth: 0, height: 32,
                       justifyContent: "flex-start", paddingLeft: 12, paddingRight: 12,
-                      borderRight: overlayInfo ? "1px solid rgba(59,61,69,0.4)" : "none",
+                      borderRight: overlayInfo && viewMode === "graph" ? "1px solid rgba(59,61,69,0.4)" : "none",
                       cursor: "default",
                       color: "#3b3d45",
                       background: "#ffffff",
@@ -4905,22 +4704,17 @@ useEffect(() => {
                   >
                     <span className="min-w-0 truncate">{subContextLabel}</span>
                   </div>
-                  {/* TABLE VIEW toggle — only for overlay (resources/modules/providers), not blast radius, not Table View mode */}
                   {overlayInfo && viewMode === "graph" && (
                     <button
                       type="button"
-                      onClick={() => setTableViewOpen(open => !open)}
-                      style={{
-                        ...segBase,
-                        height: 32,
-                        paddingLeft: 13, paddingRight: 13,
-                        fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" as const,
-                        background: tableViewOpen ? "rgba(15,98,254,0.08)" : "#ffffff",
-                        color: tableViewOpen ? "#0f62fe" : "#3b3d45",
+                      onClick={() => {
+                        setSelectedResourceId(null);
+                        setViewMode("classic");
                       }}
+                      style={{ ...segBase, height: 32, paddingLeft: 13, paddingRight: 13, fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}
                       className="transition-colors hover:bg-[#f1f2f3]"
                     >
-                      {tableViewOpen ? <>Graph View</> : <>Table View</>}
+                      Table View
                     </button>
                   )}
                 </div>
@@ -4933,7 +4727,7 @@ useEffect(() => {
           <div className="mt-3 border-t pt-3" style={{ borderColor: glassBorder }}>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>Modify conditions</p>
             <ConditionsEditor
-              columns={modalQueryColumns}
+              columns={tableQueryColumns}
               conditions={draftConditions}
               onRun={runConditions}
               onCancel={cancelConditions}
@@ -5441,7 +5235,7 @@ export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExp
                 themeMode={themeMode}
                 setThemeMode={setThemeMode}
                 explorerNodeAction={explorerNodeAction}
-                onOverlayWorkspaceChange={(info) => { setOverlayInfo(info); if (!info) setTableViewOpen(false); }}
+                onOverlayWorkspaceChange={setOverlayInfo}
                 onBlastRadiusChange={(id) => setBlastRadiusActive(!!id)}
                 onViewResources={(workspaceName) => {
                   setGraphInitialWorkspace(workspaceName);
