@@ -1799,7 +1799,7 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
           onClick={onExitBlastRadius}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
         >
-          ← exit dependency view
+          ← exit Dependency View
         </button>
         <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{node.label}</div>
 
@@ -1868,7 +1868,7 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
             onClick={onViewBlastRadius}
             style={{ height: 38, borderRadius: 8, border: `1px solid ${BLAST_DOWNSTREAM_COLOR}66`, background: "transparent", color: BLAST_DOWNSTREAM_COLOR, fontSize: 13, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "inherit" }}
           >
-            View dependency <span>→</span>
+            Dependencies <span>→</span>
           </button>
         </div>
       </div>
