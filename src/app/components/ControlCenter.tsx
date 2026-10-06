@@ -3,7 +3,7 @@ import {
   ChevronDown, ChevronRight, ChevronUp, Terminal, X, ChevronLeft,
   RefreshCw, Plus, ExternalLink, Sparkles, Send, ThumbsUp, ThumbsDown, History, ArrowUp,
 } from "lucide-react";
-import { TFSignalChat } from "./TFSignalChat";
+import { TFSignalChat, type AgentMessage } from "./TFSignalChat";
 import { ExplorerNodeList, type SelectedNodeInfo, type NodeOverlayInfo, type TopoNode } from "./WorkspacesExplorerView";
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -1134,6 +1134,10 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
 // ── Main ControlCenter ────────────────────────────────────────────────────────
 
 interface ControlCenterProps {
+  initialChat?: boolean;
+  onNewConversation?: () => void;
+  messages?: AgentMessage[];
+  onMessagesChange?: React.Dispatch<React.SetStateAction<AgentMessage[]>>;
   initialQuery?: string;
   explorerQuery?: ExplorerQueryResult;
   selectedExplorerNodeId?: string | null;
@@ -1262,7 +1266,7 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showI
         </>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderRadius: 8, backgroundColor: "#fff", border: `1px solid ${M.darkBorder}` }}>
+        <div style={{ flex: 1, minWidth: 0, height: 30, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, padding: "0 8px", borderRadius: 8, backgroundColor: "#fff", border: `1px solid ${M.darkBorder}` }}>
           <Plus size={19} color={M.textMuted} style={{ flexShrink: 0 }} />
           <input
             value={query}
@@ -1277,11 +1281,11 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showI
             placeholder="Type a response..."
             style={{ flex: 1, minWidth: 0, background: "none", border: "none", outline: "none", color: M.text, fontSize: 12, fontFamily: M.font }}
           />
-          <button type="button" onClick={onSend} disabled={!query.trim()} aria-label="Send response" style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", border: "none", borderRadius: "50%", backgroundColor: query.trim() ? M.blue : "#b9c8f5", color: "#fff", cursor: query.trim() ? "pointer" : "not-allowed" }}>
-            <ArrowUp size={20} />
+          <button type="button" onClick={onSend} disabled={!query.trim()} aria-label="Send response" style={{ width: 24, height: 24, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "none", borderRadius: "50%", backgroundColor: query.trim() ? M.blue : "#b9c8f5", color: "#fff", cursor: query.trim() ? "pointer" : "not-allowed" }}>
+            <ArrowUp size={16} />
           </button>
         </div>
-        <button type="button" aria-label="Conversation history" style={{ height: 40, width: 60, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, border: `1px solid ${M.darkBorder}`, borderRadius: 7, background: "#fff", color: M.textMuted, cursor: "pointer" }}>
+        <button type="button" aria-label="Conversation history" style={{ height: 30, width: 60, flexShrink: 0, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, border: `1px solid ${M.darkBorder}`, borderRadius: 7, background: "#fff", color: M.textMuted, cursor: "pointer" }}>
           <History size={18} />
           <ChevronDown size={16} />
         </button>
@@ -1292,10 +1296,10 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showI
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
+export function ControlCenter({ initialChat, onNewConversation, messages, onMessagesChange, initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
-  const [signalTab, setSignalTab] = useState<"ops" | "chat">("ops");
+  const [signalTab, setSignalTab] = useState<"ops" | "chat">(initialQuery || initialChat ? "chat" : "ops");
   const [activeOp, setActiveOp] = useState<RecommendedOp | null>(null);
   const [activeStep, setActiveStep] = useState<NextStep | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -1305,6 +1309,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
   const [panelHeight, setPanelHeight] = useState(440);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const chatSendRef = useRef<((text: string) => void) | null>(null);
+  const handledInitialQuery = useRef<string | undefined>(undefined);
 
   function openChat() {
     setSignalTab("chat");
@@ -1344,16 +1349,11 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
   useEffect(() => { setActiveOp(null); setActiveStep(null); }, [pageContext]);
 
   useEffect(() => {
-    if (initialQuery) {
-      setQuery(initialQuery);
+    if (initialQuery && initialQuery !== handledInitialQuery.current) {
+      handledInitialQuery.current = initialQuery;
+      setSignalTab("chat");
       setPanel("expanded");
-      // Find matching op by keyword
-      const match = OPS.find(op =>
-        initialQuery.toLowerCase().includes(op.title.toLowerCase().split(" ")[0].toLowerCase()) ||
-        op.nextSteps.some(s => s.workbenchQuery && initialQuery.toLowerCase().includes(s.workbenchQuery.split(" ")[0].toLowerCase()))
-      );
-      setProcessing(true);
-      setTimeout(() => { setActiveOp(match || OPS[0]); setProcessing(false); }, 400);
+      chatSendRef.current?.(initialQuery);
       onQueryHandled?.();
     }
   }, [initialQuery]);
@@ -1448,13 +1448,13 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
         {/* Header */}
         <div style={{ height: 47, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 24px", background: "#F1F2F3", borderBottom: "1px solid #C2C5CB", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Sparkles size={18} color="#6d4aff" />
-            <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Advisor</span>
+            <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
+            <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <button type="button" onClick={() => { setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
+            <button type="button" onClick={() => { onNewConversation?.(); setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
             <DockSideToggle value={dockMode} onChange={changeDock} />
-            <button type="button" onClick={() => onClose?.()} aria-label="Collapse Advisor" style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: M.text, cursor: "pointer", padding: 0 }}>
+            <button type="button" onClick={() => onClose?.()} aria-label="Collapse Albus" style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: M.text, cursor: "pointer", padding: 0 }}>
               {dockMode === "left" ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
             </button>
           </div>
@@ -1463,7 +1463,7 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
         {/* Chat / ops content */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: signalTab === "chat" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0 }}>
-            <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} />
+            <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} messages={messages} onMessagesChange={onMessagesChange} />
           </div>
           <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, minHeight: 0, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
             <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
@@ -1487,13 +1487,13 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
           {/* ── Expanded panel header ── */}
           <div style={{ height: 47, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 24px", background: "#F1F2F3", borderBottom: "1px solid #C2C5CB", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Sparkles size={18} color="#6d4aff" />
-              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Advisor</span>
+              <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
+              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-              <button type="button" onClick={() => { setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
+              <button type="button" onClick={() => { onNewConversation?.(); setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
               <DockSideToggle value={dockMode} onChange={changeDock} />
-              <button type="button" onClick={() => onClose?.()} aria-label="Collapse Advisor" style={{ color: M.text, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 0 }}>
+              <button type="button" onClick={() => onClose?.()} aria-label="Collapse Albus" style={{ color: M.text, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 0 }}>
                 {dockMode === "left" ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
               </button>
             </div>
@@ -1511,6 +1511,8 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             {/* Chat tab */}
             <div style={{ display: signalTab === "chat" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0 }}>
               <TFSignalChat
+                messages={messages}
+                onMessagesChange={onMessagesChange}
                 query={query}
                 onQueryChange={setQuery}
                 sendRef={chatSendRef}
@@ -1533,11 +1535,11 @@ export function ControlCenter({ initialQuery, explorerQuery, selectedExplorerNod
             <button
               type="button"
               onClick={togglePanel}
-              aria-label="Open Terraform Agent"
+              aria-label="Open Albus"
               style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, marginBottom: 6, cursor: "pointer", alignSelf: "flex-start" }}
             >
-              <Sparkles size={18} color="#6d4aff" />
-              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Advisor</span>
+              <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
+              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
             </button>
           )}
 

@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowRight, ArrowUp, ChevronDown, ChevronsLeft, ChevronsRight, History, Plus, Sparkles } from "lucide-react";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { TFCWorkspaceView } from "./components/TFCWorkspaceView";
 import { ControlCenter } from "./components/ControlCenter";
 import { Workbench } from "./components/Workbench";
 import NavTfcSideNav from "@/imports/NavTfcSideNav";
 import { TFCTopNav } from "./components/TFCTopNav";
 import type { SelectedNodeInfo, NodeOverlayInfo, TopoNode } from "./components/WorkspacesExplorerView";
+import { CollapsedAgentPanel, type AgentConversation } from "./components/CollapsedAgentPanel";
+import type { AgentMessage } from "./components/TFSignalChat";
 
 /* MARKER-MAKE-KIT-INVOKED */
 
@@ -15,104 +17,21 @@ const SIDE_PANEL_MIN = 280;
 const SIDE_PANEL_MAX = 720;
 const SIDE_PANEL_DEFAULT = 420;
 
-function AgentCollapsedTrigger({ width, onToggle, hiddenBehindDrawer }: {
-  width: number;
-  onToggle: () => void;
-  hiddenBehindDrawer: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label="Toggle Advisor drawer"
-      aria-hidden={hiddenBehindDrawer}
-      tabIndex={hiddenBehindDrawer ? -1 : 0}
-      style={{
-        position: "fixed",
-        right: 0,
-        bottom: 0,
-        zIndex: 10,
-        width: `min(${width}px, 100vw)`,
-        padding: "12px",
-        border: "1px solid #c8b5ff",
-        borderTopColor: "#78a8ff",
-        borderRadius: "7px 0 0 0",
-        background: "#f1f2f3",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-        color: "#0c0c0e",
-        fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
-        fontSize: 12,
-        textAlign: "left",
-        cursor: "pointer",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Sparkles size={18} color="#5f55f5" fill="#5f55f5" />
-        <strong style={{ fontSize: 12, lineHeight: 1.2 }}>Advisor</strong>
-      </div>
-
-      <div style={{
-        height: 32,
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "0 12px",
-        marginBottom: 8,
-        border: "1px solid #a21caf",
-        borderRadius: 4,
-        background: "#fff",
-      }}>
-        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#9218e8", flexShrink: 0 }} />
-        <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>
-          Production workspaces <span style={{ color: "#656a76" }}>2s ago</span>
-        </span>
-        <ArrowRight size={14} />
-      </div>
-
-      <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
-        <div style={{
-          minWidth: 0,
-          flex: 1,
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "0 8px 0 10px",
-          border: "1px solid rgba(59,61,69,0.4)",
-          borderRadius: 4,
-          background: "#fff",
-          color: "#656a76",
-        }}>
-          <Plus size={14} />
-          <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>
-            Ask about your infrastructure · ⌘K
-          </span>
-          <span style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "#1060ff", color: "#fff", flexShrink: 0 }}>
-            <ArrowUp size={16} />
-          </span>
-        </div>
-        <div style={{
-          width: 52,
-          height: 36,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          border: "1px solid rgba(59,61,69,0.4)",
-          borderRadius: 4,
-          background: "#fff",
-          color: "#3b3d45",
-          flexShrink: 0,
-        }}>
-          <History size={14} />
-          <ChevronDown size={14} />
-        </div>
-      </div>
-    </button>
-  );
-}
-
 export default function App() {
+  const [conversations, setConversations] = useState<AgentConversation[]>([]);
+  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
+  const [agentChatOpen, setAgentChatOpen] = useState(false);
+  const activeConversation = conversations.find(conversation => conversation.id === conversationId);
+  const updateMessages = useCallback((update: AgentMessage[] | ((previous: AgentMessage[]) => AgentMessage[])) => {
+    setConversations(previous => {
+      const current = previous.find(conversation => conversation.id === conversationId);
+      const messages = typeof update === "function" ? update(current?.messages ?? []) : update;
+      const title = messages.find(message => message.role === "user")?.text;
+      if (!title) return previous;
+      const conversation = { id: conversationId, title, messages, updatedAt: Date.now() };
+      return current ? previous.map(item => item.id === conversationId ? conversation : item) : [...previous, conversation];
+    });
+  }, [conversationId]);
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchVisible, setWorkbenchVisible] = useState(false);
   const [workbenchQuery, setWorkbenchQuery] = useState<string | undefined>(undefined);
@@ -255,6 +174,10 @@ export default function App() {
                 {agentOpen && (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <ControlCenter
+                      initialChat={agentChatOpen}
+                      onNewConversation={() => setConversationId(crypto.randomUUID())}
+                      messages={activeConversation?.messages}
+                      onMessagesChange={updateMessages}
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
@@ -292,10 +215,12 @@ export default function App() {
                 onPageChange={setPage}
                 onControlCenterTrigger={(q) => setPendingQuery(q)}
                 onExplorerQuery={(query, nodes) => {
+                  setAgentChatOpen(false);
                   setExplorerQuery({ query, nodes });
                   setAgentOpen(true);
                 }}
                 onExplorerNodeSelect={(nodeId) => {
+                  setAgentChatOpen(false);
                   setSelectedExplorerNodeId(nodeId);
                   setAgentOpen(true);
                 }}
@@ -353,6 +278,10 @@ export default function App() {
                 {agentOpen && (
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                     <ControlCenter
+                      initialChat={agentChatOpen}
+                      onNewConversation={() => setConversationId(crypto.randomUUID())}
+                      messages={activeConversation?.messages}
+                      onMessagesChange={updateMessages}
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
@@ -383,11 +312,16 @@ export default function App() {
         </div>
       </div>
 
-      {!workbenchOpen && (
-        <AgentCollapsedTrigger
+      {!workbenchOpen && !agentOpen && (
+        <CollapsedAgentPanel
           width={panelW}
-          onToggle={() => setAgentOpen(open => !open)}
-          hiddenBehindDrawer={agentOpen && dockMode === "right"}
+          nodes={selectedNodeInfo ? [selectedNodeInfo.node] : returnedNodes}
+          context={selectedNodeInfo ? `${selectedNodeInfo.activeType} · ${selectedNodeInfo.node.label}` : returnedNodesContext?.title ?? page}
+          conversations={conversations}
+          onOpen={() => { setAgentChatOpen(false); setAgentOpen(true); }}
+          onSelectNode={nodeId => { setAgentChatOpen(false); setSelectedExplorerNodeId(nodeId); setAgentOpen(true); }}
+          onSend={query => { setAgentChatOpen(true); setConversationId(crypto.randomUUID()); setPendingQuery(query); setAgentOpen(true); }}
+          onResume={id => { setAgentChatOpen(true); setConversationId(id); setAgentOpen(true); }}
         />
       )}
 

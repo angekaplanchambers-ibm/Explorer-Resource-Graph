@@ -92,10 +92,12 @@ function LoadingDots() {
 
 // ── Message types ─────────────────────────────────────────────────────────────
 type Role = "user" | "assistant";
-interface Msg { id: number; role: Role; text: string; streaming?: boolean; }
+export interface AgentMessage { id: string; role: Role; text: string; streaming?: boolean; }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 export interface TFSignalChatProps {
+  messages?: AgentMessage[];
+  onMessagesChange?: React.Dispatch<React.SetStateAction<AgentMessage[]>>;
   /** Current value of the shared bar input */
   query: string;
   /** Called when a hint chip is clicked — sets the bar input value */
@@ -105,8 +107,10 @@ export interface TFSignalChatProps {
 }
 
 // ── TFSignalChat ──────────────────────────────────────────────────────────────
-export function TFSignalChat({ query: _query, onQueryChange, sendRef }: TFSignalChatProps) {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+export function TFSignalChat({ query: _query, onQueryChange, sendRef, messages, onMessagesChange }: TFSignalChatProps) {
+  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
+  const msgs = messages ?? localMessages;
+  const setMsgs = onMessagesChange ?? setLocalMessages;
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -121,7 +125,7 @@ export function TFSignalChat({ query: _query, onQueryChange, sendRef }: TFSignal
       const trimmed = text.trim();
       if (!trimmed || loading) return;
 
-      const userMsg: Msg = { id: Date.now(), role: "user", text: trimmed };
+      const userMsg: AgentMessage = { id: crypto.randomUUID(), role: "user", text: trimmed };
       setMsgs(prev => [...prev, userMsg]);
       setLoading(true);
 
@@ -131,7 +135,7 @@ export function TFSignalChat({ query: _query, onQueryChange, sendRef }: TFSignal
         const fullText = RESPONSES[resolveIntent(trimmed)];
         const words = fullText.split(" ");
         let i = 0;
-        const assistantId = Date.now() + 1;
+        const assistantId = crypto.randomUUID();
         setMsgs(prev => [...prev, { id: assistantId, role: "assistant", text: "", streaming: true }]);
         const iv = setInterval(() => {
           i++;
@@ -147,7 +151,7 @@ export function TFSignalChat({ query: _query, onQueryChange, sendRef }: TFSignal
         }, 60);
       }, delay);
     };
-  }, [loading, sendRef]);
+  }, [loading, sendRef, setMsgs]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", backgroundColor: M.dark, fontFamily: M.font }}>
