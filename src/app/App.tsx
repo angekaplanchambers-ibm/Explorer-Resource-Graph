@@ -29,14 +29,14 @@ function AgentCollapsedTrigger({ width, onToggle, hiddenBehindDrawer }: {
       tabIndex={hiddenBehindDrawer ? -1 : 0}
       style={{
         position: "fixed",
-        right: hiddenBehindDrawer ? 0 : 12,
-        bottom: 12,
+        right: 0,
+        bottom: 0,
         zIndex: 10,
-        width: `min(${width}px, calc(100vw - 24px))`,
+        width: `min(${width}px, 100vw)`,
         padding: "12px",
         border: "1px solid #c8b5ff",
         borderTopColor: "#78a8ff",
-        borderRadius: 7,
+        borderRadius: "7px 0 0 0",
         background: "#f1f2f3",
         boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
         color: "#0c0c0e",
