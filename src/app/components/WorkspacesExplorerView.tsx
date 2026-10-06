@@ -4132,11 +4132,17 @@ useEffect(() => {
 
   useEffect(() => {
     const el = hudCardRef.current;
-    if (!el) return;
+    const canvas = el?.parentElement?.parentElement;
+    if (!el || !canvas) return;
     const observer = new ResizeObserver(() => {
       setHudCardWidth(el.offsetWidth);
+      setHudPosition(position => {
+        const x = Math.max(0, Math.min(position.x, canvas.clientWidth - el.offsetWidth - 8));
+        return x === position.x ? position : { ...position, x };
+      });
     });
     observer.observe(el);
+    observer.observe(canvas);
     setHudCardWidth(el.offsetWidth);
     return () => observer.disconnect();
   }, []);
@@ -4151,7 +4157,7 @@ useEffect(() => {
   const glassMuted = themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.64)";
 
   return (
-    <div className="relative h-full min-h-[640px] min-w-[1200px] overflow-hidden bg-[#fafafa] font-sans" style={{ color: glassText }}>
+    <div className="relative h-full min-h-[640px] min-w-0 overflow-hidden bg-[#fafafa] font-sans" style={{ color: glassText }}>
       {/* One canvas for the full Explorer. It is deliberately behind every graph, HUD, and panel. */}
       <div aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         {/* The imported canvas is 650px tall; repeat it so the same dot cadence reaches every viewport height. */}
@@ -4516,6 +4522,8 @@ useEffect(() => {
           transform: `translate(-50%, -50%) scale(${hudScale})`,
           transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
           transformOrigin: "center center",
+          width: "min(50vw, 425px)",
+          maxWidth: "calc(100% - 16px)",
         } : {
           left: hudPosition.x,
           top: hudPosition.y,
@@ -4526,13 +4534,15 @@ useEffect(() => {
             : "transform 0.32s cubic-bezier(0.25,0.8,0.25,1)",
           transformOrigin: "top left",
           pointerEvents: hudCollapsed ? "none" : undefined,
+          width: "min(50vw, 425px)",
+          maxWidth: "calc(100% - 16px)",
         }}
       >
 
         {/* HUD card — rendered after tab, z-index:1 so its dropdown always paints over the tab */}
         <div
           ref={hudCardRef}
-          className="w-[50vw] max-w-[425px] rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
+          className="w-full rounded-[12px] border px-4 py-3 shadow-[0_14px_32px_rgba(0,0,0,0.12)]"
           style={{ position: "relative", zIndex: 1, background: hudSurface, borderColor: glassBorder, cursor: hudDragging ? "grabbing" : "grab", userSelect: hudDragging ? "none" : undefined }}
           onMouseDown={startHudDrag}
         >
@@ -5157,7 +5167,7 @@ export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExp
 
   if (explorerPage === "splash") {
     return (
-      <div className="h-full min-w-[1200px] bg-white font-sans text-[#0c0c0e]">
+      <div className="h-full min-w-0 bg-white font-sans text-[#0c0c0e]">
         <ExplorerSplashView
           onSelectType={(type) => {
             navigateToType(type);
