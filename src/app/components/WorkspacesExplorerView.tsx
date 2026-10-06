@@ -1759,9 +1759,8 @@ export type SelectedNodeInfo = {
   upstreamNodes: TopoNode[];
 };
 
-export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResources, onViewModules, onViewProviders, onViewBlastRadius }: {
+export function NodeDetailPanel({ info, onExitBlastRadius, onViewResources, onViewModules, onViewProviders, onViewBlastRadius }: {
   info: SelectedNodeInfo;
-  onClose: () => void;
   onExitBlastRadius: () => void;
   onViewResources: () => void;
   onViewModules: () => void;
@@ -1771,14 +1770,16 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
   const { node, activeType, themeMode, blastRadiusActive, downstreamNodes, upstreamNodes } = info;
   const isWorkspace = node.type === "workspace";
   const d = node.data as Record<string, unknown>;
+  const fields = getNodeFields(node, activeType).filter(({ label, value }) => label !== "Name" || value !== node.label);
 
   const cardBase: React.CSSProperties = {
     width: "100%",
     boxSizing: "border-box",
     background: themeMode === "light" ? "#ffffff" : "#161820",
     borderRadius: 12,
-    border: themeMode === "light" ? "1px solid rgba(0,0,0,0.1)" : "1px solid rgba(255,255,255,0.1)",
+    border: "none",
     boxShadow: "none",
+    padding: 8,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif",
   };
 
@@ -1794,15 +1795,13 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
   // Blast radius view — exit button + downstream/upstream lists
   if (isWorkspace && activeType === "Workspaces" && blastRadiusActive) {
     return (
-      <div style={{ ...cardBase, padding: "16px 18px" }}>
+      <div style={cardBase}>
         <button
           onClick={onExitBlastRadius}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 14, height: 28, padding: "0 12px", borderRadius: 20, border: themeMode === "light" ? "1px solid rgba(0,0,0,0.15)" : "1px solid rgba(255,255,255,0.15)", background: themeMode === "light" ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.07)", color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
         >
           ← exit Dependency View
         </button>
-        <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12 }}>{node.label}</div>
-
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <svg width="28" height="10" viewBox="0 0 28 10" fill="none"><line x1="1" y1="5" x2="20" y2="5" stroke={BLAST_DOWNSTREAM_COLOR} strokeWidth="1.5" strokeLinecap="round" /><polygon points="20,2 28,5 20,8" fill={BLAST_DOWNSTREAM_COLOR} /></svg>
@@ -1828,16 +1827,12 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
     );
   }
 
-  // Workspace-specific view — close button + fields + action buttons
+  // Workspace-specific view — fields + action buttons
   if (isWorkspace && activeType === "Workspaces") {
     return (
-      <div style={{ ...cardBase, position: "relative", padding: "18px 20px 16px" }}>
-        <button onClick={onClose} style={{ position: "absolute", top: 12, right: 14, color: themeMode === "light" ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "2px 4px" }}>✕</button>
-
-        <div style={{ fontSize: 15, fontWeight: 700, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.3, wordBreak: "break-all", marginBottom: 12, paddingRight: 20 }}>{node.label}</div>
-
+      <div style={cardBase}>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-          {getNodeFields(node, activeType).map(({ label, value }) => (
+          {fields.map(({ label, value }) => (
             <div key={label} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "rgba(255,255,255,0.4)", minWidth: 120, flexShrink: 0, lineHeight: 1.5 }}>{label}</span>
               <span style={{ fontSize: 11, color: themeMode === "light" ? "#3b3d45" : "rgba(255,255,255,0.85)", wordBreak: "break-word", lineHeight: 1.5 }}>{value}</span>
@@ -1876,12 +1871,10 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
   }
 
   // Generic view for all other node types — column-label key-value pairs
-  const fields = getNodeFields(node, activeType);
   return (
-    <div style={{ ...cardBase, padding: "14px 16px" }}>
+    <div style={cardBase}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: themeMode === "light" ? "#0c0c0e" : "#fff", lineHeight: 1.35, wordBreak: "break-word" }}>{node.label}</div>
           <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: NODE_COLORS[node.type] ?? "#9b8ff5", flexShrink: 0 }} />
             <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99", textTransform: "capitalize" }}>{node.type.replace(/-/g, " ")}</span>
@@ -1889,7 +1882,6 @@ export function NodeDetailPanel({ info, onClose, onExitBlastRadius, onViewResour
             <span style={{ fontSize: 11, color: themeMode === "light" ? "#656a76" : "#7b7f99" }}>{node.secondary}</span>
           </div>
         </div>
-        <button onClick={onClose} style={{ color: themeMode === "light" ? "#656a76" : "#4b4f66", background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px", flexShrink: 0 }}>✕</button>
       </div>
       <div style={{ height: 1, background: themeMode === "light" ? "rgba(0,0,0,0.07)" : "rgba(255,255,255,0.07)", margin: "0 0 12px" }} />
       <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 320, overflowY: "auto" }}>
@@ -3769,7 +3761,7 @@ const PREDEFINED_VIEW_TITLES = new Set<string>([
   ...USE_CASE_CATEGORIES.flatMap(c => [...c.items, `View All ${c.type}`]),
 ]);
 
-export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onCloseNode, onNodeAction }: {
+export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onNodeAction }: {
   nodes: TopoNode[];
   selectedNodeId: string | null;
   themeMode: "light" | "dark";
@@ -3861,10 +3853,6 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
                   ) : detailForNode ? (
                     <NodeDetailPanel
                       info={detailForNode}
-                      onClose={() => {
-                        onNodeAction?.("close", detailForNode.node.id);
-                        onCloseNode?.();
-                      }}
                       onExitBlastRadius={() => onNodeAction?.("exit-blast-radius", detailForNode.node.id)}
                       onViewResources={() => onNodeAction?.("resources", detailForNode.node.id)}
                       onViewModules={() => onNodeAction?.("modules", detailForNode.node.id)}
