@@ -129,12 +129,31 @@ function getWorkspaceRowsForTitle(title: string | null): WsRow[] {
   }
   if (title.startsWith("status:")) {
     const key = title.slice(7);
-    return workspaceRows.filter(r => String(r.status ?? "Unknown") === key);
+    return workspaceRows.filter(row => row.runStatus === key);
   }
-  if (!VIEW_TITLE_FILTER[title]) return workspaceRows;
   const fn = VIEW_TITLE_FILTER[title];
-  return workspaceRows.filter((row, i) => fn(row, i));
+  const rows = fn ? workspaceRows.filter((row, i) => fn(row, i)) : [...workspaceRows];
+  const sort = getWorkspaceViewSort(title);
+  return sort ? rows.sort((a, b) => {
+    const comparison = compareTableValues(getWorkspaceFieldValue(a, sort.id), getWorkspaceFieldValue(b, sort.id), tableColumns.find(column => column.id === sort.id)?.valueType);
+    return sort.direction === "asc" ? comparison : -comparison;
+  }) : rows;
 }
+
+function getWorkspaceViewSort(title: string | null): TableSort | null {
+  if (title === "Latest updated workspaces") return { id: "updated", direction: "desc" };
+  if (title === "Oldest applied workspaces") return { id: "currentRunApplied", direction: "asc" };
+  if (title === "Latest Terraform versions") return { id: "terraformVersion", direction: "desc" };
+  return null;
+}
+
+const VIEW_LIMITATIONS: Record<string, string> = {
+  "Latest updated workspaces": "Demo data: preserves the existing 20-workspace selection, ordered by update date. No recency window is defined.",
+  "Latest Terraform versions": "Demo data: shows all selected workspaces ordered by Terraform version. No latest-version cutoff is defined.",
+  "All workspace versions": "Demo data: only one current Terraform version per workspace is available; historical versions are not included.",
+  "Recently updated policy sets": "Demo data: policy sets have no update timestamps. All policy sets are shown without a recency filter.",
+  "Policy sets with overrides": "Demo data: soft-mandatory failures are used as a proxy for overrides; actual override records are unavailable.",
+};
 
 const tableColumns = [
   { id: "name", label: "Name", width: "w-[201px]", valueType: "text" },
@@ -336,8 +355,73 @@ function getResultCount(type: string | null, title: string | null, conditions: C
   return filterWorkspaceRows(getWorkspaceRowsForTitle(title), conditions).length;
 }
 
-function SortControl() {
-  return <ChevronsUpDown size={14} className="text-[#656a76] shrink-0" />;
+type TableSort = { id: string; direction: "asc" | "desc" };
+type TableColumn = { id: string; label: string; valueType?: string; width?: string };
+type TableValue = string | number | boolean;
+
+function compareTableValues(left: TableValue, right: TableValue, valueType = "text") {
+  if (valueType === "date") {
+    const leftDate = Date.parse(String(left));
+    const rightDate = Date.parse(String(right));
+    if (Number.isFinite(leftDate) && Number.isFinite(rightDate)) return leftDate - rightDate;
+  }
+  if (valueType === "number" || typeof left === "number" || typeof right === "number") {
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+  }
+  return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function useTableData<T>(rows: readonly T[], columns: readonly TableColumn[], valueForColumn: (row: T, id: string) => TableValue, initialSort: TableSort | null = null) {
+  const [sort, setSort] = useState<TableSort | null>(initialSort);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const rowsKey = JSON.stringify(rows);
+  useEffect(() => { setPage(1); }, [rowsKey]);
+  const sortedRows = sort ? [...rows].sort((a, b) => {
+    const comparison = compareTableValues(valueForColumn(a, sort.id), valueForColumn(b, sort.id), columns.find(column => column.id === sort.id)?.valueType);
+    return sort.direction === "asc" ? comparison : -comparison;
+  }) : [...rows];
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  function toggleSort(id: string) {
+    setSort(current => ({ id, direction: current?.id === id && current.direction === "asc" ? "desc" : "asc" }));
+    setPage(1);
+  }
+  return {
+    sort, toggleSort, sortedRows,
+    pageRows: sortedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    pagination: {
+      currentPage, totalPages, totalItems: sortedRows.length, pageSize,
+      onPageChange: setPage,
+      onPageSizeChange: (size: number) => { setPageSize(size); setPage(1); },
+    },
+  };
+}
+
+function SortControl({ direction }: { direction?: "asc" | "desc" }) {
+  const Icon = direction === "asc" ? ChevronUp : direction === "desc" ? ChevronDown : ChevronsUpDown;
+  return <Icon size={14} className="text-[#656a76] shrink-0" />;
+}
+
+function TableColumnHeader({ column, sort, onSort, stickyLeft }: { column: TableColumn; sort: TableSort | null; onSort: (id: string) => void; stickyLeft?: number }) {
+  const direction = sort?.id === column.id ? sort.direction : undefined;
+  return (
+    <th
+      className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width ?? ""}`}
+      aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}
+      style={stickyLeft !== undefined ? { position: "sticky", left: stickyLeft, zIndex: 3, background: "#f1f2f3" } : undefined}
+    >
+      <button type="button" onClick={() => onSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
+        <span>{column.label}</span><SortControl direction={direction} />
+      </button>
+    </th>
+  );
+}
+
+function EmptyTableRow({ columnCount, message = "No results match this view. Edit or clear the conditions to try again." }: { columnCount: number; message?: string }) {
+  return <tr><td colSpan={Math.max(1, columnCount)} className="px-4 py-10 text-center text-[12px] text-[#656a76]" role="status">{message}</td></tr>;
 }
 
 function TablePagination({
@@ -378,7 +462,7 @@ function TablePagination({
   const pages = getPageNumbers();
 
   return (
-    <div className="mt-6 flex items-center justify-between text-[13px] font-normal text-[#3b3d45] select-none">
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 text-[12px] font-normal text-[#3b3d45] select-none">
       {/* Left: Range text */}
       <div>
         {startItem}–{endItem} of {totalItems}
@@ -411,6 +495,7 @@ function TablePagination({
               <button
                 key={pageNum}
                 type="button"
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => onPageChange?.(pageNum)}
                 className={`relative px-1 pb-0.5 text-[13px] font-normal transition-colors ${
                   isActive
@@ -442,6 +527,7 @@ function TablePagination({
           type="button"
           onClick={() => setMenuOpen(o => !o)}
           aria-expanded={menuOpen}
+          aria-label="Items per page"
           className="flex h-8 items-center gap-2 rounded-[6px] border border-[#8c909c] bg-white px-3 py-1 font-normal text-[#17171a] hover:bg-[#f8f9fa] shadow-sm transition-colors"
         >
           <span>{pageSize}</span>
@@ -501,36 +587,26 @@ const providerRows = [
 ] as const;
 
 function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { rows: ReadonlyArray<readonly [string, string, string, string, string]>; visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const conditionsKey = JSON.stringify(conditions);
-  useEffect(() => { setPage(1); }, [conditionsKey]);
   const columns = moduleTableColumns.filter(column => visibleColumnIds.includes(column.id));
-  const filteredRows = conditions.length
-    ? rows.filter(([name, version, source, workspaceCount, workspaces]) =>
-        conditions.every(c => {
-          const col = moduleTableColumns.find(col => col.id === c.fieldId);
-          const val = { name, version, source, workspaceCount, workspaces }[c.fieldId as "name" | "version" | "source" | "workspaceCount" | "workspaces"] ?? "";
-          return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-        })
-      )
-    : rows;
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const filteredRows = filterRegistryRows(rows, conditions);
+  const { sort, toggleSort, pageRows, pagination } = useTableData(filteredRows, moduleTableColumns, ([name, version, source, workspaceCount, workspaces], id) => {
+    const values: Record<string, string> = { name, version, source, workspaceCount, workspaces };
+    return values[id] ?? "";
+  });
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="w-full table-fixed border-collapse text-left">
+        <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: columns.length * 180 }}>
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
               {columns.map((column, ci) => (
-                <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>
+                <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={ci === 0 ? 0 : undefined} />
               ))}
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
             {pageRows.map(([name, version, source, workspaceCount, workspaces]) => (
-              <tr key={`${name}-${version}`} className="border-t border-[#dedfe3] bg-white">
+              <tr key={`${name}-${version}`} className="h-12 border-t border-[#dedfe3] bg-white">
                 {columns.map((column, ci) => {
                   const content = {
                     name,
@@ -539,22 +615,15 @@ function RegistryTable({ rows, visibleColumnIds, conditions, onNavigate }: { row
                     workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>,
                     workspaces,
                   };
-                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-4 break-words last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>;
+                  return <td key={column.id} className="border-r border-[#dedfe3] px-3 py-3 break-words last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>;
                 })}
               </tr>
             ))}
+            {pageRows.length === 0 && <EmptyTableRow columnCount={columns.length} />}
           </tbody>
         </table>
       </div>
-      <TablePagination
-        currentPage={page}
-        totalPages={totalPages}
-        totalItems={filteredRows.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
-        pageSizeOptions={[20, 50, 100]}
-      />
+      <TablePagination {...pagination} />
     </>
   );
 }
@@ -580,39 +649,21 @@ const terraformVersionRows = [
 ] as const;
 
 function TerraformVersionsTable({ visibleColumnIds, conditions, onNavigate }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void }) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const conditionsKey = JSON.stringify(conditions);
-  useEffect(() => { setPage(1); }, [conditionsKey]);
   const columns = terraformVersionTableColumns.filter(column => visibleColumnIds.includes(column.id));
-  const filteredRows = conditions.length
-    ? terraformVersionRows.filter(([version, workspaceCount, workspaces]) =>
-        conditions.every(c => {
-          const col = terraformVersionTableColumns.find(col => col.id === c.fieldId);
-          const val = ({ version, workspaceCount, workspaces } as Record<string, string>)[c.fieldId] ?? "";
-          return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-        })
-      )
-    : terraformVersionRows;
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const filteredRows = filterTerraformVersionRows(terraformVersionRows, conditions);
+  const { sort, toggleSort, pageRows, pagination } = useTableData(filteredRows, terraformVersionTableColumns, ([version, workspaceCount, workspaces], id) => {
+    const values: Record<string, string> = { version, workspaceCount, workspaces };
+    return values[id] ?? "";
+  });
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="w-full table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className="h-11 border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
-          <tbody className="text-[11px] text-[#52525b]">{pageRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-11 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}</tbody>
+        <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: columns.length * 180 }}>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={ci === 0 ? 0 : undefined} />)}</tr></thead>
+          <tbody className="text-[12px] text-[#52525b]">{pageRows.map(([version, workspaceCount, workspaces]) => <tr key={version} className="h-12 border-t border-[#dedfe3] bg-white">{columns.map((column, ci) => { const content = { version, workspaceCount: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{workspaceCount}</a>, workspaces }; return <td key={column.id} className="border-r border-[#dedfe3] px-3 last:border-r-0" style={ci === 0 ? { position: "sticky", left: 0, background: "#ffffff" } : undefined}>{content[column.id]}</td>; })}</tr>)}{pageRows.length === 0 && <EmptyTableRow columnCount={columns.length} />}</tbody>
         </table>
       </div>
-      <TablePagination
-        currentPage={page}
-        totalPages={totalPages}
-        totalItems={filteredRows.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
-        pageSizeOptions={[20, 50, 100]}
-      />
+      <TablePagination {...pagination} />
     </>
   );
 }
@@ -820,25 +871,15 @@ function ResourceDetailView({ row, themeMode }: { row: ResourceRow; themeMode: "
 }
 
 function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectResource, workspaceFilter, sourceRows: sourceRowsProp }: { visibleColumnIds: string[]; conditions: ConditionFilter[]; onNavigate: (type: string) => void; onSelectResource?: (id: string) => void; workspaceFilter?: string | null; sourceRows?: typeof resourceRows }) {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const conditionsKey = JSON.stringify(conditions);
-  useEffect(() => { setPage(1); }, [conditionsKey]);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const columns = resourceTableColumns.filter(column => visibleColumnIds.includes(column.id));
   const allRows = sourceRowsProp ?? resourceRows;
   const baseRows = workspaceFilter ? allRows.filter(r => r.workspace === workspaceFilter) : allRows;
-  const filteredRows = conditions.length
-    ? baseRows.filter(row =>
-        conditions.every(c => {
-          const col = resourceTableColumns.find(col => col.id === c.fieldId);
-          const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
-          return matchValue(val, col?.valueType ?? "text", c.operator, c.value);
-        })
-      )
-    : baseRows;
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const filteredRows = filterResourceRows(baseRows, conditions);
+  const { sort, toggleSort, pageRows, pagination } = useTableData(filteredRows, resourceTableColumns, (row, id) => {
+    const values: Record<string, TableValue> = row;
+    return values[id] ?? "";
+  });
   const selectedRow = onSelectResource ? null : allRows.find(row => row.id === selectedRowId);
   if (selectedRow) {
     return (
@@ -861,17 +902,17 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="min-w-[2300px] table-fixed border-collapse text-left">
-          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" } : undefined}><span className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#17171a]">{column.label}<SortControl /></span></th>)}</tr></thead>
-          <tbody className="text-[11px] text-[#52525b]">
+        <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: columns.length * 180 }}>
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]"><tr>{columns.map((column, ci) => <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={ci === 0 ? 0 : undefined} />)}</tr></thead>
+          <tbody className="text-[12px] text-[#52525b]">
             {pageRows.map(row => (
               <tr
                 key={row.id}
                 className="group h-12 border-t border-[#dedfe3] bg-white hover:bg-[#f5f7ff]"
                 style={{ cursor: onSelectResource ? "pointer" : "default" }}
-                onPointerDown={() => selectRow(row.id)}
                 onClick={() => selectRow(row.id)}
                 onKeyDown={event => {
+                  if (event.target instanceof HTMLElement && event.target.closest("a, button, input")) return;
                   if (onSelectResource && (event.key === "Enter" || event.key === " ")) {
                     event.preventDefault();
                     selectRow(row.id);
@@ -885,32 +926,25 @@ function ResourcesTable({ visibleColumnIds, conditions, onNavigate, onSelectReso
                     type: row.type,
                     name: row.name,
                     address: row.address,
-                    workspace: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.workspace}</a>,
+                    workspace: <a href="#" onClick={e => { e.preventDefault(); e.stopPropagation(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.workspace}</a>,
                     project: row.project,
                     moduleName: row.moduleName,
-                    provider: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Providers"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.provider}</a>,
-                    terraformVersion: <a href="#" onClick={e => { e.preventDefault(); onNavigate("Terraform Versions"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.terraformVersion}</a>,
-                    billableRum: <span className="rounded-[4px] bg-[#dedfe3] px-1.5 py-0.5 font-medium text-[#52525b]">true</span>,
+                    provider: <a href="#" onClick={e => { e.preventDefault(); e.stopPropagation(); onNavigate("Providers"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.provider}</a>,
+                    terraformVersion: <a href="#" onClick={e => { e.preventDefault(); e.stopPropagation(); onNavigate("Terraform Versions"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.terraformVersion}</a>,
+                    billableRum: <span className="rounded-[4px] bg-[#dedfe3] px-1.5 py-0.5 font-medium text-[#52525b]">{String(row.billableRum)}</span>,
                     sourceType: row.sourceType,
                     sourceId: row.sourceId,
                     sourceUpdatedAt: row.sourceUpdatedAt,
                   };
-                  return <td key={column.id} onClick={() => selectRow(row.id)} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id as keyof typeof content]}</td>;
+                  return <td key={column.id} className={`border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}${ci === 0 ? " bg-white group-hover:bg-[#f5f7ff]" : ""}`} style={ci === 0 ? { position: "sticky", left: 0 } : undefined}>{content[column.id]}</td>;
                 })}
               </tr>
             ))}
+            {pageRows.length === 0 && <EmptyTableRow columnCount={columns.length} />}
           </tbody>
         </table>
       </div>
-      <TablePagination
-        currentPage={page}
-        totalPages={totalPages}
-        totalItems={filteredRows.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
-        pageSizeOptions={[20, 50, 100]}
-      />
+      <TablePagination {...pagination} />
     </>
   );
 }
@@ -1051,37 +1085,30 @@ const policySetColumns = [
   { id: "errorCount", label: "Error count", width: "w-[130px]" },
 ] as const;
 
-function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void; rows?: PolicySetRow[] }) {
+function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride, visibleColumnIds = policySetColumns.map(column => column.id) }: { conditions: ConditionFilter[]; onNavigate: (type: string) => void; rows?: PolicySetRow[]; visibleColumnIds?: string[] }) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setExpandedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const conditionsKey = JSON.stringify(conditions);
-  useEffect(() => { setPage(1); }, [conditionsKey]);
   const baseRows = rowsOverride ?? policySetRows;
-  const filteredRows = conditions.length
-    ? baseRows.filter(row =>
-        conditions.every(c => {
-          const col = policySetColumns.find(col => col.id === c.fieldId);
-          const val = (row as Record<string, unknown>)[c.fieldId] ?? "";
-          return matchValue(val, col ? "text" : "text", c.operator, c.value);
-        })
-      )
-    : baseRows;
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-  const pageRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+  const columns = policySetColumns.filter(column => visibleColumnIds.includes(column.id));
+  const filteredRows = filterPolicySetRows(baseRows, conditions);
+  const { sort, toggleSort, pageRows, pagination } = useTableData(filteredRows, policySetColumns, (row, id) => {
+    const values: Record<string, TableValue> = {
+      name: row.name, framework: row.framework, frameworkVersion: row.frameworkVersion, sourceType: row.sourceType,
+      policyCount: row.policyCount, scope: row.scope, projects: row.projects, workspaces: row.workspaces,
+      passCount: row.passCount, failCount: row.failCount, errorCount: row.errorCount,
+    };
+    return values[id] ?? "";
+  });
 
   return (
     <>
       <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="min-w-[2100px] table-fixed border-collapse text-left">
+        <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: columns.length * 180 + 40 }}>
           <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
               <th className="h-11 w-10 border-r border-[#dedfe3] px-3" style={{ position: "sticky", left: 0, zIndex: 2, background: "#f1f2f3" }} />
-              {policySetColumns.map((col, ci) => (
-                <th key={col.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${col.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 2, background: "#f1f2f3" } : undefined}>
-                  <span className="flex items-center justify-between gap-2 whitespace-nowrap text-[12px] font-semibold text-[#17171a]">{col.label}<SortControl /></span>
-                </th>
+              {columns.map((column, ci) => (
+                <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={ci === 0 ? 40 : undefined} />
               ))}
             </tr>
           </thead>
@@ -1101,32 +1128,25 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[200px]" style={{ position: "sticky", left: 40, background: "#ffffff" }}>
-                      <a href="#policy-set" className="text-[#1060ff] underline underline-offset-2 whitespace-nowrap">{row.name}</a>
-                    </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[160px] whitespace-nowrap">{row.framework}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[170px] whitespace-nowrap">{row.frameworkVersion}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[190px] whitespace-nowrap">{row.sourceType}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[140px]">
-                      <a href="#policies" className="text-[#1060ff] underline underline-offset-2">{row.policyCount}</a>
-                    </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[140px] whitespace-nowrap">{row.scope}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[160px] whitespace-nowrap">{row.scope === "Project" ? <a href="#projects" className="text-[#1060ff] underline underline-offset-2">{row.projects}</a> : <span className="text-[#9b9cb8]">—</span>}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[180px] whitespace-nowrap">{row.scope === "Workspaces" ? <a href="#" onClick={e => { e.preventDefault(); onNavigate("Workspaces"); }} className="whitespace-nowrap text-[#1060ff] underline underline-offset-2">{row.workspaces}</a> : <span className="text-[#9b9cb8]">—</span>}</td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[130px]">
-                      <span className="text-[#198038]">{row.passCount}</span>
-                    </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[130px]">
-                      {row.failCount > 0 ? <span className="text-[#a2191f] font-medium">{row.failCount}</span> : <span>{row.failCount}</span>}
-                    </td>
-                    <td className="border-r border-[#dedfe3] px-3 w-[130px] last:border-r-0">
-                      {row.errorCount > 0 ? <span className="text-[#b45309] font-medium">{row.errorCount}</span> : <span>{row.errorCount}</span>}
-                    </td>
+                    {columns.map((column, ci) => {
+                      const content = {
+                        name: <a href="#policy-set" className="text-[#1060ff] underline underline-offset-2">{row.name}</a>,
+                        framework: row.framework, frameworkVersion: row.frameworkVersion, sourceType: row.sourceType,
+                        policyCount: <a href="#policies" className="text-[#1060ff] underline underline-offset-2">{row.policyCount}</a>,
+                        scope: row.scope,
+                        projects: row.scope === "Project" ? <a href="#projects" className="text-[#1060ff] underline underline-offset-2">{row.projects}</a> : "-",
+                        workspaces: row.scope === "Workspaces" ? <a href="#" onClick={event => { event.preventDefault(); onNavigate("Workspaces"); }} className="text-[#1060ff] underline underline-offset-2">{row.workspaces}</a> : "-",
+                        passCount: <span className="text-[#198038]">{row.passCount}</span>,
+                        failCount: <span className={row.failCount > 0 ? "text-[#a2191f] font-medium" : ""}>{row.failCount}</span>,
+                        errorCount: <span className={row.errorCount > 0 ? "text-[#b45309] font-medium" : ""}>{row.errorCount}</span>,
+                      };
+                      return <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{content[column.id]}</td>;
+                    })}
                   </tr>
                   {isExpanded && (
                     <tr className="border-t border-[#dedfe3] bg-[#f8f9fa]">
                       <td />
-                      <td colSpan={policySetColumns.length + 1} className="px-6 py-4">
+                      <td colSpan={columns.length} className="px-6 py-4">
                         <div className="flex flex-col gap-2 text-[12px]">
                           <div className="flex items-center gap-3">
                             <span className="w-[120px] shrink-0 text-[#656a76]">Policy set:</span>
@@ -1164,18 +1184,11 @@ function PolicySetsTable({ conditions, onNavigate, rows: rowsOverride }: { condi
                 </React.Fragment>
               );
             })}
+            {pageRows.length === 0 && <EmptyTableRow columnCount={columns.length + 1} />}
           </tbody>
         </table>
       </div>
-      <TablePagination
-        currentPage={page}
-        totalPages={totalPages}
-        totalItems={filteredRows.length}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={size => { setPageSize(size); setPage(1); }}
-        pageSizeOptions={[20, 50, 100]}
-      />
+      <TablePagination {...pagination} />
     </>
   );
 }
@@ -2035,7 +2048,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
   const { nodes, edges } = useMemo(() => {
     if (activeType !== "Workspaces" || wsGroupMode === "none") return { nodes: rawNodes, edges: rawEdges };
     const groupKey = (n: TopoNode): string =>
-      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.status ?? n.data?.runStatus ?? "unknown");
+      wsGroupMode === "project" ? String(n.data?.project ?? "unknown") : String(n.data?.runStatus ?? n.data?.status ?? "unknown");
     const hubType = wsGroupMode === "project" ? "ws-group-project" : "ws-group-status";
     // Count members per group
     const groupCounts = new Map<string, number>();
@@ -3313,52 +3326,14 @@ function ConditionsEditor({
 }
 
 // Table View query builder. Conditions are owned by the Explorer HUD so Graph and Table View stay in sync.
-function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride, wsGroupMode = "none" }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[]; wsGroupMode?: WsGroupMode }) {
-  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
+function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride, wsGroupMode = "none", initialSort = null }: { conditions?: ConditionFilter[]; visibleColumnIds: string[]; rows?: WsRow[]; wsGroupMode?: WsGroupMode; initialSort?: TableSort | null }) {
   const columns = tableColumns.filter(column => visibleColumnIds.includes(column.id));
-
-  function valueForColumn(row: typeof workspaceRows[number], columnId: string): string | number | boolean {
-    const [currentRunApplied, repository, moduleCount, modules, providerCount, providers, terraformVersion] = row.metadata;
-    return {
-      name: row.name, project: row.project, run: row.run, runStatus: row.runStatus, currentRunApplied, repository,
-      noCodeModule: row.noCodeModule, moduleCount, modules, providerCount, providers, terraformVersion,
-      drifted: row.drifted, healthChecksSucceeded: row.healthChecksSucceeded, healthChecksPassed: row.healthChecksPassed,
-      healthChecksFailed: row.healthChecksFailed, healthChecksErrored: row.healthChecksErrored,
-      resourcesDrifted: row.resourcesDrifted, resourcesUndrifted: row.resourcesUndrifted,
-      stateTerraformVersion: row.stateTerraformVersion, currentRumCount: row.currentRumCount,
-      resources: row.count, tags: row.tags, created: row.created, updated: row.updated,
-    }[columnId] ?? "";
-  }
-
   const baseRows = rowsOverride ?? workspaceRows;
   const filteredRows = useMemo(() => filterWorkspaceRows(baseRows, conditions), [conditions, baseRows]);
-  const conditionsKey = JSON.stringify(conditions);
-  useEffect(() => { setPage(1); }, [conditionsKey, baseRows]);
-
-  const sortedRows = useMemo(() => {
-    if (!sort) return filteredRows;
-    return [...filteredRows].sort((a, b) => {
-      const left = valueForColumn(a, sort.id);
-      const right = valueForColumn(b, sort.id);
-      const numeric = typeof left === "number" || typeof right === "number";
-      const comparison = numeric ? Number(left) - Number(right) : String(left).localeCompare(String(right));
-      return sort.direction === "asc" ? comparison : -comparison;
-    });
-  }, [filteredRows, sort]);
-
-  const totalPages = Math.ceil(sortedRows.length / pageSize);
-  const pageRows = sortedRows.slice((page - 1) * pageSize, page * pageSize);
-  const pages = Array.from({ length: totalPages }, (_, index) => index + 1);
-
-  function toggleSort(columnId: string) {
-    setSort(current => current?.id === columnId ? { id: columnId, direction: current.direction === "asc" ? "desc" : "asc" } : { id: columnId, direction: "asc" });
-    setPage(1);
-  }
+  const { sort, toggleSort, sortedRows, pageRows, pagination } = useTableData(filteredRows, tableColumns, getWorkspaceFieldValue, initialSort);
 
   function renderCell(row: typeof workspaceRows[number], columnId: string) {
-    const value = valueForColumn(row, columnId);
+    const value = getWorkspaceFieldValue(row, columnId);
     if (["name", "project", "run", "moduleCount", "providerCount", "terraformVersion", "resources", "stateTerraformVersion"].includes(columnId)) {
       return <a href="#workspace-table" onClick={event => event.preventDefault()} className="text-[#1060ff] underline underline-offset-2">{String(value)}</a>;
     }
@@ -3368,7 +3343,7 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
   }
 
   // When group mode is active, build an ordered list of [groupKey, rows[]] pairs
-  const groupedSections: [string, typeof sortedRows][] | null = useMemo(() => {
+  const groupedSections: [string, typeof sortedRows][] | null = (() => {
     if (wsGroupMode === "none") return null;
     const map = new Map<string, typeof sortedRows>();
     for (const row of sortedRows) {
@@ -3378,36 +3353,39 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(row);
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [sortedRows, wsGroupMode]);
+    const groups = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const offset = (pagination.currentPage - 1) * pagination.pageSize;
+    let consumed = 0;
+    return groups.map(([key, rows]): [string, typeof sortedRows] => {
+      const start = Math.max(0, offset - consumed);
+      const end = Math.max(0, offset + pagination.pageSize - consumed);
+      consumed += rows.length;
+      return [key, rows.slice(start, end)];
+    }).filter(([, rows]) => rows.length > 0);
+  })();
 
   const colSpan = columns.length + 1; // +1 for checkbox column
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 overflow-auto rounded-[6px] border border-[#dedfe3]">
-        <table className="min-w-[5000px] table-fixed border-collapse text-left">
+        <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: columns.length * 180 + 40 }}>
           <thead className="sticky top-0 z-10 bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
             <tr>
               <th className="h-11 w-10 border-r border-[#dedfe3] px-3 text-center" style={{ position: "sticky", left: 0, zIndex: 3, background: "#f1f2f3" }}><input type="checkbox" className="size-4 rounded-[2px] border-[#8c909c] accent-[#0f62fe]" /></th>
               {columns.map((column, ci) => (
-                <th key={column.id} className={`h-11 border-r border-[#dedfe3] px-3 last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, zIndex: 3, background: "#f1f2f3" } : undefined}>
-                  <button type="button" onClick={() => toggleSort(column.id)} className="flex w-full items-center justify-between gap-2 whitespace-nowrap text-left text-[12px] font-semibold text-[#17171a]">
-                    <span>{column.label}</span>
-                    <SortControl />
-                  </button>
-                </th>
+                <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={ci === 0 ? 40 : undefined} />
               ))}
             </tr>
           </thead>
           <tbody className="text-[12px] text-[#52525b]">
             {groupedSections ? (
               groupedSections.map(([groupKey, groupRows]) => (
-                <>
-                  <tr key={`group-${groupKey}`}>
+                <React.Fragment key={groupKey}>
+                  <tr>
                     <td colSpan={colSpan} className="border-t border-[#dedfe3] bg-[#f7f8fa] px-4 py-2">
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-[#52525b]">{groupKey}</span>
-                      <span className="ml-2 text-[11px] text-[#8c909c]">{groupRows.length} workspace{groupRows.length !== 1 ? "s" : ""}</span>
+                      <span className="ml-2 text-[11px] text-[#8c909c]">{groupRows.length} workspace{groupRows.length !== 1 ? "s" : ""} on this page</span>
                     </td>
                   </tr>
                   {groupRows.map(row => (
@@ -3416,7 +3394,7 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
                       {columns.map((column, ci) => <td key={column.id} className={`border-r border-[#dedfe3] px-3 whitespace-nowrap last:border-r-0 ${column.width}`} style={ci === 0 ? { position: "sticky", left: 40, background: "#ffffff" } : undefined}>{renderCell(row, column.id)}</td>)}
                     </tr>
                   ))}
-                </>
+                </React.Fragment>
               ))
             ) : (
               pageRows.map(row => (
@@ -3426,20 +3404,11 @@ function WorkspacesTable({ conditions = [], visibleColumnIds, rows: rowsOverride
                 </tr>
               ))
             )}
+            {sortedRows.length === 0 && <EmptyTableRow columnCount={colSpan} />}
           </tbody>
         </table>
       </div>
-      {!groupedSections && (
-        <TablePagination
-          currentPage={page}
-          totalPages={totalPages}
-          totalItems={sortedRows.length}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={_size => { setPage(1); }}
-          pageSizeOptions={[10, 20, 50, 100]}
-        />
-      )}
+      <TablePagination {...pagination} />
     </div>
   );
 }
@@ -3449,26 +3418,26 @@ function TopologyTableView({ type, graphTitle, conditions = [], visibleColumnIds
   // When a workspace overlay is active, show the scoped table for that kind.
   if (overlayInfo) {
     if (overlayInfo.kind === "modules") {
-      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={moduleTableColumns.map(c => c.id)} conditions={[]} onNavigate={onNavigate} />;
+      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={visibleColumnIds} conditions={[]} onNavigate={onNavigate} />;
     }
     if (overlayInfo.kind === "providers") {
-      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={moduleTableColumns.map(c => c.id)} conditions={[]} onNavigate={onNavigate} />;
+      return <RegistryTable rows={overlayInfo.rows} visibleColumnIds={visibleColumnIds} conditions={[]} onNavigate={onNavigate} />;
     }
     return <ResourcesTable
-      visibleColumnIds={resourceTableColumns.map(c => c.id)}
+      visibleColumnIds={visibleColumnIds}
       conditions={[]}
       onNavigate={onNavigate}
       onSelectResource={onSelectResource}
-      sourceRows={overlayInfo.rows as typeof resourceRows}
+      sourceRows={overlayInfo.rows}
     />;
   }
   // Reuse the Type details tables directly so the split Table View cannot drift from them.
-  if (type === "Policy Sets") return <PolicySetsTable conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
+  if (type === "Policy Sets") return <PolicySetsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} rows={getPolicySetRowsForTitle(graphTitle ?? null)} />;
   if (type === "Terraform Versions") return <TerraformVersionsTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Resources") return <ResourcesTable visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} onSelectResource={onSelectResource} />;
   if (type === "Modules") return <RegistryTable rows={moduleRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
   if (type === "Providers") return <RegistryTable rows={providerRows} visibleColumnIds={visibleColumnIds} conditions={conditions} onNavigate={onNavigate} />;
-  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={workspaceRowsForTitle} wsGroupMode={wsGroupMode} />;
+  return <WorkspacesTable conditions={conditions} visibleColumnIds={visibleColumnIds} rows={workspaceRowsForTitle} wsGroupMode={wsGroupMode} initialSort={getWorkspaceViewSort(graphTitle ?? null)} />;
 }
 
 // ── ActionsDropdown ──────────────────────────────────────────────────────────
@@ -3503,6 +3472,7 @@ function ActionsDropdown({ columns, visibleColumnIds, onApply }: {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button"
+        aria-label="Table actions"
         onClick={() => setOpen(o => !o)}
         style={{
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -3665,6 +3635,73 @@ const savedViews = [
   { name: "tf test", type: "Terraform Versions", owner: "aditisl", updated: "Nov 12 2024" },
   { name: "new tf versions", type: "Terraform Versions", owner: "martinhenry", updated: "Nov 12 2024" },
 ] as const;
+
+const savedViewColumns = [
+  { id: "name", label: "Name" },
+  { id: "type", label: "Type" },
+  { id: "owner", label: "Owner" },
+  { id: "updated", label: "Last Updated", valueType: "date" },
+];
+
+function SavedViewsTable({ onSelect, search, onSearchChange, type, onTypeChange }: {
+  onSelect: (type: string, title: string) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
+  type: string;
+  onTypeChange: (value: string) => void;
+}) {
+  const filteredRows = savedViews.filter(view =>
+    view.name.toLowerCase().includes(search.trim().toLowerCase()) && (type === "All types" || view.type === type),
+  );
+  const { sort, toggleSort, pageRows, pagination } = useTableData(filteredRows, savedViewColumns, (view, id) => {
+    const values: Record<string, string> = view;
+    return values[id] ?? "";
+  });
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="flex h-9 items-center gap-2 rounded-[4px] border border-[#b8bcc5] bg-white px-3 text-[#656a76]">
+          <Search size={14} />
+          <input value={search} onChange={event => onSearchChange(event.target.value)} placeholder="Search saved views" aria-label="Search saved views" className="min-w-0 bg-transparent text-[12px] text-[#3b3d45] outline-none" />
+        </label>
+        <select value={type} onChange={event => onTypeChange(event.target.value)} aria-label="Filter saved views by type" className="h-9 rounded-[4px] border border-[#b8bcc5] bg-white px-3 text-[12px] text-[#3b3d45]">
+          <option>All types</option>
+          {USE_CASE_CATEGORIES.map(category => <option key={category.type}>{category.type}</option>)}
+        </select>
+      </div>
+      <div className="overflow-x-auto rounded-[6px] border border-[#dedfe3]">
+        <table className="w-full min-w-[720px] table-fixed border-collapse text-left" aria-label="Saved Views">
+          <thead className="bg-[#f1f2f3] text-[12px] font-semibold text-[#17171a]">
+            <tr>{savedViewColumns.map((column, index) => <TableColumnHeader key={column.id} column={column} sort={sort} onSort={toggleSort} stickyLeft={index === 0 ? 0 : undefined} />)}</tr>
+          </thead>
+          <tbody className="text-[12px] text-[#52525b]">
+            {pageRows.map(view => (
+              <tr key={view.name} className="h-12 border-t border-[#dedfe3] bg-white">
+                <td className="border-r border-[#dedfe3] bg-white px-3 py-3 break-words" style={{ position: "sticky", left: 0 }}>
+                  <a href="#saved-view" onClick={event => { event.preventDefault(); onSelect(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2">{view.name}</a>
+                </td>
+                <td className="border-r border-[#dedfe3] px-3">{view.type}</td>
+                <td className="border-r border-[#dedfe3] px-3 break-words">{view.owner}</td>
+                <td className="px-3">{view.updated}</td>
+              </tr>
+            ))}
+            {pageRows.length === 0 && <EmptyTableRow columnCount={4} message="No saved views match your search or Type filter." />}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination {...pagination} />
+    </>
+  );
+}
+
+function getTableColumns(type: string | null) {
+  if (type === "Policy Sets") return policySetColumns;
+  if (type === "Modules") return moduleTableColumns;
+  if (type === "Providers") return providerTableColumns;
+  if (type === "Terraform Versions") return terraformVersionTableColumns;
+  if (type === "Resources") return resourceTableColumns;
+  return tableColumns;
+}
 
 const splashToNavLabel: Record<string, string> = {
   "Workspaces":        "Workspaces",
@@ -3859,7 +3896,9 @@ function ExplorerSplashView({
   useEffect(() => {
     if (tableViewRequest) setViewMode("classic");
   }, [tableViewRequest]);
-  const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
+  const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [savedSearch, setSavedSearch] = useState("");
+  const [savedType, setSavedType] = useState("All types");
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
   const useCaseMenuRef = useRef<HTMLDivElement>(null);
@@ -3898,17 +3937,13 @@ function ExplorerSplashView({
   const [hudPhase, setHudPhase] = useState<"intro" | "corner">("intro");
   const [hudScale, setHudScale] = useState(1);
   const hasEverSelected = useRef(false);
-  const [savedSearch, setSavedSearch] = useState("");
-  const [savedType, setSavedType] = useState("All types");
-  const tableQueryColumns =
-    selectedGraphType === "Policy Sets" ? policySetColumns :
-    selectedGraphType === "Modules" ? moduleTableColumns :
-    selectedGraphType === "Providers" ? providerTableColumns :
-    selectedGraphType === "Terraform Versions" ? terraformVersionTableColumns :
-    selectedGraphType === "Resources" ? resourceTableColumns :
-    tableColumns;
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => tableQueryColumns.map(c => c.id));
-  useEffect(() => { setVisibleColumnIds(tableQueryColumns.map(c => c.id)); }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tableQueryColumns = getTableColumns(selectedGraphType);
+  const displayedType = overlayInfo
+    ? overlayInfo.kind === "resources" ? "Resources" : overlayInfo.kind === "modules" ? "Modules" : "Providers"
+    : selectedGraphType;
+  const displayedColumns = getTableColumns(displayedType);
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() => displayedColumns.map(column => column.id));
+  useEffect(() => { setVisibleColumnIds(displayedColumns.map(column => column.id)); }, [displayedColumns]);
   // Conditions are scoped to a Type (columns differ per Type), so they reset when the Type changes.
   // Remove this effect to let conditions persist across Types.
   useEffect(() => {
@@ -3917,6 +3952,8 @@ function ExplorerSplashView({
   }, [selectedGraphType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [exitOverlayNonce, setExitOverlayNonce] = useState(0);
+  // A previous workspace action must not replay when Graph remounts for a new result set.
+  const [invalidatedNodeActionNonce, setInvalidatedNodeActionNonce] = useState<number | null>(null);
   const announceRun = useRef(false);
 
   function runConditions(rows: ConditionFilter[]) {
@@ -3924,6 +3961,9 @@ function ExplorerSplashView({
     setAppliedConditions(rows.filter(isConditionApplicable).map(condition => ({ ...condition, value: condition.value.trim() })));
     // The new result set replaces any open Resources/Modules/Providers overlay, whose tables and graph ignore conditions.
     setOverlayInfo(null);
+    onNodeOverlayChange?.(null);
+    setSelectedResourceId(null);
+    setInvalidatedNodeActionNonce(explorerNodeAction?.nonce ?? null);
     setExitOverlayNonce(nonce => nonce + 1);
     announceRun.current = true;
   }
@@ -3964,20 +4004,33 @@ function ExplorerSplashView({
     }
   }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const filteredSavedViews = useMemo(() => savedViews.filter(view => {
-    const matchesSearch = view.name.toLowerCase().includes(savedSearch.trim().toLowerCase());
-    const matchesType = savedType === "All types" || view.type === savedType;
-    return matchesSearch && matchesType;
-  }), [savedSearch, savedType]);
-
   function openView(type: string, title = type) {
     setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
     setSelectedResourceId(null);
     setSelectedHudNodeId(null);
-    setSavedViewsModalOpen(false);
+    onExplorerNodeClose?.();
+    onSelectedNodeInfoChange?.(null);
+    onNodeOverlayChange?.(null);
+    setBlastRadiusActive(false);
+    setInvalidatedNodeActionNonce(explorerNodeAction?.nonce ?? null);
+    setSavedViewsOpen(false);
+    setOverlayInfo(null);
+    setExitOverlayNonce(nonce => nonce + 1);
+    setWsGroupMode(title === "Workspaces by run status" ? "status" : "none");
     setUseCaseMenuOpen(false);
+    moveHudToCorner();
+  }
+
+  function openSavedViews() {
+    setSavedViewsOpen(true);
+    setViewMode("classic");
+    setUseCaseMenuOpen(false);
+    moveHudToCorner();
+  }
+
+  function moveHudToCorner() {
     // First-ever selection: shrink HUD to nothing, teleport to corner, then expand back out
     if (!hasEverSelected.current) {
       hasEverSelected.current = true;
@@ -4015,11 +4068,19 @@ function ExplorerSplashView({
   // Shared reset used by both the HUD chip's dismiss (×) button and the natural language
   // query's clear (×) button, so clearing either one fully resets the active view the same way.
   function dismissAll() {
+    setSavedViewsOpen(false);
     setSelectedGraphType(null);
     setSelectedGraphTitle(null);
     setWsGroupMode("none");
     setOverlayInfo(null);
     setNaturalLanguageQuery("");
+    setSelectedResourceId(null);
+    setSelectedHudNodeId(null);
+    setBlastRadiusActive(false);
+    setInvalidatedNodeActionNonce(explorerNodeAction?.nonce ?? null);
+    onExplorerNodeClose?.();
+    onSelectedNodeInfoChange?.(null);
+    onNodeOverlayChange?.(null);
   }
 
 function startHudDrag(event: React.MouseEvent<HTMLDivElement>) {
@@ -4102,7 +4163,6 @@ useEffect(() => {
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : getResultCount(selectedGraphType, selectedGraphTitle, appliedConditions);
 
-  const glassSurface = themeMode === "light" ? "rgba(255,255,255,0.88)" : "rgba(19,20,26,0.9)";
   const hudSurface = themeMode === "light" ? "#ffffff" : "#13141a";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
   const glassText = themeMode === "light" ? "#0c0c0e" : "rgba(255,255,255,0.95)";
@@ -4125,18 +4185,29 @@ useEffect(() => {
         className="absolute bottom-0 right-0 top-0 z-10 overflow-hidden"
         style={{
           background: "transparent",
-          left: selectedGraphType && viewMode === "classic" && !hudCollapsed ? hudPosition.x + hudCardWidth + 16 : 0,
-          transition: selectedGraphType ? "left 0.3s cubic-bezier(0.25,0.8,0.25,1)" : "none",
+          left: (selectedGraphType || savedViewsOpen) && viewMode === "classic" && !hudCollapsed ? hudPosition.x + hudCardWidth + 16 : 0,
+          transition: selectedGraphType || savedViewsOpen ? "left 0.3s cubic-bezier(0.25,0.8,0.25,1)" : "none",
         }}
       >
-        {selectedGraphType && viewMode === "graph" ? (
+        {savedViewsOpen ? (
+          <section aria-label="Saved Views catalog" className="absolute inset-0 overflow-auto bg-transparent px-[50px] pb-[50px] pt-6">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</h2>
+                <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
+              </div>
+              <button type="button" onClick={() => setSavedViewsOpen(false)} aria-label="Close saved views" className="flex size-8 shrink-0 items-center justify-center rounded-[6px] border border-[#dedfe3] bg-white text-[#656a76] hover:bg-[#f1f2f3]"><X size={18} /></button>
+            </div>
+            <SavedViewsTable onSelect={openView} search={savedSearch} onSearchChange={setSavedSearch} type={savedType} onTypeChange={setSavedType} />
+          </section>
+        ) : selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
             activeType={selectedGraphType}
             graphTitle={selectedGraphTitle}
             conditions={appliedConditions}
             exitOverlayNonce={exitOverlayNonce}
             selectedNodeId={selectedHudNodeId}
-            explorerNodeAction={explorerNodeAction}
+            explorerNodeAction={explorerNodeAction?.nonce === invalidatedNodeActionNonce ? null : explorerNodeAction}
             onSelectedNodeInfoChange={onSelectedNodeInfoChange}
             onNodeOverlayChange={onNodeOverlayChange}
             themeMode={themeMode} setThemeMode={setThemeMode}
@@ -4151,10 +4222,10 @@ useEffect(() => {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-[15px] font-semibold" style={{ color: glassText }}>
-                  {selectedGraphTitle ?? selectedGraphType}
+                  {overlayInfo ? `${overlayInfo.workspaceName} ${displayedType}` : selectedGraphTitle ?? selectedGraphType}
                 </p>
                 <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
-                  {tableResultCount} {selectedGraphTitle ?? selectedGraphType} showing
+                  {tableResultCount} {displayedType} showing
                   {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
                 </p>
               </div>
@@ -4169,21 +4240,26 @@ useEffect(() => {
                   </button>
                 )}
                 <ActionsDropdown
-                  columns={tableQueryColumns}
+                  columns={displayedColumns}
                   visibleColumnIds={visibleColumnIds}
                   onApply={setVisibleColumnIds}
                 />
               </div>
             </div>
+            {!overlayInfo && selectedGraphTitle && VIEW_LIMITATIONS[selectedGraphTitle] && (
+              <p role="note" className="mb-4 rounded-[6px] border border-[#dedfe3] bg-white px-3 py-2 text-[12px] text-[#656a76]">{VIEW_LIMITATIONS[selectedGraphTitle]}</p>
+            )}
+            {overlayInfo && <p className="mb-4 text-[12px] text-[#656a76]">Scoped to {overlayInfo.workspaceName}. Parent workspace conditions do not apply to this table.</p>}
             {selectedResourceId ? (
               (() => {
-                const row = (overlayInfo?.rows ?? resourceRows).find(item => item.id === selectedResourceId)
+                const row = (overlayInfo?.kind === "resources" ? overlayInfo.rows : resourceRows).find(item => item.id === selectedResourceId)
                   ?? resourceRows.find(item => item.id === selectedResourceId);
                 return row ? <ResourceDetailView row={row} themeMode={themeMode} /> : null;
               })()
             ) : (
               <>
                 <TopologyTableView
+                  key={`${selectedGraphType}:${selectedGraphTitle}:${overlayInfo?.kind ?? ""}:${overlayInfo?.workspaceName ?? ""}`}
                   type={selectedGraphType}
                   graphTitle={selectedGraphTitle}
                   conditions={appliedConditions}
@@ -4209,97 +4285,6 @@ useEffect(() => {
           </div>
         )}
       </div>
-
-      {/* Saved Views modal */}
-      <AnimatePresence>
-        {savedViewsModalOpen && (
-          <>
-            <motion.div
-              key="saved-views-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setSavedViewsModalOpen(false)}
-              style={{ position: "fixed", inset: 0, top: 60, zIndex: 40, background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
-            />
-            <div style={{ position: "fixed", inset: 0, top: 60, zIndex: 41, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-              <motion.div
-                key="saved-views-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Saved Views"
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.22, ease: [0.25, 0.8, 0.25, 1] }}
-                style={{ width: "85vw", maxWidth: 1400, height: "80vh", display: "flex", flexDirection: "column", borderRadius: 12, border: `1px solid ${glassBorder}`, boxShadow: "0 24px 64px rgba(0,0,0,0.28)", background: glassSurface, overflow: "hidden", pointerEvents: "auto" }}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: glassBorder }}>
-                  <div>
-                    <p className="text-[15px] font-semibold" style={{ color: glassText }}>Saved Views</p>
-                    <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>{savedViews.length} saved views available.</p>
-                  </div>
-                  <button type="button" onClick={() => setSavedViewsModalOpen(false)} className="flex size-8 items-center justify-center rounded-[6px] transition-colors hover:bg-black/5" style={{ color: glassMuted }} aria-label="Close saved views"><X size={18} /></button>
-                </div>
-                {/* Body */}
-                <div className="min-h-0 flex-1 overflow-auto p-5">
-                  <div className="min-w-0">
-                    <div className="mb-4 flex items-center">
-                      <label className="flex h-9 w-[258px] items-center gap-2 rounded-l-[6px] border border-[#b8bcc5] bg-white px-3 text-[#656a76] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                        <Search size={16} strokeWidth={2} />
-                        <input
-                          value={savedSearch}
-                          onChange={event => setSavedSearch(event.target.value)}
-                          placeholder="Search"
-                          className="min-w-0 flex-1 bg-transparent text-[13px] text-[#3b3d45] outline-none placeholder:text-[#737784]"
-                          aria-label="Search saved views"
-                        />
-                      </label>
-                      <label className="relative flex h-9 items-center border-y border-r border-[#b8bcc5] bg-white pl-3 pr-8 text-[13px] font-medium text-[#3b3d45] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                        <select value={savedType} onChange={event => setSavedType(event.target.value)} className="appearance-none bg-transparent outline-none" aria-label="Filter saved views by type">
-                          <option>All types</option>
-                          <option>Workspaces</option>
-                          <option>Modules</option>
-                          <option>Terraform Versions</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2.5" size={15} />
-                      </label>
-                    </div>
-                    <p className="mb-4 text-[13px] text-[#656a76]">{filteredSavedViews.length === savedViews.length ? "No filters applied" : `${filteredSavedViews.length} saved view${filteredSavedViews.length === 1 ? "" : "s"} shown`} <span className="font-semibold">ⓘ</span></p>
-                    <div className="overflow-hidden rounded-[7px] border border-[#d7d9de] bg-white">
-                      <table className="w-full table-fixed border-collapse text-left text-[12px]">
-                        <thead className="bg-[#f1f2f3] text-[#17171a]">
-                          <tr>
-                            <th className="w-[36%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Name</th>
-                            <th className="w-[20%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Type</th>
-                            <th className="w-[24%] border-r border-[#d7d9de] px-4 py-3 font-semibold">Owner</th>
-                            <th className="w-[20%] px-4 py-3 font-semibold">Last Updated</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-[#555964]">
-                          {filteredSavedViews.map(view => (
-                            <tr key={view.name} className="border-t border-[#d7d9de]">
-                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openView(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
-                              <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
-                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
-                              <td className="px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
-                            </tr>
-                          ))}
-                          {filteredSavedViews.length === 0 && (
-                            <tr><td colSpan={4} className="px-4 py-10 text-center text-[#656a76]">No saved views match your search.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* HUD tab — lives outside the animated wrapper so position:fixed works when collapsed */}
       <button
@@ -4452,11 +4437,13 @@ useEffect(() => {
           <button
             type="button"
             onClick={() => setViewMode("graph")}
+            disabled={savedViewsOpen}
+            title={savedViewsOpen ? "Select a saved view to use Graph" : undefined}
             aria-pressed={viewMode === "graph"}
             style={{
               flex: 1, position: "relative", zIndex: 1,
               height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "none", border: "none", cursor: "pointer",
+              background: "none", border: "none", cursor: savedViewsOpen ? "not-allowed" : "pointer",
               fontFamily: "inherit", fontSize: 12, fontWeight: 500,
               color: viewMode === "graph" ? "#0f62fe" : "rgba(59,61,69,0.55)",
               transition: "color 200ms ease-in-out",
@@ -4551,7 +4538,7 @@ useEffect(() => {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => { setSavedViewsModalOpen(true); setUseCaseMenuOpen(false); }}
+                    onClick={openSavedViews}
                     className="flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold transition-colors hover:bg-[#dbeafe] hover:text-[#0f62fe]"
                     style={{ color: glassText }}
                   >
@@ -4616,7 +4603,12 @@ useEffect(() => {
           })()}
         </div>
 
-        {selectedGraphTitle && (() => {
+        {savedViewsOpen ? (
+          <div className="mt-2 flex items-center gap-2 rounded-[4px] border border-[#dedfe3] bg-white px-3 py-2 text-[12px] text-[#3b3d45]">
+            <ListOrdered size={14} /><span className="flex-1">Saved Views</span>
+            <button type="button" onClick={() => setSavedViewsOpen(false)} aria-label="Dismiss saved views"><X size={12} /></button>
+          </div>
+        ) : selectedGraphTitle && (() => {
           const ActiveIcon = USE_CASE_CATEGORIES.find(c => c.type === selectedGraphType)?.Icon ?? Compass;
           const resultCount = getResultCount(selectedGraphType, selectedGraphTitle, appliedConditions);
           const chipLabel = selectedGraphTitle;
@@ -4733,9 +4725,9 @@ useEffect(() => {
           );
         })()}
 
-        {selectedGraphType && (
+        {selectedGraphType && !savedViewsOpen && (
           <div className="mt-3 border-t pt-3" style={{ borderColor: glassBorder }}>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>Modify conditions</p>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>{overlayInfo ? "Parent workspace conditions" : "Modify conditions"}</p>
             <ConditionsEditor
               columns={tableQueryColumns}
               conditions={draftConditions}
