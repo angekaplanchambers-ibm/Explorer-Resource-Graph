@@ -3828,6 +3828,7 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
 }
 
 function ExplorerSplashView({
+  tableViewRequest,
   onSelectType,
   onSelectUseCase,
   onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange,
@@ -3839,6 +3840,7 @@ function ExplorerSplashView({
   onSelectedNodeInfoChange,
   onNodeOverlayChange,
 }: {
+  tableViewRequest?: number;
   onSelectType: (type: string) => void;
   onSelectUseCase: (type: string, title: string) => void;
   onExplorerQuery?: (query: string, nodes: TopoNode[]) => void;
@@ -3853,7 +3855,10 @@ function ExplorerSplashView({
   onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void;
   onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void;
 }) {
-  const [viewMode, setViewMode] = useState<"graph" | "classic">("graph");
+  const [viewMode, setViewMode] = useState<"graph" | "classic">("classic");
+  useEffect(() => {
+    if (tableViewRequest) setViewMode("classic");
+  }, [tableViewRequest]);
   const [savedViewsModalOpen, setSavedViewsModalOpen] = useState(false);
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
   const [hoveredUseCaseType, setHoveredUseCaseType] = useState("Workspaces");
@@ -3965,7 +3970,8 @@ function ExplorerSplashView({
     return matchesSearch && matchesType;
   }), [savedSearch, savedType]);
 
-  function openGraph(type: string, title = type) {
+  function openView(type: string, title = type) {
+    setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
     setSelectedResourceId(null);
@@ -4001,7 +4007,7 @@ function ExplorerSplashView({
     // active view and Browse dropdown highlighting stay in sync.
     const title = matchedUseCase?.title ?? `View All ${type}`;
     if (!matchedUseCase) setWsGroupMode("none");
-    openGraph(type, title);
+    openView(type, title);
     const resultNodes = buildTopoGraph(type, [], title).nodes;
     onExplorerQuery?.(query, resultNodes);
   }
@@ -4182,7 +4188,7 @@ useEffect(() => {
                   graphTitle={selectedGraphTitle}
                   conditions={appliedConditions}
                   visibleColumnIds={visibleColumnIds}
-                  onNavigate={(type) => openGraph(type, type)}
+                  onNavigate={(type) => openView(type, type)}
                   onSelectResource={setSelectedResourceId}
                   overlayInfo={overlayInfo}
                   wsGroupMode={wsGroupMode}
@@ -4275,7 +4281,7 @@ useEffect(() => {
                         <tbody className="text-[#555964]">
                           {filteredSavedViews.map(view => (
                             <tr key={view.name} className="border-t border-[#d7d9de]">
-                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openGraph(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
+                              <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5"><a href="#saved-view" onClick={event => { event.preventDefault(); openView(view.type, view.name); }} className="text-[#1060ff] underline underline-offset-2 transition-colors hover:text-[#0043ce]">{view.name}</a></td>
                               <td className="border-r border-[#e0e1e5] px-4 py-3.5">{view.type}</td>
                               <td className="break-words border-r border-[#e0e1e5] px-4 py-3.5">{view.owner}</td>
                               <td className="px-4 py-3.5 whitespace-nowrap">{view.updated}</td>
@@ -4392,10 +4398,12 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* View mode toggle — sliding pill, Graph / Table View */}
+      {/* View mode toggle — sliding pill, Table View / Graph */}
       <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View Mode</p>
         <div
+          role="group"
+          aria-label="View Mode"
           style={{
             position: "relative",
             display: "flex",
@@ -4410,7 +4418,7 @@ useEffect(() => {
               position: "absolute",
               top: 3,
               bottom: 3,
-              left: viewMode === "graph" ? 3 : "50%",
+              left: viewMode === "classic" ? 3 : "50%",
               width: "calc(50% - 3px)",
               background: "#ffffff",
               borderRadius: 999,
@@ -4419,10 +4427,32 @@ useEffect(() => {
               pointerEvents: "none",
             }}
           />
+          {/* Table View button */}
+          <button
+            type="button"
+            onClick={() => setViewMode("classic")}
+            aria-pressed={viewMode === "classic"}
+            style={{
+              flex: 1, position: "relative", zIndex: 1,
+              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
+              color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)",
+              transition: "color 200ms ease-in-out",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="3" width="14" height="2" rx="0.5" fill="currentColor" />
+              <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
+              <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
+            </svg>
+            Table View
+          </button>
           {/* Graph button */}
           <button
             type="button"
             onClick={() => setViewMode("graph")}
+            aria-pressed={viewMode === "graph"}
             style={{
               flex: 1, position: "relative", zIndex: 1,
               height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -4444,26 +4474,6 @@ useEffect(() => {
               <line x1="11.5" y1="12" x2="10" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
             </svg>
             Graph
-          </button>
-          {/* Table View button */}
-          <button
-            type="button"
-            onClick={() => setViewMode("classic")}
-            style={{
-              flex: 1, position: "relative", zIndex: 1,
-              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
-              color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)",
-              transition: "color 200ms ease-in-out",
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="3" width="14" height="2" rx="0.5" fill="currentColor" />
-              <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
-              <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
-            </svg>
-            Table View
           </button>
         </div>
       </div>
@@ -4526,7 +4536,7 @@ useEffect(() => {
                         onClick={() => {
                           setHoveredUseCaseType(category.type);
                           setWsGroupMode("none");
-                          openGraph(category.type, `View All ${category.type}`);
+                          openView(category.type, `View All ${category.type}`);
                           setUseCaseMenuOpen(true);
                         }}
                         className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
@@ -4565,7 +4575,7 @@ useEffect(() => {
                           role="menuitem"
                           onClick={() => {
                             setWsGroupMode("none");
-                            openGraph(activeCategory.type, viewAllLabel);
+                            openView(activeCategory.type, viewAllLabel);
                             onExplorerQuery?.(viewAllLabel, buildTopoGraph(activeCategory.type, [], viewAllLabel).nodes);
                           }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
@@ -4588,7 +4598,7 @@ useEffect(() => {
                           type="button"
                           role="menuitem"
                           onClick={() => {
-                            openGraph(activeCategory.type, view);
+                            openView(activeCategory.type, view);
                             onExplorerQuery?.(view, buildTopoGraph(activeCategory.type, [], view).nodes);
                           }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
@@ -4790,7 +4800,7 @@ useEffect(() => {
 
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
-export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeClose?: () => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
+export function WorkspacesExplorerView({ tableViewRequest, navOpen = false, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { tableViewRequest?: number; navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeClose?: () => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
   const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);
@@ -4963,6 +4973,7 @@ export function WorkspacesExplorerView({ navOpen = false, onExplorerQuery, onExp
     return (
       <div className="h-full min-w-0 bg-white font-sans text-[#0c0c0e]">
         <ExplorerSplashView
+          tableViewRequest={tableViewRequest}
           onSelectType={(type) => {
             navigateToType(type);
             onExplorerQuery?.(type, buildTopoGraph(type, [], null).nodes);

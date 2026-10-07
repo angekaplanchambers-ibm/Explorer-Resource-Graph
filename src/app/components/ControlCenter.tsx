@@ -1138,6 +1138,7 @@ interface ControlCenterProps {
   onNewConversation?: () => void;
   messages?: AgentMessage[];
   onMessagesChange?: React.Dispatch<React.SetStateAction<AgentMessage[]>>;
+  onQueryInput?: () => void;
   initialQuery?: string;
   explorerQuery?: ExplorerQueryResult;
   selectedExplorerNodeId?: string | null;
@@ -1296,7 +1297,7 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showI
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialChat, onNewConversation, messages, onMessagesChange, initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
+export function ControlCenter({ initialChat, onNewConversation, messages, onMessagesChange, onQueryInput, initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
   const [signalTab, setSignalTab] = useState<"ops" | "chat">(initialQuery || initialChat ? "chat" : "ops");
@@ -1310,6 +1311,11 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const chatSendRef = useRef<((text: string) => void) | null>(null);
   const handledInitialQuery = useRef<string | undefined>(undefined);
+
+  function updateQueryInput(value: string) {
+    setQuery(value);
+    if (value.trim()) onQueryInput?.();
+  }
 
   function openChat() {
     setSignalTab("chat");
@@ -1417,7 +1423,7 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
   const isDefaultEmptyState = pageContext === "overview" && !selectedNodeInfo && !nodeOverlayInfo && (returnedNodes?.length ?? 0) === 0 && !noResultsForConditions;
 
   function selectDefaultScreenPrompt(prompt: string) {
-    setQuery(prompt);
+    updateQueryInput(prompt);
     setSignalTab("chat");
   }
 
@@ -1463,14 +1469,14 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
         {/* Chat / ops content */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: signalTab === "chat" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0 }}>
-            <TFSignalChat query={query} onQueryChange={setQuery} sendRef={chatSendRef} messages={messages} onMessagesChange={onMessagesChange} />
+            <TFSignalChat query={query} onQueryChange={updateQueryInput} sendRef={chatSendRef} messages={messages} onMessagesChange={onMessagesChange} />
           </div>
           <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, minHeight: 0, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
             <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
           </div>
         </div>
 
-        <AgentComposer query={query} setQuery={setQuery} onFocus={() => setSignalTab("chat")} onSend={() => { setSignalTab("chat"); chatSendRef.current?.(query); setQuery(""); }} showInspectFurther={!isDefaultEmptyState} />
+        <AgentComposer query={query} setQuery={updateQueryInput} onFocus={() => setSignalTab("chat")} onSend={() => { setSignalTab("chat"); chatSendRef.current?.(query); setQuery(""); }} showInspectFurther={!isDefaultEmptyState} />
       </div>
     );
   }
@@ -1514,7 +1520,7 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
                 messages={messages}
                 onMessagesChange={onMessagesChange}
                 query={query}
-                onQueryChange={setQuery}
+                onQueryChange={updateQueryInput}
                 sendRef={chatSendRef}
               />
             </div>
@@ -1543,7 +1549,7 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
             </button>
           )}
 
-          <AgentComposer query={query} setQuery={setQuery} onFocus={openChat} onSend={() => { setSignalTab("chat"); setPanel("expanded"); chatSendRef.current?.(query); setQuery(""); }} bottom showInspectFurther={!isDefaultEmptyState} />
+          <AgentComposer query={query} setQuery={updateQueryInput} onFocus={openChat} onSend={() => { setSignalTab("chat"); setPanel("expanded"); chatSendRef.current?.(query); setQuery(""); }} bottom showInspectFurther={!isDefaultEmptyState} />
 
         </div>
       </div>

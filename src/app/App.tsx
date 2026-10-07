@@ -38,6 +38,8 @@ export default function App() {
   const [pendingQuery, setPendingQuery] = useState<string | undefined>(undefined);
   const [explorerQuery, setExplorerQuery] = useState<{ query: string; nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }> } | undefined>(undefined);
   const [selectedExplorerNodeId, setSelectedExplorerNodeId] = useState<string | null>(null);
+  const [tableViewRequest, setTableViewRequest] = useState(0);
+  const requestTableView = useCallback(() => setTableViewRequest(request => request + 1), []);
   const [returnedNodes, setReturnedNodes] = useState<TopoNode[]>([]);
   const [returnedNodesTheme, setReturnedNodesTheme] = useState<"light" | "dark">("light");
   const [returnedNodesContext, setReturnedNodesContext] = useState<{ title: string; conditionCount: number } | null>(null);
@@ -178,6 +180,7 @@ export default function App() {
                       onNewConversation={() => setConversationId(crypto.randomUUID())}
                       messages={activeConversation?.messages}
                       onMessagesChange={updateMessages}
+                      onQueryInput={requestTableView}
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
@@ -211,6 +214,7 @@ export default function App() {
               transition: "padding-bottom 0.4s cubic-bezier(0.25,0.8,0.25,1)",
             }}>
               <TFCWorkspaceView
+                tableViewRequest={tableViewRequest}
                 page={page}
                 onPageChange={setPage}
                 onControlCenterTrigger={(q) => setPendingQuery(q)}
@@ -282,6 +286,7 @@ export default function App() {
                       onNewConversation={() => setConversationId(crypto.randomUUID())}
                       messages={activeConversation?.messages}
                       onMessagesChange={updateMessages}
+                      onQueryInput={requestTableView}
                       initialQuery={pendingQuery}
                       explorerQuery={explorerQuery}
                       selectedExplorerNodeId={selectedExplorerNodeId}
