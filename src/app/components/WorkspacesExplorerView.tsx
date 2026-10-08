@@ -3098,7 +3098,7 @@ function TopoLegend({ activeType: _activeType, nodes, themeMode = "dark" }: { ac
 type ConditionColumn = { id: string; label: string; valueType?: string };
 
 // Describes the Explorer result set reported to the Advisor so it can explain an empty result.
-export type ReturnedNodesContext = { title: string; conditionCount: number };
+export type ReturnedNodesContext = { title: string; conditionCount: number; entityLabel: string };
 
 function ConditionValueIcon({ valueType, size = 14 }: { valueType: string; size?: number }) {
   const Icon = valueType === "date" ? CalendarDays : valueType === "number" ? Hash : valueType === "boolean" ? ToggleRight : Type;
@@ -3746,8 +3746,37 @@ const USE_CASE_CATEGORIES = [
  ] as const;
 
 // All pre-defined view titles (items + "View All {type}").
-export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onNodeAction }: {
+function getExplorerEntityLabel(type: string | null | undefined) {
+  switch (type) {
+    case "Workspaces":
+    case "workspace":
+    case "ws-group-project":
+    case "ws-group-status":
+      return "Workspaces";
+    case "Policy Sets":
+    case "policy-set":
+      return "Policy Sets";
+    case "Modules":
+    case "module":
+      return "Modules";
+    case "Providers":
+    case "provider":
+      return "Providers";
+    case "Resources":
+    case "resource":
+      return "Resources";
+    case "Terraform Versions":
+    case "terraform-version":
+      return "Terraform Versions";
+    default:
+      return type?.replace(/-/g, " ").replace(/\b\w/g, character => character.toUpperCase()) ?? "Workspaces";
+  }
+}
+
+export function ExplorerNodeList({ nodes, entityLabel, showSearch = true, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onNodeAction }: {
   nodes: TopoNode[];
+  entityLabel: string;
+  showSearch?: boolean;
   selectedNodeId: string | null;
   themeMode: "light" | "dark";
   glassText: string;
@@ -3760,6 +3789,7 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
 }) {
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
+  const displayEntityLabel = entityLabel;
   const pageSize = 10;
   const filteredNodes = nodes.filter(node => node.label.toLowerCase().includes(query.trim().toLowerCase()));
   const pageCount = Math.max(1, Math.ceil(filteredNodes.length / pageSize));
@@ -3771,22 +3801,24 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
     <div className="mt-3" onMouseDown={event => event.stopPropagation()}>
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
-          Returned nodes
+          {displayEntityLabel}
         </p>
-        <span className="text-[11px]" style={{ color: glassMuted }}>{filteredNodes.length}</span>
+        <span className="text-[11px]" style={{ color: glassMuted }}>{filteredNodes.length} {displayEntityLabel}</span>
       </div>
-      <label className="mb-2 flex h-8 items-center gap-2 rounded-[4px] border px-2 text-[#656a76]" style={{ borderColor: "rgba(59,61,69,0.4)" }}>
-        <Search size={14} strokeWidth={1.7} />
-        <input
-          type="search"
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          placeholder="Search nodes"
-          className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#656a76]"
-          style={{ color: glassText }}
-          aria-label="Search returned nodes"
-        />
-      </label>
+      {showSearch && (
+        <label className="mb-2 flex h-8 items-center gap-2 rounded-[4px] border px-2 text-[#656a76]" style={{ borderColor: "rgba(59,61,69,0.4)" }}>
+          <Search size={14} strokeWidth={1.7} />
+          <input
+            type="search"
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder={`Search ${displayEntityLabel}`}
+            className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#656a76]"
+            style={{ color: glassText }}
+            aria-label={`Search ${displayEntityLabel}`}
+          />
+        </label>
+      )}
       <div className="flex flex-col gap-1">
         {pageNodes.map(node => {
           const isSelected = node.id === selectedNodeId;
@@ -3850,14 +3882,14 @@ export function ExplorerNodeList({ nodes, selectedNodeId, themeMode, glassText, 
             </div>
           );
         })}
-        {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No nodes match "{query}".</p>}
+        {filteredNodes.length === 0 && <p className="px-2 py-3 text-center text-[11px]" style={{ color: glassMuted }}>No {displayEntityLabel} match "{query}".</p>}
       </div>
       <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: glassMuted }}>
-        <span>{filteredNodes.length === 0 ? "0 nodes" : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, filteredNodes.length)} of ${filteredNodes.length}`}</span>
+        <span>{filteredNodes.length === 0 ? `0 ${displayEntityLabel}` : `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, filteredNodes.length)} of ${filteredNodes.length} ${displayEntityLabel}`}</span>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous node page"><ChevronLeft size={14} /></button>
+          <button type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous page"><ChevronLeft size={14} /></button>
           <span>{page} / {pageCount}</span>
-          <button type="button" onClick={() => setPage(current => Math.min(pageCount, current + 1))} disabled={page === pageCount} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next node page"><ChevronRight size={14} /></button>
+          <button type="button" onClick={() => setPage(current => Math.min(pageCount, current + 1))} disabled={page === pageCount} className="flex size-5 items-center justify-center rounded hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next page"><ChevronRight size={14} /></button>
         </div>
       </div>
     </div>
@@ -3883,7 +3915,7 @@ function ExplorerSplashView({
   onExplorerQuery?: (query: string, nodes: TopoNode[]) => void;
   onExplorerNodeSelect?: (id: string) => void;
   onExplorerNodeClose?: () => void;
-  onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void;
+  onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null, viewMode?: "graph" | "classic") => void;
   queryColumns: readonly any[];
   themeMode: "light" | "dark"; setThemeMode: React.Dispatch<React.SetStateAction<"light" | "dark">>;
   navOpen: boolean;
@@ -3913,6 +3945,7 @@ function ExplorerSplashView({
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [selectedHudNodeId, setSelectedHudNodeId] = useState<string | null>(null);
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState("");
+  const [browseSelectionActive, setBrowseSelectionActive] = useState(false);
   // One query shared by the HUD builder, Graph, node list, and Table View.
   // draftConditions is the editors' committed draft (in-progress typing stays local to each editor);
   // appliedConditions is what Run Query committed and is what filters everything.
@@ -3979,9 +4012,14 @@ function ExplorerSplashView({
     onReturnedNodesChange?.(
       selectedGraphType ? hudNodes : [],
       themeMode,
-      selectedGraphType ? { title: selectedGraphTitle ?? selectedGraphType, conditionCount: appliedConditions.length } : null,
+      selectedGraphType ? {
+        title: selectedGraphTitle ?? selectedGraphType,
+        conditionCount: appliedConditions.length,
+        entityLabel: getExplorerEntityLabel(selectedGraphType),
+      } : null,
+      viewMode,
     );
-  }, [selectedGraphType, selectedGraphTitle, appliedConditions, hudNodes, themeMode, onReturnedNodesChange]);
+  }, [selectedGraphType, selectedGraphTitle, appliedConditions, hudNodes, themeMode, viewMode, onReturnedNodesChange]);
 
   // Tell the Advisor about the filtered result, the same way picking a view does.
   useEffect(() => {
@@ -4021,6 +4059,11 @@ function ExplorerSplashView({
     setWsGroupMode(title === "Workspaces by run status" ? "status" : "none");
     setUseCaseMenuOpen(false);
     moveHudToCorner();
+  }
+
+  function openBrowseView(type: string, title = type) {
+    setBrowseSelectionActive(true);
+    openView(type, title);
   }
 
   function openSavedViews() {
@@ -4074,6 +4117,7 @@ function ExplorerSplashView({
     setWsGroupMode("none");
     setOverlayInfo(null);
     setNaturalLanguageQuery("");
+    setBrowseSelectionActive(false);
     setSelectedResourceId(null);
     setSelectedHudNodeId(null);
     setBlastRadiusActive(false);
@@ -4198,7 +4242,7 @@ useEffect(() => {
               </div>
               <button type="button" onClick={() => setSavedViewsOpen(false)} aria-label="Close saved views" className="flex size-8 shrink-0 items-center justify-center rounded-[6px] border border-[#dedfe3] bg-white text-[#656a76] hover:bg-[#f1f2f3]"><X size={18} /></button>
             </div>
-            <SavedViewsTable onSelect={openView} search={savedSearch} onSearchChange={setSavedSearch} type={savedType} onTypeChange={setSavedType} />
+            <SavedViewsTable onSelect={openBrowseView} search={savedSearch} onSearchChange={setSavedSearch} type={savedType} onTypeChange={setSavedType} />
           </section>
         ) : selectedGraphType && viewMode === "graph" ? (
           <TopologyGraph
@@ -4523,7 +4567,7 @@ useEffect(() => {
                         onClick={() => {
                           setHoveredUseCaseType(category.type);
                           setWsGroupMode("none");
-                          openView(category.type, `View All ${category.type}`);
+                          openBrowseView(category.type, `View All ${category.type}`);
                           setUseCaseMenuOpen(true);
                         }}
                         className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isHovered ? "bg-[#0f62fe] text-white" : "hover:bg-black/5"}`}
@@ -4562,7 +4606,7 @@ useEffect(() => {
                           role="menuitem"
                           onClick={() => {
                             setWsGroupMode("none");
-                            openView(activeCategory.type, viewAllLabel);
+                            openBrowseView(activeCategory.type, viewAllLabel);
                             onExplorerQuery?.(viewAllLabel, buildTopoGraph(activeCategory.type, [], viewAllLabel).nodes);
                           }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isViewAllSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
@@ -4585,7 +4629,7 @@ useEffect(() => {
                           type="button"
                           role="menuitem"
                           onClick={() => {
-                            openView(activeCategory.type, view);
+                            openBrowseView(activeCategory.type, view);
                             onExplorerQuery?.(view, buildTopoGraph(activeCategory.type, [], view).nodes);
                           }}
                           className={`flex w-full items-center justify-between rounded-[5px] px-2.5 py-2 text-left text-[11px] font-medium transition-colors ${isSelected ? "bg-[#edf4ff] text-[#0f62fe]" : "hover:bg-[#dbeafe] hover:text-[#0f62fe]"}`}
@@ -4739,7 +4783,7 @@ useEffect(() => {
           </div>
         )}
 
-        <div className="mt-3">
+        {!browseSelectionActive && !savedViewsOpen && <div className="mt-3">
           <label htmlFor="natural-language-query" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>
             Enter a natural language query
           </label>
@@ -4771,10 +4815,11 @@ useEffect(() => {
               aria-label="Enter a natural language query"
             />
           </label>
-        </div>
+        </div>}
         {selectedGraphType && !onReturnedNodesChange ? (
           <ExplorerNodeList
             nodes={hudNodes}
+            entityLabel={getExplorerEntityLabel(selectedGraphType)}
             selectedNodeId={selectedHudNodeId}
             themeMode={themeMode}
             glassText={glassText}
@@ -4792,7 +4837,7 @@ useEffect(() => {
 
 // ── Workspaces Explorer ──────────────────────────────────────────────────────
 
-export function WorkspacesExplorerView({ tableViewRequest, navOpen = false, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { tableViewRequest?: number; navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeClose?: () => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null) => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
+export function WorkspacesExplorerView({ tableViewRequest, navOpen = false, onExplorerQuery, onExplorerNodeSelect, onExplorerNodeClose, onReturnedNodesChange, selectedExplorerNodeId, explorerNodeAction, onSelectedNodeInfoChange, onNodeOverlayChange }: { tableViewRequest?: number; navOpen?: boolean; onExplorerQuery?: (query: string, nodes: TopoNode[]) => void; onExplorerNodeSelect?: (id: string) => void; onExplorerNodeClose?: () => void; onReturnedNodesChange?: (nodes: TopoNode[], themeMode: "light" | "dark", context?: ReturnedNodesContext | null, viewMode?: "graph" | "classic") => void; onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void; selectedExplorerNodeId?: string | null; explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null; onSelectedNodeInfoChange?: (info: SelectedNodeInfo | null) => void; onNodeOverlayChange?: (info: NodeOverlayInfo | null) => void }) {
   const [explorerPage, setExplorerPage] = useState<"splash" | "detail">("splash");
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [conditionsExpanded, setConditionsExpanded] = useState(false);

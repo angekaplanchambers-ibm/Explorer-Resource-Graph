@@ -1146,7 +1146,8 @@ interface ControlCenterProps {
   nodeOverlayInfo?: NodeOverlayInfo | null;
   returnedNodes?: TopoNode[];
   returnedNodesTheme?: "light" | "dark";
-  returnedNodesContext?: { title: string; conditionCount: number } | null;
+  returnedNodesContext?: { title: string; conditionCount: number; entityLabel: string } | null;
+  returnedNodesViewMode?: "graph" | "classic";
   onExplorerNodeSelect?: (id: string) => void;
   onExplorerNodeClose?: () => void;
   onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
@@ -1167,12 +1168,13 @@ type ExplorerQueryResult = { query: string; nodes: ExplorerNode[] };
 
 const DEFAULT_SCREEN_PROMPTS = ["View all Modules", "View all Providers", "View all Resources", "Drifted Workspaces"];
 
-function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes = [], returnedNodesTheme = "light", returnedNodesContext = null, selectedNodeId, onSelectNode, onCloseNode, onNodeAction, isDefaultEmptyState = false, onSelectPrompt }: {
+function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes = [], returnedNodesTheme = "light", returnedNodesContext = null, returnedNodesViewMode = "classic", selectedNodeId, onSelectNode, onCloseNode, onNodeAction, isDefaultEmptyState = false, onSelectPrompt }: {
   selectedNodeInfo?: SelectedNodeInfo | null;
   nodeOverlayInfo?: NodeOverlayInfo | null;
   returnedNodes?: TopoNode[];
   returnedNodesTheme?: "light" | "dark";
-  returnedNodesContext?: { title: string; conditionCount: number } | null;
+  returnedNodesContext?: { title: string; conditionCount: number; entityLabel: string } | null;
+  returnedNodesViewMode?: "graph" | "classic";
   selectedNodeId?: string | null;
   onSelectNode?: (id: string) => void;
   onCloseNode?: () => void;
@@ -1201,13 +1203,15 @@ function AgentResponseContent({ selectedNodeInfo, nodeOverlayInfo, returnedNodes
         <div role="status" style={{ marginTop: 18, padding: "12px 14px", border: `1px solid ${M.darkBorder}`, borderRadius: 8, fontSize: 12, lineHeight: 1.55 }}>
           <p style={{ margin: 0, fontWeight: 600 }}>0 results for {returnedNodesContext.title}</p>
           <p style={{ margin: "4px 0 0", color: M.textMuted }}>
-            No nodes match the {returnedNodesContext.conditionCount} applied condition{returnedNodesContext.conditionCount > 1 ? "s" : ""}. Edit or clear the conditions in the Explorer and run the query again.
+            No {returnedNodesContext.entityLabel} match the applied condition{returnedNodesContext.conditionCount > 1 ? "s" : ""}. Edit or clear the conditions in the Explorer and run the query again.
           </p>
         </div>
       )}
-      {returnedNodes.length > 0 && (
+      {returnedNodesViewMode === "graph" && returnedNodes.length > 0 && (
         <ExplorerNodeList
           nodes={returnedNodes}
+          entityLabel={returnedNodesContext?.entityLabel}
+          showSearch={false}
           selectedNodeId={selectedNodeId ?? null}
           themeMode={returnedNodesTheme}
           glassText={M.text}
@@ -1297,7 +1301,7 @@ function AgentComposer({ query, setQuery, onFocus, onSend, bottom = false, showI
 
 type PanelState = "bar" | "expanded";
 
-export function ControlCenter({ initialChat, onNewConversation, messages, onMessagesChange, onQueryInput, initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
+export function ControlCenter({ initialChat, onNewConversation, messages, onMessagesChange, onQueryInput, initialQuery, explorerQuery, selectedExplorerNodeId, selectedNodeInfo, nodeOverlayInfo, returnedNodes, returnedNodesTheme, returnedNodesContext, returnedNodesViewMode, onExplorerNodeSelect, onExplorerNodeClose, onExplorerNodeAction, onQueryHandled, openOpTriage, onOpenOpTriageHandled, onOpenWorkbench, pageContext = "overview", dockMode = "right", onDockChange, onStepActiveChange, onClose }: ControlCenterProps) {
   const OPS = OPS_BY_PAGE[pageContext] || OPS_BY_PAGE.overview;
   const [panel, setPanel] = useState<PanelState>("bar");
   const [signalTab, setSignalTab] = useState<"ops" | "chat">(initialQuery || initialChat ? "chat" : "ops");
@@ -1472,7 +1476,7 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
             <TFSignalChat query={query} onQueryChange={updateQueryInput} sendRef={chatSendRef} messages={messages} onMessagesChange={onMessagesChange} />
           </div>
           <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", flex: 1, minHeight: 0, flexDirection: "column", backgroundColor: M.dark, fontFamily: "'IBM Plex Mono', 'Fira Code', 'Menlo', monospace" }}>
-            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
+            <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} returnedNodesViewMode={returnedNodesViewMode} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
           </div>
         </div>
 
@@ -1526,7 +1530,7 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
             </div>
             {/* Ops tab — CLI interface */}
               <div style={{ display: signalTab === "ops" ? "flex" : "none", width: "100%", height: "100%", minHeight: 0, flexDirection: "column", backgroundColor: M.dark }}>
-                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
+                <AgentResponseContent selectedNodeInfo={selectedNodeInfo} nodeOverlayInfo={nodeOverlayInfo} returnedNodes={returnedNodes} returnedNodesTheme={returnedNodesTheme} returnedNodesContext={returnedNodesContext} returnedNodesViewMode={returnedNodesViewMode} selectedNodeId={selectedExplorerNodeId} onSelectNode={onExplorerNodeSelect} onCloseNode={onExplorerNodeClose} onNodeAction={onExplorerNodeAction} isDefaultEmptyState={isDefaultEmptyState} onSelectPrompt={selectDefaultScreenPrompt} />
               </div>
           </div>
         </div>

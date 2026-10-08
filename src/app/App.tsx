@@ -42,11 +42,13 @@ export default function App() {
   const requestTableView = useCallback(() => setTableViewRequest(request => request + 1), []);
   const [returnedNodes, setReturnedNodes] = useState<TopoNode[]>([]);
   const [returnedNodesTheme, setReturnedNodesTheme] = useState<"light" | "dark">("light");
-  const [returnedNodesContext, setReturnedNodesContext] = useState<{ title: string; conditionCount: number } | null>(null);
-  const handleReturnedNodesChange = useCallback((nodes: TopoNode[], themeMode: "light" | "dark", context?: { title: string; conditionCount: number } | null) => {
+  const [returnedNodesContext, setReturnedNodesContext] = useState<{ title: string; conditionCount: number; entityLabel: string } | null>(null);
+  const [returnedNodesViewMode, setReturnedNodesViewMode] = useState<"graph" | "classic">("classic");
+  const handleReturnedNodesChange = useCallback((nodes: TopoNode[], themeMode: "light" | "dark", context?: { title: string; conditionCount: number; entityLabel: string } | null, viewMode?: "graph" | "classic") => {
     setReturnedNodes(nodes);
     setReturnedNodesTheme(themeMode);
     setReturnedNodesContext(context ?? null);
+    setReturnedNodesViewMode(viewMode ?? "classic");
   }, []);
   const [explorerNodeAction, setExplorerNodeAction] = useState<{ action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null>(null);
   // Node detail panel — the graph's former on-canvas "Node Popover" now reports its
@@ -187,6 +189,7 @@ export default function App() {
                       returnedNodes={returnedNodes}
                       returnedNodesTheme={returnedNodesTheme}
                       returnedNodesContext={returnedNodesContext}
+                      returnedNodesViewMode={returnedNodesViewMode}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}
@@ -293,6 +296,7 @@ export default function App() {
                       returnedNodes={returnedNodes}
                       returnedNodesTheme={returnedNodesTheme}
                       returnedNodesContext={returnedNodesContext}
+                      returnedNodesViewMode={returnedNodesViewMode}
                       selectedNodeInfo={selectedNodeInfo}
                       nodeOverlayInfo={nodeOverlayInfo}
                       onExplorerNodeAction={(action, nodeId) => setExplorerNodeAction({ action, nodeId, nodeLabel: explorerQuery?.nodes.find(node => node.id === nodeId)?.label, nonce: Date.now() })}

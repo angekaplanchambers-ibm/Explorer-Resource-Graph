@@ -515,7 +515,7 @@ interface TFCWorkspaceViewProps {
   onExplorerQuery?: (query: string, nodes: Array<{ id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> }>) => void;
   onExplorerNodeSelect?: (id: string) => void;
   onExplorerNodeClose?: () => void;
-  onReturnedNodesChange?: (nodes: Array<{ id: string; label: string; type: string; secondary: string; data: Record<string, string | number | boolean> }>, themeMode: "light" | "dark", context?: { title: string; conditionCount: number } | null) => void;
+  onReturnedNodesChange?: (nodes: Array<{ id: string; label: string; type: string; secondary: string; data: Record<string, string | number | boolean> }>, themeMode: "light" | "dark", context?: { title: string; conditionCount: number; entityLabel: string } | null, viewMode?: "graph" | "classic") => void;
   onExplorerNodeAction?: (action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay", nodeId: string) => void;
   selectedExplorerNodeId?: string | null;
   explorerNodeAction?: { action: "resources" | "modules" | "providers" | "blast-radius" | "exit-blast-radius" | "close" | "exit-overlay"; nodeId: string; nodeLabel?: string; nonce: number } | null;
