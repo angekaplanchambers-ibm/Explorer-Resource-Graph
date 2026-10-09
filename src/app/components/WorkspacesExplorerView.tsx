@@ -3773,6 +3773,19 @@ function getExplorerEntityLabel(type: string | null | undefined) {
   }
 }
 
+function getExplorerEntityCountLabel(type: string | null | undefined, count: number) {
+  const singularLabels: Record<string, string> = {
+    Workspaces: "workspace",
+    "Policy Sets": "policy set",
+    Modules: "module",
+    Providers: "provider",
+    Resources: "resource",
+    "Terraform Versions": "Terraform version",
+  };
+  const label = getExplorerEntityLabel(type);
+  return count === 1 ? singularLabels[label] ?? label : label.toLowerCase();
+}
+
 export function ExplorerNodeList({ nodes, entityLabel, showSearch = true, selectedNodeId, themeMode, glassText, glassMuted, onSelectNode, expandedNodeInfo, nodeOverlayInfo, onNodeAction }: {
   nodes: TopoNode[];
   entityLabel: string;
@@ -3945,6 +3958,8 @@ function ExplorerSplashView({
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
   const [selectedHudNodeId, setSelectedHudNodeId] = useState<string | null>(null);
   const [naturalLanguageQuery, setNaturalLanguageQuery] = useState("");
+  const [activeQueryLabel, setActiveQueryLabel] = useState<string | null>(null);
+  const [activeQueryCardOpen, setActiveQueryCardOpen] = useState(false);
   const [browseSelectionActive, setBrowseSelectionActive] = useState(false);
   // One query shared by the HUD builder, Graph, node list, and Table View.
   // draftConditions is the editors' committed draft (in-progress typing stays local to each editor);
@@ -3992,6 +4007,8 @@ function ExplorerSplashView({
   function runConditions(rows: ConditionFilter[]) {
     setDraftConditions(rows);
     setAppliedConditions(rows.filter(isConditionApplicable).map(condition => ({ ...condition, value: condition.value.trim() })));
+    setViewMode("classic");
+    setActiveQueryCardOpen(true);
     // The new result set replaces any open Resources/Modules/Providers overlay, whose tables and graph ignore conditions.
     setOverlayInfo(null);
     onNodeOverlayChange?.(null);
@@ -4008,6 +4025,12 @@ function ExplorerSplashView({
     () => selectedGraphType ? buildTopoGraph(selectedGraphType, appliedConditions, selectedGraphTitle).nodes : [],
     [selectedGraphType, appliedConditions, selectedGraphTitle],
   );
+  const appliedConditionSummary = appliedConditions
+    .map(condition => {
+      const field = tableQueryColumns.find(column => column.id === condition.fieldId);
+      return `${field?.label ?? condition.fieldId} ${condition.operator}${VALUELESS_OPERATORS.includes(condition.operator) ? "" : ` ${condition.value}`}`;
+    })
+    .join(" and ");
   useEffect(() => {
     onReturnedNodesChange?.(
       selectedGraphType ? hudNodes : [],
@@ -4046,6 +4069,8 @@ function ExplorerSplashView({
     setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
+    setActiveQueryLabel(title);
+    setActiveQueryCardOpen(true);
     setSelectedResourceId(null);
     setSelectedHudNodeId(null);
     onExplorerNodeClose?.();
@@ -4104,6 +4129,7 @@ function ExplorerSplashView({
     const title = matchedUseCase?.title ?? `View All ${type}`;
     if (!matchedUseCase) setWsGroupMode("none");
     openView(type, title);
+    setActiveQueryLabel(query);
     const resultNodes = buildTopoGraph(type, [], title).nodes;
     onExplorerQuery?.(query, resultNodes);
   }
@@ -4117,6 +4143,8 @@ function ExplorerSplashView({
     setWsGroupMode("none");
     setOverlayInfo(null);
     setNaturalLanguageQuery("");
+    setActiveQueryLabel(null);
+    setActiveQueryCardOpen(false);
     setBrowseSelectionActive(false);
     setSelectedResourceId(null);
     setSelectedHudNodeId(null);
@@ -4206,6 +4234,16 @@ useEffect(() => {
 
   const tableResultCount = overlayInfo ? overlayInfo.rows.length
     : getResultCount(selectedGraphType, selectedGraphTitle, appliedConditions);
+  const showActiveQueryCard = activeQueryCardOpen && !!selectedGraphType && !!selectedGraphTitle && viewMode === "classic" && !savedViewsOpen;
+
+  useEffect(() => {
+    setHudCollapsed(showActiveQueryCard);
+  }, [showActiveQueryCard]);
+
+  function returnToHud() {
+    setActiveQueryCardOpen(false);
+    setHudCollapsed(false);
+  }
 
   const hudSurface = themeMode === "light" ? "#ffffff" : "#13141a";
   const glassBorder = themeMode === "light" ? "rgba(17,24,39,0.13)" : "rgba(255,255,255,0.14)";
@@ -4262,17 +4300,37 @@ useEffect(() => {
           />
         ) : selectedGraphType && viewMode === "classic" ? (
           <div className="absolute inset-0 overflow-auto bg-transparent" style={{ paddingTop: 24, paddingRight: 50, paddingBottom: 50, paddingLeft: 50 }}>
-            {/* Table view header — title + actions */}
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-[15px] font-semibold" style={{ color: glassText }}>
-                  {overlayInfo ? `${overlayInfo.workspaceName} ${displayedType}` : selectedGraphTitle ?? selectedGraphType}
+            {showActiveQueryCard && (
+              <section
+                aria-label="Active query"
+                className="mb-4 rounded-[9px] border bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                style={{ borderColor: glassBorder }}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Active Query</p>
+                  <button
+                    type="button"
+                    onClick={returnToHud}
+                    className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.15)] bg-[rgba(0,0,0,0.04)] px-3 text-[12px] font-medium text-[#3b3d45] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
+                    aria-label="Back to Explorer HUD"
+                  >
+                    ← Back to Explorer
+                  </button>
+                </div>
+                <p className="mt-1 text-[16px] font-semibold" style={{ color: glassText }}>
+                  {activeQueryLabel ?? selectedGraphTitle}
                 </p>
+                {appliedConditionSummary && (
+                  <p className="mt-1 text-[12px]" style={{ color: glassMuted }}>
+                    Conditions: {appliedConditionSummary}
+                  </p>
+                )}
                 <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
-                  {tableResultCount} {displayedType} showing
-                  {selectedGraphType === "Workspaces" && wsGroupMode !== "none" ? ` · grouped by ${wsGroupMode}` : ""}.
+                  {tableResultCount} {getExplorerEntityCountLabel(displayedType, tableResultCount)}
                 </p>
-              </div>
+              </section>
+            )}
+            <div className="mb-4 flex justify-end">
               <div className="flex items-center gap-2">
                 {selectedResourceId && (
                   <button
@@ -4336,7 +4394,8 @@ useEffect(() => {
         type="button"
         onClick={e => {
           e.stopPropagation();
-          setHudCollapsed(c => !c);
+          if (hudCollapsed && showActiveQueryCard) returnToHud();
+          else setHudCollapsed(c => !c);
         }}
         onMouseDown={e => e.stopPropagation()}
         aria-label={hudCollapsed ? "Expand Explorer HUD" : "Collapse Explorer HUD"}
