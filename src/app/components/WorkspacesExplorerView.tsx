@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import * as d3 from "d3";
 import { TopologyForceEngine, breathingSeed, type EngineNode, type EngineLink } from "./topologyForceEngine";
@@ -4030,8 +4030,6 @@ function ExplorerSplashView({
     if (tableViewRequest) setViewMode("classic");
   }, [tableViewRequest]);
   const [savedViewsOpen, setSavedViewsOpen] = useState(false);
-  const [activeQueryCollapsed, setActiveQueryCollapsed] = useState(false);
-  const activeQueryId = useId();
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
@@ -4115,12 +4113,6 @@ function ExplorerSplashView({
     () => selectedGraphType ? buildTopoGraph(selectedGraphType, appliedConditions, selectedGraphTitle).nodes : [],
     [selectedGraphType, appliedConditions, selectedGraphTitle],
   );
-  const appliedConditionSummary = appliedConditions
-    .map(condition => {
-      const field = tableQueryColumns.find(column => column.id === condition.fieldId);
-      return `${field?.label ?? condition.fieldId} ${condition.operator}${VALUELESS_OPERATORS.includes(condition.operator) ? "" : ` ${condition.value}`}`;
-    })
-    .join(" and ");
   useEffect(() => {
     onReturnedNodesChange?.(
       selectedGraphType ? hudNodes : [],
@@ -4156,7 +4148,6 @@ function ExplorerSplashView({
   }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openView(type: string, title = type) {
-    setActiveQueryCollapsed(false);
     setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
@@ -4397,69 +4388,17 @@ useEffect(() => {
                 className="@container mb-4 rounded-[9px] border bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                 style={{ borderColor: glassBorder }}
               >
-                <div className={activeQueryCollapsed ? "grid min-w-0" : "grid min-w-0 @[760px]:grid-cols-[minmax(0,1fr)_200px]"}>
-                  <div className={`min-w-0 px-6 ${activeQueryCollapsed ? "py-3" : "py-6"}`}>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setActiveQueryCollapsed(collapsed => !collapsed)}
-                        aria-label={activeQueryCollapsed ? "Expand Active Query" : "Collapse Active Query"}
-                        aria-expanded={!activeQueryCollapsed}
-                        aria-controls={`${activeQueryId}-details ${activeQueryId}-view`}
-                        className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-[#a4a7ae] bg-[#fafafa] text-[#3b3d45] shadow-sm hover:bg-[#f1f3f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
-                      >
-                        <ChevronUp size={12} aria-hidden="true" className={`transition-transform duration-150 motion-reduce:transition-none ${activeQueryCollapsed ? "rotate-180" : ""}`} />
-                      </button>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Active Query</p>
-                    </div>
+                <div className="grid min-w-0 @[480px]:grid-cols-[minmax(0,1fr)_160px]">
+                  <div className="min-w-0 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Active Query</p>
                     <p className="mt-1.5 break-words text-[12px] font-medium text-[#3b3d45]">
                       {activeQueryLabel ?? selectedGraphTitle}{" "}
                       <span className="whitespace-nowrap text-[12px] font-normal" style={{ color: glassMuted }} aria-label={`${tableResultCount} ${getExplorerEntityCountLabel(displayedType, tableResultCount)}`}>
                         ({tableResultCount})
                       </span>
                     </p>
-                    <div id={`${activeQueryId}-details`} hidden={activeQueryCollapsed}>
-                      {appliedConditionSummary && (
-                        <p className="mt-1 break-words text-[12px] text-[#656a76]">
-                          Conditions: {appliedConditionSummary}
-                        </p>
-                      )}
-                      <div className="mt-5 border-t border-[#c5c5c5] pt-5">
-                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>
-                          {overlayInfo ? "Parent workspace conditions" : "Modify conditions"}
-                        </p>
-                        <ConditionsEditor
-                          columns={tableQueryColumns}
-                          conditions={draftConditions}
-                          onRun={runConditions}
-                          onCancel={cancelConditions}
-                          labelColor={glassMuted}
-                          responsive
-                        />
-                      </div>
-                    </div>
                   </div>
-                  <div
-                    id={`${activeQueryId}-view`}
-                    hidden={activeQueryCollapsed}
-                    className={activeQueryCollapsed ? "hidden" : "flex min-w-0 flex-col justify-between gap-6 rounded-b-[9px] border-t border-[#c5c5c5] bg-[#fafafa] p-6 @[760px]:rounded-bl-none @[760px]:rounded-r-[9px] @[760px]:border-l @[760px]:border-t-0"}
-                  >
-                    <div className="min-w-0">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View</p>
-                      <ExplorerViewModeSwitch
-                        orientation="vertical"
-                        viewMode={viewMode}
-                        onChange={mode => {
-                          setViewMode(mode);
-                          if (mode === "graph") {
-                            setHudCollapsed(false);
-                            requestAnimationFrame(() => {
-                              hudCardRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
-                            });
-                          }
-                        }}
-                      />
-                    </div>
+                  <div className="flex min-w-0 items-center rounded-b-[9px] border-t border-[#c5c5c5] bg-[#fafafa] px-4 py-3 @[480px]:rounded-bl-none @[480px]:rounded-r-[9px] @[480px]:border-l @[480px]:border-t-0">
                     <button
                       type="button"
                       onClick={returnToHud}
