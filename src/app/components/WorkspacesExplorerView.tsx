@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import * as d3 from "d3";
 import { TopologyForceEngine, breathingSeed, type EngineNode, type EngineLink } from "./topologyForceEngine";
@@ -3115,6 +3115,7 @@ function ConditionsEditor({
   onCancel,
   labelColor = "#656a76",
   compact = false,
+  responsive = false,
 }: {
   columns: readonly ConditionColumn[];
   conditions: ConditionFilter[];
@@ -3122,6 +3123,7 @@ function ConditionsEditor({
   onCancel: () => void;
   labelColor?: string;
   compact?: boolean;
+  responsive?: boolean;
 }) {
   const [rows, setRows] = useState(conditions);
   useEffect(() => { setRows(conditions); }, [conditions]);
@@ -3178,7 +3180,7 @@ function ConditionsEditor({
   const menu = "absolute left-0 top-[34px] z-40 max-h-60 overflow-y-auto rounded-[4px] border border-[#b8bcc5] bg-white py-1 shadow-md";
 
   return (
-    <div ref={rootRef} className="text-[12px] text-[#3b3d45]" style={{ cursor: "default" }} onMouseDown={event => event.stopPropagation()}>
+    <div ref={rootRef} className={`text-[12px] text-[#3b3d45] ${responsive ? "@container" : ""}`} style={{ cursor: "default" }} onMouseDown={event => event.stopPropagation()}>
       <div className="space-y-2.5">
         {rows.map((condition, index) => {
           const field = columns.find(column => column.id === condition.fieldId) ?? columns[0];
@@ -3193,14 +3195,14 @@ function ConditionsEditor({
           return (
             <div key={index}>
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: labelColor }}>{index === 0 ? "WHERE" : "AND"}</p>
-              <div className="flex items-stretch">
+              <div className={responsive ? "grid grid-cols-[minmax(0,1fr)_32px] items-stretch gap-y-2 @[400px]:flex" : "flex items-stretch"}>
                 {showLeadingControl && (
-                  <button type="button" onClick={() => remove(index)} aria-label={onlyRow ? "Clear condition" : "Remove condition"} className={`${iconButton} rounded-l-[4px]`}>
+                  <button type="button" onClick={() => remove(index)} aria-label={onlyRow ? "Clear condition" : "Remove condition"} className={`${iconButton} rounded-l-[4px] ${responsive ? "col-span-2 justify-self-end" : ""}`}>
                     <X size={14} />
                   </button>
                 )}
 
-                <div className={`relative ${segment} ${compact ? "w-[108px]" : "w-[190px]"} shrink-0 ${showLeadingControl ? "" : "rounded-l-[4px]"}`}>
+                <div className={`relative ${segment} ${compact ? "w-[108px]" : "w-[190px]"} shrink-0 ${showLeadingControl ? "" : "rounded-l-[4px]"} ${responsive ? "col-span-2 @max-[400px]:w-auto" : ""}`}>
                   <button
                     type="button"
                     onClick={() => { setOpenOperatorIndex(null); setOpenFieldIndex(openFieldIndex === index ? null : index); }}
@@ -3234,7 +3236,7 @@ function ConditionsEditor({
                   )}
                 </div>
 
-                <div className={`relative ${segment} ${compact ? "w-[104px]" : "w-[140px]"} shrink-0`}>
+                <div className={`relative ${segment} ${compact ? "w-[104px]" : "w-[140px]"} shrink-0 ${responsive ? "col-span-2 @max-[400px]:w-auto" : ""}`}>
                   <button
                     type="button"
                     onClick={() => { setOpenFieldIndex(null); setOpenOperatorIndex(openOperatorIndex === index ? null : index); }}
@@ -3294,9 +3296,9 @@ function ConditionsEditor({
 
                 <button type="button" onClick={add} aria-label="Add condition" className={`${iconButton} group/add relative rounded-r-[4px]`}>
                   <Plus size={14} />
-                  <span aria-hidden="true" className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#0c0c0e] px-3 py-1.5 text-xs font-normal text-white opacity-0 shadow-md transition-opacity group-hover/add:opacity-100 group-focus-visible/add:opacity-100">
+                  <span aria-hidden="true" className={`pointer-events-none absolute bottom-full z-50 mb-2 whitespace-nowrap rounded-md bg-[#0c0c0e] px-3 py-1.5 text-xs font-normal text-white opacity-0 shadow-md transition-opacity group-hover/add:opacity-100 group-focus-visible/add:opacity-100 ${responsive ? "right-0" : "left-1/2 -translate-x-1/2"}`}>
                     Add condition
-                    <span className="absolute left-1/2 top-full size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-[#0c0c0e]" />
+                    <span className={`absolute top-full size-2 -translate-y-1/2 rotate-45 bg-[#0c0c0e] ${responsive ? "right-3" : "left-1/2 -translate-x-1/2"}`} />
                   </span>
                 </button>
               </div>
@@ -3909,6 +3911,92 @@ export function ExplorerNodeList({ nodes, entityLabel, showSearch = true, select
   );
 }
 
+function ExplorerViewModeSwitch({
+  viewMode,
+  onChange,
+  graphDisabled = false,
+  orientation = "horizontal",
+}: {
+  viewMode: "graph" | "classic";
+  onChange: (mode: "graph" | "classic") => void;
+  graphDisabled?: boolean;
+  orientation?: "horizontal" | "vertical";
+}) {
+  if (orientation === "vertical") {
+    return (
+      <div role="group" aria-label="View Mode" className="flex flex-col gap-1 rounded-[12px] bg-[#f1f3f6] p-1" onMouseDown={event => event.stopPropagation()}>
+        {([
+          { mode: "classic", label: "Table View", Icon: Table2 },
+          { mode: "graph", label: "Graph", Icon: ChartNoAxesCombined },
+        ] as const).map(({ mode, label, Icon }) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onChange(mode)}
+            disabled={mode === "graph" && graphDisabled}
+            title={mode === "graph" && graphDisabled ? "Select a saved view to use Graph" : undefined}
+            aria-pressed={viewMode === mode}
+            className={`flex min-h-8 items-center gap-2 rounded-[9px] px-3 py-1.5 text-left text-[12px] font-medium transition-colors disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe] ${viewMode === mode ? "bg-white text-[#0f62fe] shadow-[0_1px_3px_rgba(0,0,0,0.04)]" : "text-[#656a76] hover:bg-white/60"}`}
+          >
+            <Icon size={14} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div
+      role="group"
+      aria-label="View Mode"
+      className="relative flex rounded-full p-[3px]"
+      style={{ background: "rgba(59,61,69,0.07)" }}
+      onMouseDown={event => event.stopPropagation()}
+    >
+      <div
+        className="pointer-events-none absolute bottom-[3px] top-[3px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.18)] transition-[left] duration-200 ease-in-out"
+        style={{ left: viewMode === "classic" ? 3 : "50%", width: "calc(50% - 3px)" }}
+      />
+      <button
+        type="button"
+        onClick={() => onChange("classic")}
+        aria-pressed={viewMode === "classic"}
+        className="relative z-[1] flex h-[26px] flex-1 items-center justify-center gap-[5px] whitespace-nowrap rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
+        style={{ color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)" }}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <rect x="1" y="3" width="14" height="2" rx="0.5" fill="currentColor" />
+          <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
+          <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
+        </svg>
+        Table View
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("graph")}
+        disabled={graphDisabled}
+        title={graphDisabled ? "Select a saved view to use Graph" : undefined}
+        aria-pressed={viewMode === "graph"}
+        className="relative z-[1] flex h-[26px] flex-1 items-center justify-center gap-[5px] whitespace-nowrap rounded-full px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
+        style={{ color: viewMode === "graph" ? "#0f62fe" : "rgba(59,61,69,0.55)" }}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.5" fill="currentColor" />
+          <circle cx="2.5" cy="4" r="2" fill="currentColor" />
+          <circle cx="13.5" cy="4" r="2" fill="currentColor" />
+          <circle cx="2.5" cy="12" r="2" fill="currentColor" />
+          <circle cx="13.5" cy="12" r="2" fill="currentColor" />
+          <line x1="4.5" y1="4" x2="6" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="11.5" y1="4" x2="10" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="4.5" y1="12" x2="6" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="11.5" y1="12" x2="10" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+        Graph
+      </button>
+    </div>
+  );
+}
+
 function ExplorerSplashView({
   tableViewRequest,
   onSelectType,
@@ -3942,6 +4030,8 @@ function ExplorerSplashView({
     if (tableViewRequest) setViewMode("classic");
   }, [tableViewRequest]);
   const [savedViewsOpen, setSavedViewsOpen] = useState(false);
+  const [activeQueryCollapsed, setActiveQueryCollapsed] = useState(false);
+  const activeQueryId = useId();
   const [savedSearch, setSavedSearch] = useState("");
   const [savedType, setSavedType] = useState("All types");
   const [useCaseMenuOpen, setUseCaseMenuOpen] = useState(false);
@@ -4066,6 +4156,7 @@ function ExplorerSplashView({
   }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openView(type: string, title = type) {
+    setActiveQueryCollapsed(false);
     setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
@@ -4303,31 +4394,82 @@ useEffect(() => {
             {showActiveQueryCard && (
               <section
                 aria-label="Active query"
-                className="mb-4 rounded-[9px] border bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                className="@container mb-4 rounded-[9px] border bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                 style={{ borderColor: glassBorder }}
               >
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Active Query</p>
-                  <button
-                    type="button"
-                    onClick={returnToHud}
-                    className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.15)] bg-[rgba(0,0,0,0.04)] px-3 text-[12px] font-medium text-[#3b3d45] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
-                    aria-label="Back to Explorer HUD"
+                <div className={activeQueryCollapsed ? "grid min-w-0" : "grid min-w-0 @[760px]:grid-cols-[minmax(0,1fr)_200px]"}>
+                  <div className={`min-w-0 px-6 ${activeQueryCollapsed ? "py-3" : "py-6"}`}>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveQueryCollapsed(collapsed => !collapsed)}
+                        aria-label={activeQueryCollapsed ? "Expand Active Query" : "Collapse Active Query"}
+                        aria-expanded={!activeQueryCollapsed}
+                        aria-controls={`${activeQueryId}-details ${activeQueryId}-view`}
+                        className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-[#a4a7ae] bg-[#fafafa] text-[#3b3d45] shadow-sm hover:bg-[#f1f3f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
+                      >
+                        <ChevronUp size={12} aria-hidden="true" className={`transition-transform duration-150 motion-reduce:transition-none ${activeQueryCollapsed ? "rotate-180" : ""}`} />
+                      </button>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>Active Query</p>
+                    </div>
+                    <p className="mt-1.5 break-words text-[12px] font-medium text-[#3b3d45]">
+                      {activeQueryLabel ?? selectedGraphTitle}{" "}
+                      <span className="whitespace-nowrap text-[12px] font-normal" style={{ color: glassMuted }} aria-label={`${tableResultCount} ${getExplorerEntityCountLabel(displayedType, tableResultCount)}`}>
+                        ({tableResultCount})
+                      </span>
+                    </p>
+                    <div id={`${activeQueryId}-details`} hidden={activeQueryCollapsed}>
+                      {appliedConditionSummary && (
+                        <p className="mt-1 break-words text-[12px] text-[#656a76]">
+                          Conditions: {appliedConditionSummary}
+                        </p>
+                      )}
+                      <div className="mt-5 border-t border-[#c5c5c5] pt-5">
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>
+                          {overlayInfo ? "Parent workspace conditions" : "Modify conditions"}
+                        </p>
+                        <ConditionsEditor
+                          columns={tableQueryColumns}
+                          conditions={draftConditions}
+                          onRun={runConditions}
+                          onCancel={cancelConditions}
+                          labelColor={glassMuted}
+                          responsive
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    id={`${activeQueryId}-view`}
+                    hidden={activeQueryCollapsed}
+                    className={activeQueryCollapsed ? "hidden" : "flex min-w-0 flex-col justify-between gap-6 rounded-b-[9px] border-t border-[#c5c5c5] bg-[#fafafa] p-6 @[760px]:rounded-bl-none @[760px]:rounded-r-[9px] @[760px]:border-l @[760px]:border-t-0"}
                   >
-                    ← Back to Explorer
-                  </button>
+                    <div className="min-w-0">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View</p>
+                      <ExplorerViewModeSwitch
+                        orientation="vertical"
+                        viewMode={viewMode}
+                        onChange={mode => {
+                          setViewMode(mode);
+                          if (mode === "graph") {
+                            setHudCollapsed(false);
+                            requestAnimationFrame(() => {
+                              hudCardRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={returnToHud}
+                      className="inline-flex min-h-8 w-full shrink-0 items-center justify-center gap-1.5 rounded-[8px] border border-[#d5dce8] bg-[#f4f5f7] px-2 py-1.5 text-[12px] font-medium text-[#3b3d45] transition-colors hover:bg-[#e9ecf1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
+                      aria-label="Back to Explorer HUD"
+                    >
+                      ← Back to Explorer
+                    </button>
+                  </div>
                 </div>
-                <p className="mt-1 text-[16px] font-semibold" style={{ color: glassText }}>
-                  {activeQueryLabel ?? selectedGraphTitle}
-                </p>
-                {appliedConditionSummary && (
-                  <p className="mt-1 text-[12px]" style={{ color: glassMuted }}>
-                    Conditions: {appliedConditionSummary}
-                  </p>
-                )}
-                <p className="mt-0.5 text-[12px]" style={{ color: glassMuted }}>
-                  {tableResultCount} {getExplorerEntityCountLabel(displayedType, tableResultCount)}
-                </p>
               </section>
             )}
             <div className="mb-4 flex justify-end">
@@ -4395,6 +4537,10 @@ useEffect(() => {
         onClick={e => {
           e.stopPropagation();
           if (hudCollapsed && showActiveQueryCard) returnToHud();
+          else if (!hudCollapsed && selectedGraphType && selectedGraphTitle && viewMode === "classic" && !savedViewsOpen) {
+            setActiveQueryCardOpen(true);
+            setHudCollapsed(true);
+          }
           else setHudCollapsed(c => !c);
         }}
         onMouseDown={e => e.stopPropagation()}
@@ -4433,6 +4579,8 @@ useEffect(() => {
       {/* HUD wrapper — only the card, slides in/out with transform */}
       <div
         className="absolute"
+        ref={element => { if (element) element.inert = hudCollapsed; }}
+        aria-hidden={hudCollapsed}
         style={hudPhase === "intro" ? {
           left: "50%",
           top: "50%",
@@ -4486,86 +4634,9 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* View mode toggle — sliding pill, Table View / Graph */}
       <div className="mt-3" onMouseDown={e => e.stopPropagation()}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassMuted }}>View Mode</p>
-        <div
-          role="group"
-          aria-label="View Mode"
-          style={{
-            position: "relative",
-            display: "flex",
-            background: "rgba(59,61,69,0.07)",
-            borderRadius: 999,
-            padding: 3,
-          }}
-        >
-          {/* Sliding pill */}
-          <div
-            style={{
-              position: "absolute",
-              top: 3,
-              bottom: 3,
-              left: viewMode === "classic" ? 3 : "50%",
-              width: "calc(50% - 3px)",
-              background: "#ffffff",
-              borderRadius: 999,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
-              transition: "left 200ms ease-in-out",
-              pointerEvents: "none",
-            }}
-          />
-          {/* Table View button */}
-          <button
-            type="button"
-            onClick={() => setViewMode("classic")}
-            aria-pressed={viewMode === "classic"}
-            style={{
-              flex: 1, position: "relative", zIndex: 1,
-              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
-              color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)",
-              transition: "color 200ms ease-in-out",
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="3" width="14" height="2" rx="0.5" fill="currentColor" />
-              <rect x="1" y="7" width="14" height="2" rx="0.5" fill="currentColor" />
-              <rect x="1" y="11" width="14" height="2" rx="0.5" fill="currentColor" />
-            </svg>
-            Table View
-          </button>
-          {/* Graph button */}
-          <button
-            type="button"
-            onClick={() => setViewMode("graph")}
-            disabled={savedViewsOpen}
-            title={savedViewsOpen ? "Select a saved view to use Graph" : undefined}
-            aria-pressed={viewMode === "graph"}
-            style={{
-              flex: 1, position: "relative", zIndex: 1,
-              height: 26, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              background: "none", border: "none", cursor: savedViewsOpen ? "not-allowed" : "pointer",
-              fontFamily: "inherit", fontSize: 12, fontWeight: 500,
-              color: viewMode === "graph" ? "#0f62fe" : "rgba(59,61,69,0.55)",
-              transition: "color 200ms ease-in-out",
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="2.5" fill="currentColor" />
-              <circle cx="2.5" cy="4" r="2" fill="currentColor" />
-              <circle cx="13.5" cy="4" r="2" fill="currentColor" />
-              <circle cx="2.5" cy="12" r="2" fill="currentColor" />
-              <circle cx="13.5" cy="12" r="2" fill="currentColor" />
-              <line x1="4.5" y1="4" x2="6" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
-              <line x1="11.5" y1="4" x2="10" y2="6.5" stroke="currentColor" strokeWidth="1.2" />
-              <line x1="4.5" y1="12" x2="6" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
-              <line x1="11.5" y1="12" x2="10" y2="9.5" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-            Graph
-          </button>
-        </div>
+        <ExplorerViewModeSwitch viewMode={viewMode} onChange={setViewMode} graphDisabled={savedViewsOpen} />
       </div>
 
       {/* Browse Types dropdown + selected tag */}
@@ -4828,7 +4899,7 @@ useEffect(() => {
           );
         })()}
 
-        {selectedGraphType && !savedViewsOpen && (
+        {selectedGraphType && !savedViewsOpen && !showActiveQueryCard && (
           <div className="mt-3 border-t pt-3" style={{ borderColor: glassBorder }}>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: glassText }}>{overlayInfo ? "Parent workspace conditions" : "Modify conditions"}</p>
             <ConditionsEditor
