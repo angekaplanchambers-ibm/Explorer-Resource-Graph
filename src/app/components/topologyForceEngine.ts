@@ -94,6 +94,7 @@ export class TopologyForceEngine {
   private readonly baseAlphaTarget = 0.011;
 
   private flares = new Map<string, FlareEntry>();
+  private flareTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private trails = new Map<string, TrailPoint[]>();
 
   private onFrame: () => void;
@@ -151,7 +152,15 @@ export class TopologyForceEngine {
     // coalesces multiple restarts into one tick per real frame, so we can
     // notify the host directly here without a second rAF wrapper.
     for (const n of this.simNodes) {
-      this.positions.set(n.id, { x: n.x ?? n.tx, y: n.y ?? n.ty });
+      const position = this.positions.get(n.id);
+      const x = n.x ?? n.tx;
+      const y = n.y ?? n.ty;
+      if (position) {
+        position.x = x;
+        position.y = y;
+      } else {
+        this.positions.set(n.id, { x, y });
+      }
     }
     this.pruneTrails();
     this.onFrame();
@@ -426,14 +435,18 @@ export class TopologyForceEngine {
 
   // --- bioluminescent flare (click/hold flash, decays back to baseline) -----
   flareNode(id: string, duration = 900) {
+    const previousTimer = this.flareTimers.get(id);
+    if (previousTimer != null) clearTimeout(previousTimer);
     this.flares.set(id, { start: performance.now(), duration });
     // The simulation's alphaTarget keeps it perpetually ticking, so the next
     // natural tick (within ~16ms) will pick this flare up — no extra kick needed.
     // Self-clean after the flare fully decays.
-    window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       const f = this.flares.get(id);
       if (f && performance.now() - f.start >= f.duration) this.flares.delete(id);
+      this.flareTimers.delete(id);
     }, duration + 50);
+    this.flareTimers.set(id, timer);
   }
 
   getFlareIntensity(id: string): number {
@@ -467,6 +480,10 @@ export class TopologyForceEngine {
 
   destroy() {
     this.blendTimer?.stop();
+    if (this.reheatTimer != null) clearTimeout(this.reheatTimer);
+    for (const timer of this.flareTimers.values()) clearTimeout(timer);
+    this.flareTimers.clear();
+    this.flares.clear();
     this.simulation.stop();
   }
 }

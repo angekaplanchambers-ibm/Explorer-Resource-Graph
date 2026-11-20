@@ -113,6 +113,13 @@ export function TFSignalChat({ query: _query, onQueryChange, sendRef, messages, 
   const setMsgs = onMessagesChange ?? setLocalMessages;
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const responseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (responseTimeoutRef.current !== null) clearTimeout(responseTimeoutRef.current);
+    if (streamIntervalRef.current !== null) clearInterval(streamIntervalRef.current);
+  }, []);
 
   // Auto-scroll whenever messages or loading state change
   useEffect(() => {
@@ -130,20 +137,22 @@ export function TFSignalChat({ query: _query, onQueryChange, sendRef, messages, 
       setLoading(true);
 
       const delay = 800 + Math.random() * 400;
-      setTimeout(() => {
+      responseTimeoutRef.current = setTimeout(() => {
+        responseTimeoutRef.current = null;
         setLoading(false);
         const fullText = RESPONSES[resolveIntent(trimmed)];
         const words = fullText.split(" ");
         let i = 0;
         const assistantId = crypto.randomUUID();
         setMsgs(prev => [...prev, { id: assistantId, role: "assistant", text: "", streaming: true }]);
-        const iv = setInterval(() => {
+        streamIntervalRef.current = setInterval(() => {
           i++;
           setMsgs(prev => prev.map(m =>
             m.id === assistantId ? { ...m, text: words.slice(0, i).join(" ") } : m
           ));
           if (i >= words.length) {
-            clearInterval(iv);
+            if (streamIntervalRef.current !== null) clearInterval(streamIntervalRef.current);
+            streamIntervalRef.current = null;
             setMsgs(prev => prev.map(m =>
               m.id === assistantId ? { ...m, streaming: false } : m
             ));

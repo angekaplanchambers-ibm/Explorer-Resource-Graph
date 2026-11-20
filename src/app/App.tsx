@@ -6,13 +6,18 @@ import { Workbench } from "./components/Workbench";
 import NavTfcSideNav from "@/imports/NavTfcSideNav";
 import { TFCTopNav } from "./components/TFCTopNav";
 import type { SelectedNodeInfo, NodeOverlayInfo, TopoNode } from "./components/WorkspacesExplorerView";
-import { CollapsedAgentPanel, type AgentConversation } from "./components/CollapsedAgentPanel";
 import type { AgentMessage } from "./components/TFSignalChat";
 
 /* MARKER-MAKE-KIT-INVOKED */
 
 export type PageContext = "overview" | "runs" | "runDetail";
 export type DockMode = "left" | "right";
+type AgentConversation = {
+  id: string;
+  title: string;
+  messages: AgentMessage[];
+  updatedAt: number;
+};
 const SIDE_PANEL_MIN = 280;
 const SIDE_PANEL_MAX = 720;
 const SIDE_PANEL_DEFAULT = 420;
@@ -62,20 +67,11 @@ export default function App() {
   const [pendingOpTriage, setPendingOpTriage] = useState<string | undefined>(undefined);
   const [page, setPage] = useState<PageContext>("overview");
   const [dockMode, setDockMode] = useState<DockMode>("right");
-  const [agentOpen, setAgentOpen] = useState(false);
-  // Auto-open the Agent Drawer whenever a node popover/overlay is triggered (canvas
-  // click, HUD "Returned Nodes" list, or an explorerNodeAction like View Blast Radius/
-  // Resources/Modules/Providers) so its content isn't hidden behind the collapsed
-  // trigger. Closing/collapsing remains a manual action — this effect only opens.
-  useEffect(() => {
-    if (selectedNodeInfo || nodeOverlayInfo) {
-      setAgentOpen(true);
-    }
-  }, [selectedNodeInfo, nodeOverlayInfo]);
   const [stepActive, setStepActive] = useState(false); // mirrors whether a step is open in ControlCenter
   const [navOpen, setNavOpen] = useState(false);
   const [panelW, setPanelW] = useState(SIDE_PANEL_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const workbenchCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startPanelDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -95,6 +91,10 @@ export default function App() {
   }, [panelW]);
 
   function openWorkbench(query?: string) {
+    if (workbenchCloseTimerRef.current !== null) {
+      clearTimeout(workbenchCloseTimerRef.current);
+      workbenchCloseTimerRef.current = null;
+    }
     setWorkbenchQuery(query);
     setWorkbenchOpen(true);
     // Defer to next frame so the initial translateY renders before we animate in
@@ -104,11 +104,17 @@ export default function App() {
   function closeWorkbench() {
     setWorkbenchVisible(false);
     // Wait for slide-out to finish before unmounting
-    setTimeout(() => {
+    if (workbenchCloseTimerRef.current !== null) clearTimeout(workbenchCloseTimerRef.current);
+    workbenchCloseTimerRef.current = setTimeout(() => {
       setWorkbenchOpen(false);
       setWorkbenchQuery(undefined);
+      workbenchCloseTimerRef.current = null;
     }, 760);
   }
+
+  useEffect(() => () => {
+    if (workbenchCloseTimerRef.current !== null) clearTimeout(workbenchCloseTimerRef.current);
+  }, []);
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -174,10 +180,9 @@ export default function App() {
           >
             {/* Left-dock panel — in-flow flex column, shown only when dockMode=left */}
             {dockMode === "left" && !workbenchOpen && (
-              <div style={{ position: "relative", order: -1, zIndex: 20, flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
-                {agentOpen && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    <ControlCenter
+              <div style={{ position: "relative", order: -1, zIndex: 20, flexShrink: 0, width: panelW, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  <ControlCenter
                       initialChat={agentChatOpen}
                       onNewConversation={() => setConversationId(crypto.randomUUID())}
                       messages={activeConversation?.messages}
@@ -203,10 +208,8 @@ export default function App() {
                       dockMode={dockMode}
                       onDockChange={setDockMode}
                       onStepActiveChange={setStepActive}
-                      onClose={() => setAgentOpen(false)}
-                    />
-                  </div>
-                )}
+                  />
+                </div>
               </div>
             )}
 
@@ -224,12 +227,10 @@ export default function App() {
                 onExplorerQuery={(query, nodes) => {
                   setAgentChatOpen(false);
                   setExplorerQuery({ query, nodes });
-                  setAgentOpen(true);
                 }}
                 onExplorerNodeSelect={(nodeId) => {
                   setAgentChatOpen(false);
                   setSelectedExplorerNodeId(nodeId);
-                  setAgentOpen(true);
                 }}
                 onReturnedNodesChange={handleReturnedNodesChange}
                 onExplorerNodeClose={() => setSelectedExplorerNodeId(null)}
@@ -247,44 +248,40 @@ export default function App() {
 
             {/* Right-dock panel — in-flow flex column, shown only when dockMode=right */}
             {dockMode === "right" && !workbenchOpen && (
-              <div style={{ position: "relative", zIndex: 20, flexShrink: 0, width: agentOpen ? panelW : 0, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
-                {/* Resize handle — only active when panel is open */}
-                {agentOpen && (
+              <div style={{ position: "relative", zIndex: 20, flexShrink: 0, width: panelW, height: "100%", overflow: "visible", transition: "width 0.3s cubic-bezier(0.25,0.8,0.25,1)" }}>
+                <div
+                  onMouseDown={startPanelDrag}
+                  style={{
+                    position: "absolute",
+                    left: -6,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 12,
+                    height: 48,
+                    cursor: "ew-resize",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 10,
+                  }}
+                  title="Drag to resize panel"
+                >
                   <div
-                    onMouseDown={startPanelDrag}
                     style={{
-                      position: "absolute",
-                      left: -6,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      width: 12,
-                      height: 48,
-                      cursor: "ew-resize",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      zIndex: 10,
+                      width: 4,
+                      height: 32,
+                      borderRadius: 2,
+                      backgroundColor: "rgba(101,106,118,0.25)",
+                      transition: "background-color 0.15s",
                     }}
-                    title="Drag to resize panel"
-                  >
-                    <div
-                      style={{
-                        width: 4,
-                        height: 32,
-                        borderRadius: 2,
-                        backgroundColor: "rgba(101,106,118,0.25)",
-                        transition: "background-color 0.15s",
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
-                      onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
-                    />
-                  </div>
-                )}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(16,96,255,0.5)")}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(101,106,118,0.25)")}
+                  />
+                </div>
 
                 {/* Panel content */}
-                {agentOpen && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                    <ControlCenter
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  <ControlCenter
                       initialChat={agentChatOpen}
                       onNewConversation={() => setConversationId(crypto.randomUUID())}
                       messages={activeConversation?.messages}
@@ -310,29 +307,14 @@ export default function App() {
                       dockMode={dockMode}
                       onDockChange={setDockMode}
                       onStepActiveChange={setStepActive}
-                      onClose={() => setAgentOpen(false)}
-                    />
-                  </div>
-                )}
+                  />
+                </div>
               </div>
             )}
           </div>
 
         </div>
       </div>
-
-      {!workbenchOpen && !agentOpen && (
-        <CollapsedAgentPanel
-          width={panelW}
-          nodes={selectedNodeInfo ? [selectedNodeInfo.node] : returnedNodes}
-          context={selectedNodeInfo ? `${selectedNodeInfo.activeType} · ${selectedNodeInfo.node.label}` : returnedNodesContext?.title ?? page}
-          conversations={conversations}
-          onOpen={() => { setAgentChatOpen(false); setAgentOpen(true); }}
-          onSelectNode={nodeId => { setAgentChatOpen(false); setSelectedExplorerNodeId(nodeId); setAgentOpen(true); }}
-          onSend={query => { setAgentChatOpen(true); setConversationId(crypto.randomUUID()); setPendingQuery(query); setAgentOpen(true); }}
-          onResume={id => { setAgentChatOpen(true); setConversationId(id); setAgentOpen(true); }}
-        />
-      )}
 
       {workbenchOpen && (
         <div

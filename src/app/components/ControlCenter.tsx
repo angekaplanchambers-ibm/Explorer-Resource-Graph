@@ -984,13 +984,12 @@ function BudgetBreakdownTable({ compact }: { compact?: boolean }) {
 
 // ── Side panel view (dockMode === "right") ─────────────────────────────────────
 
-function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavigate, showBudgetTable, onClose }: {
+function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavigate, showBudgetTable }: {
   op: RecommendedOp; step: NextStep; onBack: () => void;
   onOpenWorkbench?: (q: string) => void;
   onDockChange?: (m: "left" | "right") => void;
   onNavigate?: (dest: string) => void;
   showBudgetTable?: boolean;
-  onClose?: () => void;
 }) {
   const sevColor = SEV_COLOR[op.severity];
   const sevLabel = SEV_LABEL[op.severity];
@@ -1039,20 +1038,7 @@ function SidePanelView({ op, step, onBack, onOpenWorkbench, onDockChange, onNavi
               <Terminal size={10} /> Open in Workbench
             </button>
           ) : <div />}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
-            {onClose && (
-              <button
-                onClick={onClose}
-                title="Close panel"
-                style={{ width: 24, height: 24, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: `1px solid ${M.darkBorder}`, backgroundColor: "transparent", color: M.textMuted, transition: "background 0.15s", flexShrink: 0 }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = M.darkItem)}
-                onMouseLeave={e => (e.currentTarget.style.backgroundColor = "transparent")}
-              >
-                <ChevronRight size={14} />
-              </button>
-            )}
-          </div>
+          <DockSideToggle value="right" onChange={v => onDockChange?.(v)} />
         </div>
       </div>
 
@@ -1159,7 +1145,6 @@ interface ControlCenterProps {
   dockMode?: "left" | "right";
   onDockChange?: (m: "left" | "right") => void;
   onStepActiveChange?: (active: boolean) => void;
-  onClose?: () => void;
 }
 
 type ExplorerNode = { id: string; label: string; type: string; secondary?: string; data?: Record<string, string | number | boolean> };
@@ -1442,7 +1427,6 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
         onDockChange={onDockChange}
         onNavigate={(dest) => { closeStep(); }}
         showBudgetTable={isBudgetStep}
-        onClose={onClose}
       />
     );
   }
@@ -1459,14 +1443,11 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
         <div style={{ height: 47, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 24px", background: "#F1F2F3", borderBottom: "1px solid #C2C5CB", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
-            <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
+            <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>AI Assistant</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
             <button type="button" onClick={() => { onNewConversation?.(); setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
             <DockSideToggle value={dockMode} onChange={changeDock} />
-            <button type="button" onClick={() => onClose?.()} aria-label="Collapse Albus" style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: M.text, cursor: "pointer", padding: 0 }}>
-              {dockMode === "left" ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-            </button>
           </div>
         </div>
 
@@ -1498,14 +1479,11 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
           <div style={{ height: 47, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 24px", background: "#F1F2F3", borderBottom: "1px solid #C2C5CB", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
-              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
+              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>AI Assistant</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
               <button type="button" onClick={() => { onNewConversation?.(); setQuery(""); setSignalTab("ops"); }} style={{ width: 105, height: 28, padding: "4px 12px", border: `1px solid ${M.blue}`, borderRadius: 4, background: "#FAFAFA", color: "#1060FF", fontSize: 12, fontFamily: M.font, cursor: "pointer", boxSizing: "border-box" }}>New session</button>
               <DockSideToggle value={dockMode} onChange={changeDock} />
-              <button type="button" onClick={() => onClose?.()} aria-label="Collapse Albus" style={{ color: M.text, cursor: "pointer", background: "none", border: "none", padding: 0, lineHeight: 0 }}>
-                {dockMode === "left" ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
-              </button>
             </div>
           </div>
           {/* Drag handle — only visible in step/chat view */}
@@ -1545,11 +1523,11 @@ export function ControlCenter({ initialChat, onNewConversation, messages, onMess
             <button
               type="button"
               onClick={togglePanel}
-              aria-label="Open Albus"
+              aria-label="Open AI Assistant"
               style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: 0, marginBottom: 6, cursor: "pointer", alignSelf: "flex-start" }}
             >
               <Sparkles size={24} color="#5f55f5" fill="#5f55f5" />
-              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>Albus</span>
+              <span style={{ color: M.text, fontSize: 12, fontWeight: 650 }}>AI Assistant</span>
             </button>
           )}
 

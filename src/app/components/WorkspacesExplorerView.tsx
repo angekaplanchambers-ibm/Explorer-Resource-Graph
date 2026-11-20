@@ -2282,7 +2282,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       if (e.target === selectedId) s.add(e.source);
     }
     return s;
-  }, [selectedId, edges]);
+  }, [selectedId, activeEdges]);
 
   const hoverNeighborSet = useMemo(() => {
     if (!hoveredId) return new Set<string>();
@@ -2292,7 +2292,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       if (e.target === hoveredId) s.add(e.source);
     }
     return s;
-  }, [hoveredId, edges]);
+  }, [hoveredId, activeEdges]);
 
   // --- Sympathetic link resonance ---------------------------------------------
   // BFS hop-distance from whichever node is currently hovered or being dragged,
@@ -2315,7 +2315,7 @@ function TopologyGraph({ activeType, graphTitle, initialWorkspace, conditions = 
       }
     }
     return dist;
-  }, [resonanceOriginId, edges]);
+  }, [resonanceOriginId, activeEdges]);
   const resonanceStartRef = useRef(0);
   useEffect(() => { if (resonanceOriginId) resonanceStartRef.current = performance.now(); }, [resonanceOriginId]);
 
@@ -3922,6 +3922,11 @@ function ExplorerViewModeSwitch({
   graphDisabled?: boolean;
   orientation?: "horizontal" | "vertical";
 }) {
+  function selectView(mode: "graph" | "classic", event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onChange(mode);
+  }
+
   if (orientation === "vertical") {
     return (
       <div role="group" aria-label="View Mode" className="flex flex-col gap-1 rounded-[12px] bg-[#f1f3f6] p-1" onMouseDown={event => event.stopPropagation()}>
@@ -3932,7 +3937,7 @@ function ExplorerViewModeSwitch({
           <button
             key={mode}
             type="button"
-            onClick={() => onChange(mode)}
+            onClick={event => selectView(mode, event)}
             disabled={mode === "graph" && graphDisabled}
             title={mode === "graph" && graphDisabled ? "Select a saved view to use Graph" : undefined}
             aria-pressed={viewMode === mode}
@@ -3959,7 +3964,7 @@ function ExplorerViewModeSwitch({
       />
       <button
         type="button"
-        onClick={() => onChange("classic")}
+        onClick={event => selectView("classic", event)}
         aria-pressed={viewMode === "classic"}
         className="relative z-[1] flex h-[26px] flex-1 items-center justify-center gap-[5px] whitespace-nowrap rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f62fe]"
         style={{ color: viewMode === "classic" ? "#0f62fe" : "rgba(59,61,69,0.55)" }}
@@ -3973,7 +3978,7 @@ function ExplorerViewModeSwitch({
       </button>
       <button
         type="button"
-        onClick={() => onChange("graph")}
+        onClick={event => selectView("graph", event)}
         disabled={graphDisabled}
         title={graphDisabled ? "Select a saved view to use Graph" : undefined}
         aria-pressed={viewMode === "graph"}
@@ -4148,7 +4153,6 @@ function ExplorerSplashView({
   }, [hudNodes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openView(type: string, title = type) {
-    setViewMode("classic");
     setSelectedGraphType(type);
     setSelectedGraphTitle(title);
     setActiveQueryLabel(title);
@@ -4922,7 +4926,9 @@ export function WorkspacesExplorerView({ tableViewRequest, navOpen = false, onEx
   const [activeType, setActiveType] = useState("Workspaces");
   const [activeView, setActiveView] = useState<"table" | "graph">("table");
   useEffect(() => {
-    if (explorerNodeAction) setActiveView("graph");
+    if (explorerNodeAction && ["resources", "modules", "providers", "blast-radius"].includes(explorerNodeAction.action)) {
+      setActiveView("graph");
+    }
   }, [explorerNodeAction]);
   const [graphInitialWorkspace, setGraphInitialWorkspace] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
